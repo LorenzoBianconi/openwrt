@@ -28,48 +28,6 @@
 		reg = <0x0 0x80000000 0x2 0x00000000>;
 	};
 
-	partition@1fa10000 {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		bootloader@0 {
-			label = "bootloader";
-			reg = <0x00000000 0x00080000>;
-		};
-		romfile@80000 {
-			label = "romfile";
-			reg = <0x00080000 0x00040000>;
-		};
-		tclinux@c0000 {
-			label = "tclinux";
-			reg = <0x000c0000 0x02500000>;
-		};
-		tclinux_slave@25c0000 {
-			label = "tclinux_slave";
-			reg = <0x025c0000 0x02500000>;
-		};
-	};
-
-	partition-nor@1fa10000 {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		bootloader@0 {
-			label = "bootloader";
-			reg = <0x00000000 0x00080000>;
-		};
-		tclinux@80000 {
-			label = "tclinux";
-			reg = <0x00080000 0x1980000>;
-		};
-		rootfs_data@5080000 {
-			label = "rootfs_data";
-			reg = <0x1980000 0x400000>;
-		};
-	};
-
 	gpio-keys-polled {
 		compatible = "gpio-keys-polled";
 		poll-interval = <100>;
@@ -198,7 +156,7 @@
 
 &spi_nand {
 	partitions {
-		compatible = "airoha,airoha-partitions";
+		compatible = "airoha,fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
 
@@ -218,7 +176,8 @@
 			label = "rootfs_data";
 			reg = <0x5080000 0x00800000>;
 		};
-		art@de80000 {
+		art@ffffffff {
+			compatible = "airoha,dynamic-art";
 			label = "art";
 			reg = <0xffffffff 0x00300000>;
 		};
