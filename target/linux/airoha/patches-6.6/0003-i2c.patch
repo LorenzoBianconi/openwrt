@@ -1,0 +1,22 @@
+--- a/drivers/i2c/busses/Kconfig
++++ b/drivers/i2c/busses/Kconfig
+@@ -839,7 +839,7 @@ config I2C_MT65XX
+ 
+ config I2C_MT7621
+ 	tristate "MT7621/MT7628 I2C Controller"
+-	depends on (RALINK && (SOC_MT7620 || SOC_MT7621)) || COMPILE_TEST
++	depends on (RALINK && (SOC_MT7620 || SOC_MT7621)) || ARCH_AIROHA || COMPILE_TEST
+ 	help
+ 	  Say Y here to include support for I2C controller in the
+ 	  MediaTek MT7621/MT7628 SoCs.
+--- a/drivers/i2c/busses/i2c-mt7621.c
++++ b/drivers/i2c/busses/i2c-mt7621.c
+@@ -85,7 +85,7 @@ static void mtk_i2c_reset(struct mtk_i2c
+ {
+ 	int ret;
+ 
+-	ret = device_reset(i2c->adap.dev.parent);
++	ret = device_reset_optional(i2c->adap.dev.parent);
+ 	if (ret)
+ 		dev_err(i2c->dev, "I2C reset failed!\n");
+ 
