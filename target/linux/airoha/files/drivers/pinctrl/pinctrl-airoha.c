@@ -2098,10 +2098,11 @@ static int airoha_pinctrl_gpio_direction_output(struct gpio_chip *chip,
 
 static void airoha_pinctrl_gpio_irq_unmask(struct irq_data *data)
 {
+	u8 offset = data->hwirq % AIROHA_REG_GPIOCTRL_NUM_GPIO;
 	u8 index = data->hwirq / AIROHA_REG_GPIOCTRL_NUM_GPIO;
-	u32 mask = GENMASK(2 * index + 1, 2 * index);
+	u32 mask = GENMASK(2 * offset + 1, 2 * offset);
 	struct airoha_pinctrl_gpiochip *gpiochip;
-	u32 val = BIT(index);
+	u32 val = BIT(2 * offset);
 	unsigned long flags;
 
 	gpiochip = irq_data_get_irq_chip_data(data);
@@ -2112,13 +2113,13 @@ static void airoha_pinctrl_gpio_irq_unmask(struct irq_data *data)
 
 	switch (gpiochip->irq_type[data->hwirq] & IRQ_TYPE_SENSE_MASK) {
 	case IRQ_TYPE_LEVEL_LOW:
-		val = val << 2;
+		val = val << 1;
 		fallthrough;
 	case IRQ_TYPE_LEVEL_HIGH:
 		airoha_pinctrl_rmw_unlock(gpiochip->level[index], mask, val);
 		break;
 	case IRQ_TYPE_EDGE_FALLING:
-		val = val << 2;
+		val = val << 1;
 		fallthrough;
 	case IRQ_TYPE_EDGE_RISING:
 		airoha_pinctrl_rmw_unlock(gpiochip->edge[index], mask, val);
@@ -2135,8 +2136,9 @@ static void airoha_pinctrl_gpio_irq_unmask(struct irq_data *data)
 
 static void airoha_pinctrl_gpio_irq_mask(struct irq_data *data)
 {
+	u8 offset = data->hwirq % AIROHA_REG_GPIOCTRL_NUM_GPIO;
 	u8 index = data->hwirq / AIROHA_REG_GPIOCTRL_NUM_GPIO;
-	u32 mask = GENMASK(2 * index + 1, 2 * index);
+	u32 mask = GENMASK(2 * offset + 1, 2 * offset);
 	struct airoha_pinctrl_gpiochip *gpiochip;
 	unsigned long flags;
 
