@@ -17,7 +17,7 @@
 #include <net/page_pool/helpers.h>
 #include <uapi/linux/ppp_defs.h>
 
-#define AIROHA_MAX_NUM_GDM_PORTS	2
+#define AIROHA_MAX_NUM_GDM_PORTS	1
 #define AIROHA_MAX_NUM_QDMA		2
 #define AIROHA_MAX_NUM_RSTS		3
 #define AIROHA_MAX_NUM_XSI_RSTS		5
@@ -1676,6 +1676,7 @@ static int airoha_qdma_init_rx_queue(struct airoha_queue *q,
 		.max_len = PAGE_SIZE,
 		.nid = NUMA_NO_NODE,
 		.dev = qdma->eth->dev,
+		.napi = &q->napi,
 	};
 	struct airoha_eth *eth = qdma->eth;
 	int qid = q - &qdma->q_rx[0], thr;
@@ -1981,8 +1982,7 @@ static int airoha_qdma_init_hfwd_queues(struct airoha_qdma *qdma)
 	airoha_qdma_rmw(qdma, REG_HW_FWD_DSCP_CFG,
 			HW_FWD_DSCP_PAYLOAD_SIZE_MASK,
 			FIELD_PREP(HW_FWD_DSCP_PAYLOAD_SIZE_MASK, 0));
-	airoha_qdma_rmw(qdma, REG_FWD_DSCP_LOW_THR,
-			FWD_DSCP_LOW_THR_MASK,
+	airoha_qdma_rmw(qdma, REG_FWD_DSCP_LOW_THR, FWD_DSCP_LOW_THR_MASK,
 			FIELD_PREP(FWD_DSCP_LOW_THR_MASK, 128));
 	airoha_qdma_rmw(qdma, REG_LMGR_INIT_CFG,
 			LMGR_INIT_START | LMGR_SRAM_MODE_MASK |
@@ -2376,8 +2376,7 @@ static int airoha_qdma_hw_init(struct airoha_qdma *qdma)
 			airoha_qdma_set(qdma, REG_TX_RING_BLOCKING(i),
 					TX_RING_IRQ_BLOCKING_CFG_MASK);
 		else
-			airoha_qdma_clear(qdma,
-					  REG_TX_RING_BLOCKING(i),
+			airoha_qdma_clear(qdma, REG_TX_RING_BLOCKING(i),
 					  TX_RING_IRQ_BLOCKING_CFG_MASK);
 	}
 
@@ -2474,9 +2473,8 @@ static int airoha_qdma_init(struct platform_device *pdev,
 		return -ENOMEM;
 
 	qdma->regs = devm_platform_ioremap_resource_byname(pdev, res);
-	if (IS_ERR(eth->qdma[id].regs))
-		return dev_err_probe(eth->dev,
-				     PTR_ERR(eth->qdma[id].regs),
+	if (IS_ERR(qdma->regs))
+		return dev_err_probe(eth->dev, PTR_ERR(qdma->regs),
 				     "failed to iomap qdma%d regs\n", id);
 
 	qdma->irq = platform_get_irq(pdev, 4 * id);
