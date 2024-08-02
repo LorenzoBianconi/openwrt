@@ -218,6 +218,7 @@
 		pio: pinctrl {
 			compatible = "airoha,en7581-pinctrl";
 			reg = <0x0 0x1fa20214 0x0 0x30>,
+			      <0x0 0x1fa2027C 0x0 0x8>,
 			      <0x0 0x1fbf0234 0x0 0x4>,
 			      <0x0 0x1fbf0268 0x0 0x4>,
 			      <0x0 0x1fa2001c 0x0 0x50>,
@@ -551,13 +552,13 @@
 
 						gsw_phy1_led0: gsw-phy1-led0@0 {
 							reg = <0>;
-							function = LED_FUNCTION_LAN;
+							function = "phy1_led0";
 							status = "disabled";
 						};
 
 						gsw_phy1_led1: gsw-phy1-led1@1 {
 							reg = <1>;
-							function = LED_FUNCTION_LAN;
+							function = "phy1_led1";
 							status = "disabled";
 						};
 					};
@@ -574,13 +575,13 @@
 
 						gsw_phy2_led0: gsw-phy2-led0@0 {
 							reg = <0>;
-							function = LED_FUNCTION_LAN;
+							function = "phy2_led0";
 							status = "disabled";
 						};
 
 						gsw_phy2_led1: gsw-phy2-led1@1 {
 							reg = <1>;
-							function = LED_FUNCTION_LAN;
+							function = "phy1_led1";
 							status = "disabled";
 						};
 					};

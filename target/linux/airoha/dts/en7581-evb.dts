@@ -159,28 +159,35 @@
 
 	gswp1_led0_pins: gswp1-led0-pins {
 		mux {
-			function = "led";
+			function = "phy1_led0";
 			pins = "gpio33";
 		};
 	};
 
 	gswp2_led0_pins: gswp2-led0-pins {
 		mux {
-			function = "led";
+			function = "phy2_led0";
 			pins = "gpio34";
+		};
+	};
+
+	gswp2_led1_pins: gswp2-led1-pins {
+		mux {
+			function = "phy2_led1";
+			pins = "gpio44";
 		};
 	};
 
 	gswp3_led0_pins: gswp3-led0-pins {
 		mux {
-			function = "led";
+			function = "phy3_led0";
 			pins = "gpio35";
 		};
 	};
 
 	gswp4_led0_pins: gswp4-led0-pins {
 		mux {
-			function = "led";
+			function = "phy4_led0";
 			pins = "gpio42";
 		};
 	};
