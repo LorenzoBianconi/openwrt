@@ -105,35 +105,35 @@
 #define REG_LAN_LED0_MAPPING			0x68
 #define REG_LAN_LED1_MAPPING			0x6c
 
-#define LAN4_LED_MAPPING_MASK 			GENMASK(18, 16)
+#define LAN4_LED_MAPPING_MASK			GENMASK(18, 16)
 #define LAN4_PHY4_LED_MAP			BIT(18)
 #define LAN4_PHY2_LED_MAP			BIT(17)
 #define LAN4_PHY1_LED_MAP			BIT(16)
 #define LAN4_PHY0_LED_MAP			0
 #define LAN4_PHY3_LED_MAP			GENMASK(17, 16)
 
-#define LAN3_LED_MAPPING_MASK 			GENMASK(14, 12)
+#define LAN3_LED_MAPPING_MASK			GENMASK(14, 12)
 #define LAN3_PHY4_LED_MAP			BIT(14)
 #define LAN3_PHY2_LED_MAP			BIT(13)
 #define LAN3_PHY1_LED_MAP			BIT(12)
 #define LAN3_PHY0_LED_MAP			0
 #define LAN3_PHY3_LED_MAP			GENMASK(13, 12)
 
-#define LAN2_LED_MAPPING_MASK 			GENMASK(10, 8)
+#define LAN2_LED_MAPPING_MASK			GENMASK(10, 8)
 #define LAN2_PHY4_LED_MAP			BIT(12)
 #define LAN2_PHY2_LED_MAP			BIT(11)
 #define LAN2_PHY1_LED_MAP			BIT(10)
 #define LAN2_PHY0_LED_MAP			0
 #define LAN2_PHY3_LED_MAP			GENMASK(11, 10)
 
-#define LAN1_LED_MAPPING_MASK 			GENMASK(6, 4)
+#define LAN1_LED_MAPPING_MASK			GENMASK(6, 4)
 #define LAN1_PHY4_LED_MAP			BIT(6)
 #define LAN1_PHY2_LED_MAP			BIT(5)
 #define LAN1_PHY1_LED_MAP			BIT(4)
 #define LAN1_PHY0_LED_MAP			0
 #define LAN1_PHY3_LED_MAP			GENMASK(5, 4)
 
-#define LAN0_LED_MAPPING_MASK 			GENMASK(2, 0)
+#define LAN0_LED_MAPPING_MASK			GENMASK(2, 0)
 #define LAN0_PHY4_LED_MAP			BIT(3)
 #define LAN0_PHY2_LED_MAP			BIT(2)
 #define LAN0_PHY1_LED_MAP			BIT(1)
@@ -574,7 +574,7 @@ static const char *const spi_groups[] = { "spi_quad", "spi_cs1", "spi_cs2",
 static const char *const pcm_spi_groups[] = { "pcm_spi", "pcm_spi_int",
 					      "pcm_spi_rst", "pcm_spi_cs1",
 					      "pcm_spi_cs2_p156",
-					      "pcm_spi_cs2_p128" ,
+					      "pcm_spi_cs2_p128",
 					      "pcm_spi_cs3", "pcm_spi_cs4" };
 static const char *const i2s_groups[] = { "i2s" };
 static const char *const emmc_groups[] = { "emmc" };
@@ -604,21 +604,21 @@ static const char *const pwm_groups[] = { "gpio0", "gpio1",
 					  "gpio44", "gpio45",
 					  "gpio46", "gpio47" };
 static const char *const phy1_led0_groups[] = { "gpio33", "gpio34",
-					        "gpio35", "gpio42" };
+						"gpio35", "gpio42" };
 static const char *const phy2_led0_groups[] = { "gpio33", "gpio34",
-					        "gpio35", "gpio42" };
+						"gpio35", "gpio42" };
 static const char *const phy3_led0_groups[] = { "gpio33", "gpio34",
-					        "gpio35", "gpio42" };
+						"gpio35", "gpio42" };
 static const char *const phy4_led0_groups[] = { "gpio33", "gpio34",
-					        "gpio35", "gpio42" };
+						"gpio35", "gpio42" };
 static const char *const phy1_led1_groups[] = { "gpio43", "gpio44",
-					        "gpio45", "gpio46" };
+						"gpio45", "gpio46" };
 static const char *const phy2_led1_groups[] = { "gpio43", "gpio44",
-					        "gpio45", "gpio46" };
+						"gpio45", "gpio46" };
 static const char *const phy3_led1_groups[] = { "gpio43", "gpio44",
-					        "gpio45", "gpio46" };
+						"gpio45", "gpio46" };
 static const char *const phy4_led1_groups[] = { "gpio43", "gpio44",
-					        "gpio45", "gpio46" };
+						"gpio45", "gpio46" };
 
 static const struct airoha_pinctrl_func_group pon_func_group[] = {
 	{
@@ -1843,6 +1843,7 @@ static const struct airoha_pinctrl_func_group phy2_led1_func_group[] = {
 		.regmap_size = 2,
 	},
 };
+
 static const struct airoha_pinctrl_func_group phy3_led1_func_group[] = {
 	{
 		.name = "gpio43",
@@ -1902,6 +1903,7 @@ static const struct airoha_pinctrl_func_group phy3_led1_func_group[] = {
 		.regmap_size = 2,
 	},
 };
+
 static const struct airoha_pinctrl_func_group phy4_led1_func_group[] = {
 	{
 		.name = "gpio43",
@@ -2465,7 +2467,7 @@ static int airoha_pinctrl_set_conf(struct airoha_pinctrl *pinctrl,
 				ARRAY_SIZE(airoha_pinctrl_drive_e4_conf),	\
 				(pin), (val))
 #define airoha_pinctrl_set_pcie_rst_od_conf(pinctrl, pin, val)			\
-	airoha_pinctrl_set_conf((pinctrl), ((pinctrl)->regs.pcie_rst),	\
+	airoha_pinctrl_set_conf((pinctrl), ((pinctrl)->regs.pcie_rst),		\
 				airoha_pinctrl_pcie_rst_od_conf,		\
 				ARRAY_SIZE(airoha_pinctrl_pcie_rst_od_conf),	\
 				(pin), (val))
@@ -2528,7 +2530,7 @@ static int airoha_pinconf_get(struct pinctrl_dev *pctrl_dev,
 		break;
 	}
 	default:
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 	}
 
 	*config = pinconf_to_config_packed(param, arg);
@@ -2602,7 +2604,7 @@ static int airoha_pinconf_set(struct pinctrl_dev *pctrl_dev,
 			break;
 		}
 		default:
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 		}
 	}
 
@@ -2610,7 +2612,7 @@ static int airoha_pinconf_set(struct pinctrl_dev *pctrl_dev,
 }
 
 static int airoha_pinconf_group_get(struct pinctrl_dev *pctrl_dev,
-				   unsigned int group, unsigned long *config)
+				    unsigned int group, unsigned long *config)
 {
 	u32 cur_config = 0;
 	int i;
@@ -2619,17 +2621,16 @@ static int airoha_pinconf_group_get(struct pinctrl_dev *pctrl_dev,
 		if (airoha_pinconf_get(pctrl_dev,
 				       airoha_pinctrl_groups[group].pins[i],
 				       config))
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 
 		if (i && cur_config != *config)
-			return -ENOTSUPP;
+			return -EOPNOTSUPP;
 
-		cur_config= *config;
+		cur_config = *config;
 	}
 
 	return 0;
 }
-
 
 static int airoha_pinconf_group_set(struct pinctrl_dev *pctrl_dev,
 				    unsigned int group, unsigned long *configs,
