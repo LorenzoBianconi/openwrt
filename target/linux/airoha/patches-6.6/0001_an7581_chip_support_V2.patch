@@ -641,20 +641,6 @@
 +	.get_mapping_block = get_mapping_block,
 +	.debug = debug,
 +};
---- a/drivers/mtd/parsers/Kconfig
-+++ b/drivers/mtd/parsers/Kconfig
-@@ -20,6 +20,11 @@ config MTD_BCM63XX_PARTS
- 	  This provides partition parsing for BCM63xx devices with CFE
- 	  bootloaders.
- 
-+config MTD_AIROHA_PARTS
-+	tristate "AIROHA partitioning parser"
-+	help
-+	  This provides partition parsing for AIROHA SoC.
-+
- config MTD_BRCM_U_BOOT
- 	tristate "Broadcom's U-Boot partition parser"
- 	depends on ARCH_BCMBCA || COMPILE_TEST
 --- a/drivers/spi/Makefile
 +++ b/drivers/spi/Makefile
 @@ -14,6 +14,7 @@ obj-$(CONFIG_SPI_SPIDEV)		+= spidev.o
@@ -665,11 +651,3 @@
  obj-$(CONFIG_SPI_ALTERA)		+= spi-altera-platform.o
  obj-$(CONFIG_SPI_ALTERA_CORE)		+= spi-altera-core.o
  obj-$(CONFIG_SPI_ALTERA_DFL)		+= spi-altera-dfl.o
---- a/drivers/mtd/parsers/Makefile
-+++ b/drivers/mtd/parsers/Makefile
-@@ -1,4 +1,5 @@
- # SPDX-License-Identifier: GPL-2.0-only
-+obj-$(CONFIG_MTD_AIROHA_PARTS)		+= airohapart.o
- obj-$(CONFIG_MTD_AR7_PARTS)		+= ar7part.o
- obj-$(CONFIG_MTD_BCM47XX_PARTS)		+= bcm47xxpart.o
- obj-$(CONFIG_MTD_BCM63XX_PARTS)		+= bcm63xxpart.o

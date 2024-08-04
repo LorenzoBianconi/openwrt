@@ -205,7 +205,7 @@
 
 &spi_nand {
 	partitions {
-		compatible = "airoha,airoha-partitions";
+		compatible = "airoha,fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
 
@@ -225,7 +225,8 @@
 			label = "rootfs_data";
 			reg = <0x5080000 0x00800000>;
 		};
-		art@de80000 {
+		art@ffffffff {
+			compatible = "airoha,dynamic-art";
 			label = "art";
 			reg = <0xffffffff 0x00300000>;
 		};
