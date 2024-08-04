@@ -16,7 +16,15 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 
 --- a/drivers/mtd/devices/block2mtd.c
 +++ b/drivers/mtd/devices/block2mtd.c
-@@ -319,6 +319,15 @@ static struct block2mtd_dev *add_device(
+@@ -264,6 +264,7 @@ static struct block2mtd_dev *add_device(
+ 	const blk_mode_t mode = BLK_OPEN_READ | BLK_OPEN_WRITE;
+ 	struct block_device *bdev;
+ 	struct block2mtd_dev *dev;
++	struct device *ddev;
+ 	char *name;
+ 
+ 	if (!devname)
+@@ -319,6 +320,15 @@ static struct block2mtd_dev *add_device(
  	dev->mtd.priv = dev;
  	dev->mtd.owner = THIS_MODULE;
  
@@ -32,7 +40,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  	if (mtd_device_register(&dev->mtd, NULL, 0)) {
  		/* Device didn't get added, so free the entry */
  		goto err_destroy_mutex;
-@@ -332,6 +341,7 @@ static struct block2mtd_dev *add_device(
+@@ -332,6 +342,7 @@ static struct block2mtd_dev *add_device(
  	return dev;
  
  err_destroy_mutex:
@@ -40,7 +48,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  	mutex_destroy(&dev->write_mutex);
  err_free_block2mtd:
  	block2mtd_free_device(dev);
-@@ -510,6 +520,7 @@ static void block2mtd_exit(void)
+@@ -510,6 +521,7 @@ static void block2mtd_exit(void)
  		struct block2mtd_dev *dev = list_entry(pos, typeof(*dev), list);
  		block2mtd_sync(&dev->mtd);
  		mtd_device_unregister(&dev->mtd);
