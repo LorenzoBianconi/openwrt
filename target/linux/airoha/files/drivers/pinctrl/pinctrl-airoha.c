@@ -281,7 +281,7 @@ enum airoha_pinctrl_mux_func {
 struct airoha_pinctrl_func_group {
 	const char *name;
 	struct {
-		enum airoha_pinctrl_mux_func mux_func;
+		enum airoha_pinctrl_mux_func mux;
 		u32 offset;
 		u32 mask;
 		u32 val;
@@ -2282,7 +2282,6 @@ static int airoha_pinmux_set_mux(struct pinctrl_dev *pctrl_dev,
 	func = desc->data;
 	for (i = 0; i < func->group_size; i++) {
 		const struct airoha_pinctrl_func_group *group;
-		void __iomem *base;
 		int j;
 
 		group = &func->groups[i];
@@ -2290,7 +2289,9 @@ static int airoha_pinmux_set_mux(struct pinctrl_dev *pctrl_dev,
 			continue;
 
 		for (j = 0; j < group->regmap_size; j++) {
-			base = pinctrl->regs.mux[group->regmap[j].mux_func];
+			void __iomem *base;
+
+			base = pinctrl->regs.mux[group->regmap[j].mux];
 			airoha_pinctrl_rmw(pinctrl,
 					   base + group->regmap[j].offset,
 					   group->regmap[j].mask,
