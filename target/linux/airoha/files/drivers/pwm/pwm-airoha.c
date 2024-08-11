@@ -3,6 +3,7 @@
  * Copyright 2022 Markus Gothe <markus.gothe@genexis.eu>
  */
 
+#include <linux/bitfield.h>
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
@@ -112,7 +113,8 @@ static int airoha_pwm_get_waveform(struct airoha_pwm *pc, u32 duty, u32 period)
 		    period == pc->bucket[i].period)
 			return i;
 
-		/* Unlike duty cycle zero, which can be handled by
+		/*
+		 * Unlike duty cycle zero, which can be handled by
 		 * disabling PWM, a generator is needed for full duty
 		 * cycle but it can be reused regardless of period
 		 */
@@ -200,13 +202,15 @@ static int airoha_pwm_sipo_init(struct airoha_pwm *pc)
 	if (sipo_clock_delay < 1 || sipo_clock_delay > sipo_clock_divisor / 2)
 		return -EINVAL;
 
-	/* The actual delay is sclkdly + 1 so subtract 1 from
+	/*
+	 * The actual delay is sclkdly + 1 so subtract 1 from
 	 * sipo-clock-delay to calculate the register value
 	 */
 	sipo_clock_delay--;
 	writel(sipo_clock_delay, pc->sgpio_cfg + REG_SGPIO_CLK_DLY);
 
-	/* It it necessary to after muxing explicitly shift out all
+	/*
+	 * It it necessary to after muxing explicitly shift out all
 	 * zeroes to initialize the shift register before enabling PWM
 	 * mode because in PWM mode SIPO will not start shifting until
 	 * it needs to output a non-zero value (bit 31 of led_data
@@ -261,7 +265,8 @@ static void airoha_pwm_config_flash_map(struct airoha_pwm *pc,
 	}
 
 	if (index < 0) {
-		/* Change of waveform takes effect immediately but
+		/*
+		 * Change of waveform takes effect immediately but
 		 * disabling has some delay so to prevent glitching
 		 * only the enable bit is touched when disabling
 		 */
@@ -326,7 +331,8 @@ static void airoha_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 		airoha_pwm_sgpio_clear(pc, REG_SIPO_FLASH_MODE_CFG,
 				       SERIAL_GPIO_FLASH_MODE);
 
-	/* Clear the state to force re-initialization the next time
+	/*
+	 * Clear the state to force re-initialization the next time
 	 * this PWM channel is used since we cannot retain state in
 	 * hardware due to limited number of waveform generators
 	 */
@@ -410,9 +416,8 @@ static struct platform_driver airoha_pwm_driver = {
 };
 module_platform_driver(airoha_pwm_driver);
 
-MODULE_ALIAS("platform:airoha-pwm");
-MODULE_AUTHOR("Markus Gothe <markus.gothe@genexis.eu>");
 MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+MODULE_AUTHOR("Markus Gothe <markus.gothe@genexis.eu>");
 MODULE_AUTHOR("Benjamin Larsson <benjamin.larsson@genexis.eu>");
 MODULE_DESCRIPTION("Airoha EN7581 PWM driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
