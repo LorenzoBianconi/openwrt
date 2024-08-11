@@ -569,8 +569,7 @@ static const char *const uart_groups[] = { "uart2", "uart2_cts_rts", "hsuart",
 static const char *const i2c_groups[] = { "i2c1" };
 static const char *const jtag_groups[] = { "jtag_udi", "jtag_dfd" };
 static const char *const pcm_groups[] = { "pcm1", "pcm2" };
-static const char *const spi_groups[] = { "spi_quad", "spi_cs1", "spi_cs2",
-					  "spi_cs3", "spi_cs4" };
+static const char *const spi_groups[] = { "spi_quad", "spi_cs1" };
 static const char *const pcm_spi_groups[] = { "pcm_spi", "pcm_spi_int",
 					      "pcm_spi_rst", "pcm_spi_cs1",
 					      "pcm_spi_cs2_p156",
