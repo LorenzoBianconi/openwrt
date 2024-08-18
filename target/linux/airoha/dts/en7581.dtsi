@@ -5,6 +5,7 @@
 #include <dt-bindings/clock/en7523-clk.h>
 #include <dt-bindings/reset/airoha,en7581-reset.h>
 #include <dt-bindings/leds/common.h>
+#include <dt-bindings/thermal/thermal.h>
 
 / {
 	interrupt-parent = <&gic>;
@@ -78,6 +79,7 @@
 			enable-method = "psci";
 			clock-frequency = <80000000>;
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		cpu1: cpu@1 {
@@ -87,6 +89,7 @@
 			enable-method = "psci";
 			clock-frequency = <80000000>;
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		cpu2: cpu@2 {
@@ -96,6 +99,7 @@
 			enable-method = "psci";
 			clock-frequency = <80000000>;
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		cpu3: cpu@3 {
@@ -105,6 +109,7 @@
 			enable-method = "psci";
 			clock-frequency = <80000000>;
 			next-level-cache = <&l2>;
+			#cooling-cells = <2>;
 		};
 
 		l2: l2-cache {
@@ -123,6 +128,39 @@
 			     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
 			     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
 			     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>;
+	};
+
+	thermal-zones {
+		cpu_thermal: cpu-thermal {
+			polling-delay-passive = <200>;
+			polling-delay = <0>;
+
+			thermal-sensors = <&thermal 0>;
+
+			trips {
+				cpu-hot {
+					temperature = <95000>;
+					hysteresis = <0>;
+					type = "hot";
+				};
+
+				cpu_passive: cpu-passive {
+					temperature = <105000>;
+					hysteresis = <0>;
+					type = "passive";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_passive>;
+					cooling-device = <&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+							 <&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+                                                         <&cpu2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+                                                         <&cpu3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				};
+			};
+		};
 	};
 
 	soc {
@@ -212,6 +250,15 @@
 			      <0x0 0x1fbe3400 0x0 0xfc>;
 			#clock-cells = <1>;
 			#reset-cells = <1>;
+		};
+
+		thermal: thermal-sensor@1efbd800 {
+			compatible = "airoha,en7581-thermal";
+			reg = <0x0 0x1efbd000 0x0 0xd5c>,
+			      <0x0 0x1fa20268 0x0 0x4>,
+			      <0x0 0x1fa202ec 0x0 0x10>;
+			interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
+			#thermal-sensor-cells = <0>;
 		};
 
 		pio: pinctrl {
