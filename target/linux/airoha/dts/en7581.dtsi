@@ -194,9 +194,8 @@
 
 		watchdog@1fbf0100 {
 			compatible = "airoha,en7581-wdt";
-			reg = <0x1fbf0100 0x8>;
-			clocks = <&scuclk EN7523_CLK_BUS>;
-			clock-names = "bus";
+			reg = <0x0 0x1fbf0100 0x0 0x38>;
+			clock-frequency = <300000000>;
 		};
 
 		uart2: serial@1fbf0300 {
