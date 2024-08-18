@@ -258,6 +258,13 @@
 			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		crypto@1e004000 {
+			compatible = "airoha,mtk-eip93";
+			reg = <0x0 0x1fb70000 0x0 0x1000>;
+
+			interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
 		thermal: thermal-sensor@1efbd800 {
 			compatible = "airoha,en7581-thermal";
 			reg = <0x0 0x1efbd000 0x0 0xd5c>,
