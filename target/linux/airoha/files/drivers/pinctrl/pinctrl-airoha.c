@@ -6,6 +6,7 @@
  */
 
 #include <dt-bindings/pinctrl/mt65xx.h>
+#include <linux/bitfield.h>
 #include <linux/gpio/driver.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
@@ -261,6 +262,29 @@
 #define GPIO18_FLASH_MODE_CFG			BIT(2)
 #define GPIO17_FLASH_MODE_CFG			BIT(1)
 #define GPIO16_FLASH_MODE_CFG			BIT(0)
+
+/* GPIOs */
+#define REG_GPIO_CTRL				0x00
+#define REG_GPIO_DATA				0x04
+#define REG_GPIO_INT				0x08
+#define REG_GPIO_INT_EDGE			0x0c
+#define REG_GPIO_INT_LEVEL			0x10
+#define REG_GPIO_OE				0x14
+
+#define REG_GPIO_CTRL1				0x00
+
+#define REG_GPIO_CTRL2				0x00
+#define REG_GPIO_CTRL3				0x04
+
+#define REG_GPIO_DATA1				0x00
+#define REG_GPIO_OE1				0x08
+#define REG_GPIO_INT1				0x0c
+#define REG_GPIO_INT_EDGE1			0x10
+#define REG_GPIO_INT_EDGE2			0x14
+#define REG_GPIO_INT_EDGE3			0x18
+#define REG_GPIO_INT_LEVEL1			0x1c
+#define REG_GPIO_INT_LEVEL2			0x20
+#define REG_GPIO_INT_LEVEL3			0x24
 
 #define AIROHA_NUM_GPIOS			64
 #define AIROHA_GPIO_BANK_SIZE			(AIROHA_NUM_GPIOS / 2)
@@ -2788,41 +2812,57 @@ static irqreturn_t airoha_pinctrl_gpio_irq_handler(int irq, void *data)
 }
 
 static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
-				       struct platform_device *pdev,
-				       int index)
+				       struct platform_device *pdev)
 {
 	struct gpio_chip *chip = &pinctrl->gpiochip.chip;
 	struct gpio_irq_chip *girq = &chip->irq;
 	struct device *dev = &pdev->dev;
 	void __iomem *ptr;
-	int i, irq, err;
+	int irq, err;
 
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.data); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map gpio data regs\n");
+	ptr = devm_platform_ioremap_resource_byname(pdev, "gpio-bank0");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
 
-		pinctrl->gpiochip.data[i] = ptr;
+	pinctrl->gpiochip.data[0] = ptr + REG_GPIO_DATA;
+	pinctrl->gpiochip.dir[0] = ptr + REG_GPIO_CTRL;
+	pinctrl->gpiochip.out[0] = ptr + REG_GPIO_OE;
+
+	if (of_property_read_bool(dev->of_node, "interrupt-controller")) {
+		pinctrl->gpiochip.status[0] = ptr + REG_GPIO_INT;
+		pinctrl->gpiochip.level[0] = ptr + REG_GPIO_INT_LEVEL;
+		pinctrl->gpiochip.edge[0] = ptr + REG_GPIO_INT_EDGE;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.dir); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map gpio dir regs\n");
+	ptr = devm_platform_ioremap_resource_byname(pdev, "gpio-ctrl1");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
 
-		pinctrl->gpiochip.dir[i] = ptr;
+	pinctrl->gpiochip.dir[1] = ptr + REG_GPIO_CTRL1;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "gpio-bank1");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->gpiochip.data[1] = ptr + REG_GPIO_DATA1;
+	pinctrl->gpiochip.out[1] = ptr + REG_GPIO_OE1;
+
+	if (of_property_read_bool(dev->of_node, "interrupt-controller")) {
+		pinctrl->gpiochip.status[1] = ptr + REG_GPIO_INT1;
+		pinctrl->gpiochip.level[1] = ptr + REG_GPIO_INT_LEVEL1;
+		pinctrl->gpiochip.level[2] = ptr + REG_GPIO_INT_LEVEL2;
+		pinctrl->gpiochip.level[3] = ptr + REG_GPIO_INT_LEVEL3;
+		pinctrl->gpiochip.edge[1] = ptr + REG_GPIO_INT_EDGE1;
+		pinctrl->gpiochip.edge[2] = ptr + REG_GPIO_INT_EDGE2;
+		pinctrl->gpiochip.edge[3] = ptr + REG_GPIO_INT_EDGE3;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.out); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map gpio out regs\n");
+	ptr = devm_platform_ioremap_resource_byname(pdev, "gpio-ctrl2");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
 
-		pinctrl->gpiochip.out[i] = ptr;
-	}
+	pinctrl->gpiochip.dir[2] = ptr + REG_GPIO_CTRL2;
+	pinctrl->gpiochip.dir[3] = ptr + REG_GPIO_CTRL3;
 
 	chip->parent = dev;
 	chip->label = dev_name(dev);
@@ -2834,36 +2874,6 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 	chip->get = airoha_pinctrl_gpio_get;
 	chip->base = -1;
 	chip->ngpio = AIROHA_NUM_GPIOS;
-
-	if (!of_property_read_bool(dev->of_node, "interrupt-controller"))
-		goto out;
-
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.status); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map irq status regs\n");
-
-		pinctrl->gpiochip.status[i] = ptr;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.level); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map irq level regs\n");
-
-		pinctrl->gpiochip.level[i] = ptr;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(pinctrl->gpiochip.edge); i++) {
-		ptr = devm_platform_ioremap_resource(pdev, index++);
-		if (IS_ERR(ptr))
-			return dev_err_probe(dev, PTR_ERR(ptr),
-					     "failed to map irq edge regs\n");
-
-		pinctrl->gpiochip.edge[i] = ptr;
-	}
 
 	spin_lock_init(&pinctrl->gpiochip.lock);
 	irq = platform_get_irq(pdev, 0);
@@ -2889,14 +2899,59 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 	girq->chip->flags = IRQCHIP_SET_TYPE_MASKED;
 	girq->default_type = IRQ_TYPE_NONE;
 	girq->handler = handle_simple_irq;
-out:
+
 	return devm_gpiochip_add_data(dev, chip, pinctrl);
+}
+
+static int airoha_pinctrl_ioreg_map(struct airoha_pinctrl *pinctrl,
+				    struct platform_device *pdev)
+{
+	void __iomem *ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "iomux");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.mux[0] = ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "led-iomux");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.mux[1] = ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "gpio-flash-mode");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.mux[2] = ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev,
+						    "gpio-flash-mode-ext");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.mux[3] = ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "ioconf");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.conf = ptr;
+
+	ptr = devm_platform_ioremap_resource_byname(pdev, "pcie-rst-od");
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+
+	pinctrl->regs.pcie_rst = ptr;
+
+	return 0;
 }
 
 static int airoha_pinctrl_probe(struct platform_device *pdev)
 {
 	struct airoha_pinctrl *pinctrl;
-	int err, i, index = 0;
+	int err, i;
 
 	pinctrl = devm_kzalloc(&pdev->dev, sizeof(*pinctrl), GFP_KERNEL);
 	if (!pinctrl)
@@ -2904,25 +2959,9 @@ static int airoha_pinctrl_probe(struct platform_device *pdev)
 
 	mutex_init(&pinctrl->mutex);
 
-	for (i = 0; i < ARRAY_SIZE(pinctrl->regs.mux); i++) {
-		pinctrl->regs.mux[i] = devm_platform_ioremap_resource(pdev,
-								      index++);
-		if (IS_ERR(pinctrl->regs.mux[i]))
-			return dev_err_probe(&pdev->dev,
-					     PTR_ERR(pinctrl->regs.mux[i]),
-					     "failed to iomap mux regs\n");
-	}
-
-	pinctrl->regs.conf = devm_platform_ioremap_resource(pdev, index++);
-	if (IS_ERR(pinctrl->regs.conf))
-		return dev_err_probe(&pdev->dev, PTR_ERR(pinctrl->regs.conf),
-				     "failed to iomap conf regs\n");
-
-	pinctrl->regs.pcie_rst = devm_platform_ioremap_resource(pdev, index++);
-	if (IS_ERR(pinctrl->regs.pcie_rst))
-		return dev_err_probe(&pdev->dev,
-				     PTR_ERR(pinctrl->regs.pcie_rst),
-				     "failed to iomap pcie rst od regs\n");
+	err = airoha_pinctrl_ioreg_map(pinctrl, pdev);
+	if (err)
+		return err;
 
 	err = devm_pinctrl_register_and_init(&pdev->dev, &airoha_pinctrl_desc,
 					     pinctrl, &pinctrl->ctrl);
@@ -2965,10 +3004,10 @@ static int airoha_pinctrl_probe(struct platform_device *pdev)
 		return err;
 
 	/* build gpio-chip */
-	return airoha_pinctrl_add_gpiochip(pinctrl, pdev, index);
+	return airoha_pinctrl_add_gpiochip(pinctrl, pdev);
 }
 
-const struct of_device_id of_airoha_pinctrl_match[] = {
+static const struct of_device_id of_airoha_pinctrl_match[] = {
 	{ .compatible = "airoha,en7581-pinctrl" },
 	{ /* sentinel */ }
 };
