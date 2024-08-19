@@ -2875,6 +2875,9 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 	chip->base = -1;
 	chip->ngpio = AIROHA_NUM_GPIOS;
 
+	if (!of_property_read_bool(dev->of_node, "interrupt-controller"))
+		goto out;
+
 	spin_lock_init(&pinctrl->gpiochip.lock);
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -2896,10 +2899,10 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 	girq->chip->irq_mask = airoha_pinctrl_gpio_irq_mask;
 	girq->chip->irq_mask_ack = airoha_pinctrl_gpio_irq_mask;
 	girq->chip->irq_set_type = airoha_pinctrl_gpio_irq_type;
-	girq->chip->flags = IRQCHIP_SET_TYPE_MASKED;
+	girq->chip->flags = IRQCHIP_SET_TYPE_MASKED | IRQCHIP_IMMUTABLE;
 	girq->default_type = IRQ_TYPE_NONE;
 	girq->handler = handle_simple_irq;
-
+out:
 	return devm_gpiochip_add_data(dev, chip, pinctrl);
 }
 
