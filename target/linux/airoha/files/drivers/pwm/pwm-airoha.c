@@ -242,13 +242,13 @@ static void airoha_pwm_config_waveform(struct airoha_pwm *pc, int index,
 
 	/* Configure frequency divisor */
 	mask = WAVE_GEN_CYCLE_MASK(index % 4);
-	val = (period << __bf_shf(mask)) & mask;
+	val = (period << __ffs(mask)) & mask;
 	airoha_pwm_cycle_rmw(pc, REG_CYCLE_CFG_VALUE(index / 4), mask, val);
 
 	/* Configure duty cycle */
 	duty = ((DUTY_FULL - duty) << 8) | duty;
 	mask = GPIO_FLASH_PRD_MASK(index % 2);
-	val = (duty << __bf_shf(mask)) & mask;
+	val = (duty << __ffs(mask)) & mask;
 	airoha_pwm_flash_rmw(pc, REG_GPIO_FLASH_PRD_SET(index / 2), mask, val);
 }
 
@@ -275,7 +275,7 @@ static void airoha_pwm_config_flash_map(struct airoha_pwm *pc,
 	}
 
 	mask = GPIO_FLASH_SETID_MASK(hwpwm % 8);
-	val = ((index & 7) << __bf_shf(mask)) & mask;
+	val = ((index & 7) << __ffs(mask)) & mask;
 	airoha_pwm_flash_rmw(pc, addr, mask, val);
 	airoha_pwm_flash_set(pc, addr, GPIO_FLASH_EN(hwpwm % 8));
 }
