@@ -71,12 +71,10 @@
 #define FE_RST_CORE_MASK		BIT(0)
 
 #define REG_FE_WAN_MAC_H		0x0030
-#define REG_FE_WAN_MAC_LMIN		0x0034
-#define REG_FE_WAN_MAC_LMAX		0x0038
-
 #define REG_FE_LAN_MAC_H		0x0040
-#define REG_FE_LAN_MAC_LMIN		0x0044
-#define REG_FE_LAN_MAC_LMAX		0x0048
+
+#define REG_FE_MAC_LMIN(_n)		((_n) + 0x04)
+#define REG_FE_MAC_LMAX(_n)		((_n) + 0x08)
 
 #define REG_FE_CDM1_OQ_MAP0		0x0050
 #define REG_FE_CDM1_OQ_MAP1		0x0054
@@ -1043,20 +1041,17 @@ static bool airhoa_is_lan_gdm_port(struct airoha_gdm_port *port)
 
 static void airoha_set_macaddr(struct airoha_gdm_port *port, const u8 *addr)
 {
-	bool is_lan_port = airhoa_is_lan_gdm_port(port);
 	struct airoha_eth *eth = port->qdma->eth;
 	u32 val, reg;
 
+	reg = airhoa_is_lan_gdm_port(port) ? REG_FE_LAN_MAC_H
+					   : REG_FE_WAN_MAC_H;
 	val = (addr[0] << 16) | (addr[1] << 8) | addr[2];
-	reg = is_lan_port ? REG_FE_LAN_MAC_H : REG_FE_WAN_MAC_H;
 	airoha_fe_wr(eth, reg, val);
 
 	val = (addr[3] << 16) | (addr[4] << 8) | addr[5];
-	reg = is_lan_port ? REG_FE_LAN_MAC_LMIN : REG_FE_WAN_MAC_LMIN;
-	airoha_fe_wr(eth, reg, val);
-
-	reg = is_lan_port ? REG_FE_LAN_MAC_LMAX : REG_FE_WAN_MAC_LMAX;
-	airoha_fe_wr(eth, reg, val);
+	airoha_fe_wr(eth, REG_FE_MAC_LMIN(reg), val);
+	airoha_fe_wr(eth, REG_FE_MAC_LMAX(reg), val);
 }
 
 static void airoha_set_gdm_port_fwd_cfg(struct airoha_eth *eth, u32 addr,
