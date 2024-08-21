@@ -1,0 +1,10 @@
+--- a/crypto/Kconfig
++++ b/crypto/Kconfig
+@@ -76,6 +76,7 @@ config CRYPTO_SIG
+ 	tristate
+ 	select CRYPTO_SIG2
+ 	select CRYPTO_ALGAPI
++	default y
+ 
+ config CRYPTO_SIG2
+ 	tristate
