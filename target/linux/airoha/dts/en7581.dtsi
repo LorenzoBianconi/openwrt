@@ -274,7 +274,7 @@
 
 		pio: pinctrl {
 			compatible = "airoha,en7581-pinctrl", "syscon";
-			reg = <0x1fbf0200 0x0 0xc0>;
+			reg = <0x0 0x1fbf0200 0x0 0xc0>;
 			airoha,chip-scu = <&chip_scu>;
 
 			gpio-controller;
