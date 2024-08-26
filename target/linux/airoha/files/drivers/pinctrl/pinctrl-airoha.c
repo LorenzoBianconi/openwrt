@@ -3014,6 +3014,7 @@ static const struct of_device_id of_airoha_pinctrl_match[] = {
 	{ .compatible = "airoha,en7581-pinctrl" },
 	{ /* sentinel */ }
 };
+MODULE_DEVICE_TABLE(of, of_airoha_pinctrl_match);
 
 static struct platform_driver airoha_pinctrl_driver = {
 	.probe = airoha_pinctrl_probe,
