@@ -55,7 +55,7 @@ struct airoha_pwm {
 		u32 duty;
 		/* In 1/250 s, 1-250 permitted */
 		u32 period;
-		bool polarity;
+		enum pwm_polarity polarity;
 	} bucket[8];
 };
 
@@ -359,22 +359,21 @@ static int airoha_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
 				struct pwm_state *state)
 {
 	struct airoha_pwm *pc = container_of(chip, struct airoha_pwm, chip);
-	int i, id = - 1;
+	int i;
 
 	/* find hwpwm in waveform generator bucket */
 	for (i = 0; i < ARRAY_SIZE(pc->bucket); i++) {
 		if (pc->bucket[i].used & BIT_ULL(pwm->hwpwm)) {
-			id = i;
+			state->enabled = pc->initialized & BIT_ULL(pwm->hwpwm);
+			state->polarity = pc->bucket[i].polarity;
+			state->period = pc->bucket[i].period;
+			state->duty_cycle = pc->bucket[i].duty;
 			break;
 		}
 	}
 
-	state->enabled = pc->initialized & BIT_ULL(pwm->hwpwm) && id >= 0;
-	if (id >= 0) {
-		state->polarity = pc->bucket[id].polarity;
-		state->period = pc->bucket[id].period;
-		state->duty_cycle = pc->bucket[id].duty;
-	}
+	if (i == ARRAY_SIZE(pc->bucket))
+		state->enabled = false;
 
 	return 0;
 }
