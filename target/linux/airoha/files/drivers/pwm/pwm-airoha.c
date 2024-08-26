@@ -55,6 +55,7 @@ struct airoha_pwm {
 		u32 duty;
 		/* In 1/250 s, 1-250 permitted */
 		u32 period;
+		bool polarity;
 	} bucket[8];
 };
 
@@ -134,7 +135,8 @@ static void airoha_pwm_free_waveform(struct airoha_pwm *pc, unsigned int hwpwm)
 }
 
 static int airoha_pwm_consume_waveform(struct airoha_pwm *pc, u32 duty,
-				       u32 period, unsigned int hwpwm)
+				       u32 period, enum pwm_polarity polarity,
+				       unsigned int hwpwm)
 {
 	int id = airoha_pwm_get_waveform(pc, duty, period);
 
@@ -155,6 +157,7 @@ static int airoha_pwm_consume_waveform(struct airoha_pwm *pc, u32 duty,
 		pc->bucket[id].used |= BIT_ULL(hwpwm);
 		pc->bucket[id].period = period;
 		pc->bucket[id].duty = duty;
+		pc->bucket[id].polarity = polarity;
 	}
 
 	return id;
@@ -295,7 +298,7 @@ static int airoha_pwm_config(struct airoha_pwm *pc, struct pwm_device *pwm,
 	period = clamp_val(div64_u64(25 * period_ns, 100000000), PERIOD_MIN,
 			   PERIOD_MAX);
 	if (duty) {
-		index = airoha_pwm_consume_waveform(pc, duty, period,
+		index = airoha_pwm_consume_waveform(pc, duty, period, polarity,
 						    pwm->hwpwm);
 		if (index < 0)
 			return -EBUSY;
@@ -352,8 +355,33 @@ static int airoha_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 				 state->polarity);
 }
 
+static int airoha_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
+				struct pwm_state *state)
+{
+	struct airoha_pwm *pc = container_of(chip, struct airoha_pwm, chip);
+	int i, id = - 1;
+
+	/* find hwpwm in waveform generator bucket */
+	for (i = 0; i < ARRAY_SIZE(pc->bucket); i++) {
+		if (pc->bucket[i].used & BIT_ULL(pwm->hwpwm)) {
+			id = i;
+			break;
+		}
+	}
+
+	state->enabled = pc->initialized & BIT_ULL(pwm->hwpwm) && id >= 0;
+	if (id >= 0) {
+		state->polarity = pc->bucket[id].polarity;
+		state->period = pc->bucket[id].period;
+		state->duty_cycle = pc->bucket[id].duty;
+	}
+
+	return 0;
+}
+
 static const struct pwm_ops airoha_pwm_ops = {
 	.apply = airoha_pwm_apply,
+	.get_state = airoha_pwm_get_state,
 	.free = airoha_pwm_free,
 	.owner = THIS_MODULE,
 };
