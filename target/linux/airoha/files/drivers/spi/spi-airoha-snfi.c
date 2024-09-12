@@ -1063,6 +1063,7 @@ static const struct regmap_config spi_ctrl_regmap_config = {
 	.val_bits	= 32,
 	.reg_stride	= 4,
 	.max_register	= REG_SPI_CTRL_NFI2SPI_EN,
+	.disable_locking = true,
 };
 
 static const struct regmap_config spi_nfi_regmap_config = {
@@ -1071,6 +1072,7 @@ static const struct regmap_config spi_nfi_regmap_config = {
 	.val_bits	= 32,
 	.reg_stride	= 4,
 	.max_register	= REG_SPI_NFI_SNF_NFI_CNFG,
+	.disable_locking = true,
 };
 
 static int airoha_snand_probe(struct platform_device *pdev)
