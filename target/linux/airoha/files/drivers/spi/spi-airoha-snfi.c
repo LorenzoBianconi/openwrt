@@ -209,8 +209,13 @@ enum airoha_snand_cs {
 struct airoha_snand_dev {
 	size_t buf_len;
 
-	u8 *txrx_buf;
-	dma_addr_t dma_addr;
+	u8 *rx_buf;
+	u8 *tx_buf;
+	dma_addr_t rx_dma_addr;
+	dma_addr_t tx_dma_addr;
+
+	u64 cur_page_num;
+	bool data_need_update;
 };
 
 struct airoha_snand_ctrl {
@@ -619,7 +624,10 @@ static int airoha_snand_dirmap_create(struct spi_mem_dirmap_desc *desc)
 {
 	struct airoha_snand_dev *as_dev = spi_get_ctldata(desc->mem->spi);
 
-	if (!as_dev->txrx_buf)
+	if (!as_dev->rx_buf)
+		return -EINVAL;
+
+	if (!as_dev->tx_buf)
 		return -EINVAL;
 
 	if (desc->info.offset + desc->info.length > U32_MAX)
@@ -641,6 +649,12 @@ static ssize_t airoha_snand_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	u32 val, rd_mode;
 	int err;
 
+	/* block data cached, copy directly from DMA buffer */
+	if (!as_dev->data_need_update)
+		goto out;
+
+	as_dev->data_need_update = false;
+
 	switch (op->cmd.opcode) {
 	case SPI_NAND_OP_READ_FROM_CACHE_DUAL:
 		rd_mode = 1;
@@ -661,12 +675,12 @@ static ssize_t airoha_snand_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	if (err)
 		return err;
 
-	dma_sync_single_for_device(as_ctrl->dev, as_dev->dma_addr,
-				   as_dev->buf_len, DMA_BIDIRECTIONAL);
+	dma_sync_single_for_device(as_ctrl->dev, as_dev->rx_dma_addr,
+				   as_dev->buf_len, DMA_FROM_DEVICE);
 
 	/* set dma addr */
 	err = regmap_write(as_ctrl->regmap_nfi, REG_SPI_NFI_STRADDR,
-			   as_dev->dma_addr);
+			   as_dev->rx_dma_addr);
 	if (err)
 		return err;
 
@@ -749,13 +763,14 @@ static ssize_t airoha_snand_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	/* DMA read need delay for data ready from controller to DRAM */
 	udelay(1);
 
-	dma_sync_single_for_cpu(as_ctrl->dev, as_dev->dma_addr,
-				as_dev->buf_len, DMA_BIDIRECTIONAL);
+	dma_sync_single_for_cpu(as_ctrl->dev, as_dev->rx_dma_addr,
+				as_dev->buf_len, DMA_FROM_DEVICE);
 	err = airoha_snand_set_mode(as_ctrl, SPI_MODE_MANUAL);
 	if (err < 0)
 		return err;
 
-	memcpy(buf, as_dev->txrx_buf + offs, len);
+out:
+	memcpy(buf, as_dev->rx_buf + offs, len);
 
 	return len;
 }
@@ -774,11 +789,11 @@ static ssize_t airoha_snand_dirmap_write(struct spi_mem_dirmap_desc *desc,
 	if (err < 0)
 		return err;
 
-	dma_sync_single_for_cpu(as_ctrl->dev, as_dev->dma_addr,
-				as_dev->buf_len, DMA_BIDIRECTIONAL);
-	memcpy(as_dev->txrx_buf + offs, buf, len);
-	dma_sync_single_for_device(as_ctrl->dev, as_dev->dma_addr,
-				   as_dev->buf_len, DMA_BIDIRECTIONAL);
+	dma_sync_single_for_cpu(as_ctrl->dev, as_dev->tx_dma_addr,
+				as_dev->buf_len, DMA_TO_DEVICE);
+	memcpy(as_dev->tx_buf + offs, buf, len);
+	dma_sync_single_for_device(as_ctrl->dev, as_dev->tx_dma_addr,
+				   as_dev->buf_len, DMA_TO_DEVICE);
 
 	err = airoha_snand_set_mode(as_ctrl, SPI_MODE_DMA);
 	if (err < 0)
@@ -795,7 +810,7 @@ static ssize_t airoha_snand_dirmap_write(struct spi_mem_dirmap_desc *desc,
 		wr_mode = 0;
 
 	err = regmap_write(as_ctrl->regmap_nfi, REG_SPI_NFI_STRADDR,
-			   as_dev->dma_addr);
+			   as_dev->tx_dma_addr);
 	if (err)
 		return err;
 
@@ -887,8 +902,21 @@ static int airoha_snand_exec_op(struct spi_mem *mem,
 {
 	struct spi_device *spi = mem->spi;
 	struct airoha_snand_ctrl *as_ctrl = spi_master_get_devdata(spi->master);
+	struct airoha_snand_dev *as_dev = spi_get_ctldata(spi);
 	u8 data[8], cmd, opcode = op->cmd.opcode;
 	int i, err;
+
+	if (opcode == SPI_NAND_OP_PROGRAM_EXECUTE &&
+	    op->addr.val == as_dev->cur_page_num) {
+		as_dev->data_need_update = true;
+	} else if (opcode == SPI_NAND_OP_PAGE_READ) {
+		if (!as_dev->data_need_update &&
+		    op->addr.val == as_dev->cur_page_num)
+			return 0;
+
+		as_dev->data_need_update = true;
+		as_dev->cur_page_num = op->addr.val;
+	}
 
 	/* switch to manual mode */
 	err = airoha_snand_set_mode(as_ctrl, SPI_MODE_MANUAL);
@@ -961,16 +989,27 @@ static int airoha_snand_setup(struct spi_device *spi)
 
 	/* prepare device buffer */
 	as_dev->buf_len = SPI_NAND_CACHE_SIZE;
-	as_dev->txrx_buf = devm_kzalloc(as_ctrl->dev, as_dev->buf_len,
+	as_dev->tx_buf = devm_kzalloc(as_ctrl->dev, as_dev->buf_len,
 					GFP_KERNEL);
-	if (!as_dev->txrx_buf)
+	if (!as_dev->tx_buf)
 		return -ENOMEM;
 
-	as_dev->dma_addr = dma_map_single(as_ctrl->dev, as_dev->txrx_buf,
-					  as_dev->buf_len, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(as_ctrl->dev, as_dev->dma_addr))
+	as_dev->rx_buf = devm_kzalloc(as_ctrl->dev, as_dev->buf_len,
+					GFP_KERNEL);
+	if (!as_dev->rx_buf)
 		return -ENOMEM;
 
+	as_dev->tx_dma_addr = dma_map_single(as_ctrl->dev, as_dev->tx_buf,
+					  as_dev->buf_len, DMA_TO_DEVICE);
+	if (dma_mapping_error(as_ctrl->dev, as_dev->tx_dma_addr))
+		return -ENOMEM;
+
+	as_dev->rx_dma_addr = dma_map_single(as_ctrl->dev, as_dev->rx_buf,
+					  as_dev->buf_len, DMA_FROM_DEVICE);
+	if (dma_mapping_error(as_ctrl->dev, as_dev->rx_dma_addr))
+		return -ENOMEM;
+
+	as_dev->data_need_update = true;
 	spi_set_ctldata(spi, as_dev);
 
 	return 0;
@@ -981,8 +1020,10 @@ static void airoha_snand_cleanup(struct spi_device *spi)
 	struct airoha_snand_ctrl *as_ctrl = spi_master_get_devdata(spi->master);
 	struct airoha_snand_dev *as_dev = spi_get_ctldata(spi);
 
-	dma_unmap_single(as_ctrl->dev, as_dev->dma_addr,
-			 as_dev->buf_len, DMA_BIDIRECTIONAL);
+	dma_unmap_single(as_ctrl->dev, as_dev->tx_dma_addr,
+			 as_dev->buf_len, DMA_TO_DEVICE);
+	dma_unmap_single(as_ctrl->dev, as_dev->rx_dma_addr,
+			 as_dev->buf_len, DMA_FROM_DEVICE);
 	spi_set_ctldata(spi, NULL);
 }
 
