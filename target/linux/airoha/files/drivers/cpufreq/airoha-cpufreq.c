@@ -27,7 +27,7 @@ static unsigned int airoha_cpufreq_get(unsigned int cpu)
 	struct arm_smccc_res res;
 
 	arm_smccc_smc(AIROHA_SIP_AVS_HANDLE, AIROHA_AVS_OP_GET_FREQ,
-		      0, 0, 0, 0, 0 ,0, &res);
+		      0, 0, 0, 0, 0, 0, &res);
 
 	return (int) (res.a0 * 1000);
 }
@@ -37,7 +37,7 @@ static int airoha_cpufreq_set_target(struct cpufreq_policy *policy, unsigned int
 	struct arm_smccc_res res;
 
 	arm_smccc_smc(AIROHA_SIP_AVS_HANDLE, AIROHA_AVS_OP_FREQ_DYN_ADJ,
-		      0, index, 0, 0, 0 ,0, &res);
+		      0, index, 0, 0, 0, 0, &res);
 
 	return 0;
 }
