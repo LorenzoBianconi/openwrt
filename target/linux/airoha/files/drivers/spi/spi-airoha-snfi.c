@@ -657,8 +657,9 @@ static ssize_t airoha_snand_dirmap_read(struct spi_mem_dirmap_desc *desc,
 
 	dma_addr = dma_map_single(as_ctrl->dev, txrx_buf, SPI_NAND_CACHE_SIZE,
 				  DMA_FROM_DEVICE);
-	if (dma_mapping_error(as_ctrl->dev, dma_addr))
-		return -ENOMEM;
+	err = dma_mapping_error(as_ctrl->dev, dma_addr);
+	if (err)
+		return err;
 
 	/* set dma addr */
 	err = regmap_write(as_ctrl->regmap_nfi, REG_SPI_NFI_STRADDR,
@@ -779,8 +780,9 @@ static ssize_t airoha_snand_dirmap_write(struct spi_mem_dirmap_desc *desc,
 	memcpy(txrx_buf + offs, buf, len);
 	dma_addr = dma_map_single(as_ctrl->dev, txrx_buf, SPI_NAND_CACHE_SIZE,
 				  DMA_TO_DEVICE);
-	if (dma_mapping_error(as_ctrl->dev, dma_addr))
-		return -ENOMEM;
+	err = dma_mapping_error(as_ctrl->dev, dma_addr);
+	if (err)
+		return err;
 
 	err = airoha_snand_set_mode(as_ctrl, SPI_MODE_DMA);
 	if (err < 0)
@@ -1021,6 +1023,12 @@ static const struct regmap_config spi_nfi_regmap_config = {
 	.max_register	= REG_SPI_NFI_SNF_NFI_CNFG,
 };
 
+static const struct of_device_id airoha_snand_ids[] = {
+	{ .compatible	= "airoha,en7581-snand" },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, airoha_snand_ids);
+
 static int airoha_snand_probe(struct platform_device *pdev)
 {
 	struct airoha_snand_ctrl *as_ctrl;
@@ -1078,12 +1086,6 @@ static int airoha_snand_probe(struct platform_device *pdev)
 
 	return devm_spi_register_controller(dev, ctrl);
 }
-
-static const struct of_device_id airoha_snand_ids[] = {
-	{ .compatible	= "airoha,en7581-snand" },
-	{ /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, airoha_snand_ids);
 
 static struct platform_driver airoha_snand_driver = {
 	.driver = {
