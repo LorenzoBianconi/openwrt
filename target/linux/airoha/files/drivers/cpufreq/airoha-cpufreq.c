@@ -24,22 +24,30 @@ static LIST_HEAD(priv_list);
 
 static unsigned int airoha_cpufreq_get(unsigned int cpu)
 {
-	struct arm_smccc_res res;
+	const struct arm_smccc_1_2_regs args = {
+		.a0 = AIROHA_SIP_AVS_HANDLE,
+		.a1 = AIROHA_AVS_OP_GET_FREQ,
+	};
+	struct arm_smccc_1_2_regs res;
 
-	arm_smccc_smc(AIROHA_SIP_AVS_HANDLE, AIROHA_AVS_OP_GET_FREQ,
-		      0, 0, 0, 0, 0, 0, &res);
+	arm_smccc_1_2_smc(&args, &res);
 
 	return (int) (res.a0 * 1000);
 }
 
 static int airoha_cpufreq_set_target(struct cpufreq_policy *policy, unsigned int index)
 {
-	struct arm_smccc_res res;
+	const struct arm_smccc_1_2_regs args = {
+		.a0 = AIROHA_SIP_AVS_HANDLE,
+		.a1 = AIROHA_AVS_OP_FREQ_DYN_ADJ,
+		.a3 = index,
+	};
+	struct arm_smccc_1_2_regs res;
 
-	arm_smccc_smc(AIROHA_SIP_AVS_HANDLE, AIROHA_AVS_OP_FREQ_DYN_ADJ,
-		      0, index, 0, 0, 0, 0, &res);
+	arm_smccc_1_2_smc(&args, &res);
 
-	return 0;
+	/* SMC signal correct apply by unsetting BIT 0 */
+	return res.a0 & BIT(0) ? -EINVAL : 0;
 }
 
 
