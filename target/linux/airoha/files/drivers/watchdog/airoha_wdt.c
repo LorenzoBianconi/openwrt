@@ -125,9 +125,10 @@ static const struct watchdog_ops airoha_wdt_ops = {
 
 static int airoha_wdt_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
-	struct watchdog_device *wdog_dev;
 	struct airoha_wdt_desc *airoha_wdt;
+	struct watchdog_device *wdog_dev;
+	struct device *dev = &pdev->dev;
+	struct clk *bus_clk;
 	int ret;
 
 	airoha_wdt = devm_kzalloc(dev, sizeof(*airoha_wdt), GFP_KERNEL);
@@ -138,13 +139,13 @@ static int airoha_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(airoha_wdt->base))
 		return PTR_ERR(airoha_wdt->base);
 
-	ret = device_property_read_u32(dev, "clock-frequency",
-				       &airoha_wdt->wdt_freq);
-	if (ret)
-		return -EINVAL;
+	bus_clk = devm_clk_get_enabled(dev, "bus");
+	if (IS_ERR(bus_clk))
+		return dev_err_probe(dev, PTR_ERR(bus_clk),
+				     "failed to enable bus clock\n");
 
 	/* Watchdog ticks at half the bus rate */
-	airoha_wdt->wdt_freq /= 2;
+	airoha_wdt->wdt_freq = clk_get_rate(bus_clk) / 2;
 
 	/* Initialize struct watchdog device */
 	wdog_dev = &airoha_wdt->wdog_dev;
