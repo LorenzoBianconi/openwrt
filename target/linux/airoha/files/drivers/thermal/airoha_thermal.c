@@ -140,7 +140,7 @@
 #define EN7581_SLOPE_X100_DIO_AVS		5645
 
 #define EN7581_INIT_TEMP_CPK_X10		300
-#define EN7581_INIT_TEMP_FPK_X10		620
+#define EN7581_INIT_TEMP_FTK_X10		620
 #define EN7581_INIT_TEMP_NONK_X10		550
 
 #define EN7581_SCU_THERMAL_PROTECT_KEY		0x12
@@ -296,11 +296,11 @@ static void airoha_thermal_setup_adc_val(struct device *dev,
 		/* Different slope are applied if the sensor is used for CPU or for package */
 		cpu_sensor = readl(priv->base + EN7581_EFUSE_TEMP_CPU_SENSOR_REG);
 		if (cpu_sensor) {
+			priv->default_slope = EN7581_SLOPE_X100_DIO_DEFAULT;
+			priv->init_temp = EN7581_INIT_TEMP_FTK_X10;
+		} else {
 			priv->default_slope = EN7581_SLOPE_X100_DIO_AVS;
 			priv->init_temp = EN7581_INIT_TEMP_CPK_X10;
-		} else {
-			priv->default_slope = EN7581_SLOPE_X100_DIO_DEFAULT;
-			priv->init_temp = EN7581_INIT_TEMP_FPK_X10;
 		}
 	} else {
 		priv->default_offset = airoha_get_thermal_ADC(priv);
