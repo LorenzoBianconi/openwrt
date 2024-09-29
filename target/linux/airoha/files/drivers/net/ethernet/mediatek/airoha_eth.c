@@ -555,6 +555,8 @@
 #define DBG_CNTRMEM_EN_MASK		BIT(31)
 
 #define REG_SDN_CNTR_CFG		0x0800
+#define SDN_CNTR_EN			BIT(31)
+#define SDN_CNTR_CPU_RX_EN		BIT(3)
 
 #define REG_MULTICAST_FPORT(_n)		(0x0880 + ((_n) << 2))
 #define MULTICAST_SPTAG_KEEP_HI_EN_MASK	BIT(31)
@@ -2175,7 +2177,7 @@ static int airoha_qdma_clear_flow_counter(struct airoha_qdma *qdma, int group,
 
 	airoha_qdma_wr(qdma, REG_SDN_CNTR_CFG + 0x8, 0);
 	airoha_qdma_wr(qdma, REG_SDN_CNTR_CFG + 0xc, 0);
-	airoha_qdma_wr(qdma, REG_SDN_CNTR_CFG + 0x8, val);
+	airoha_qdma_wr(qdma, REG_SDN_CNTR_CFG + 0x4, val);
 
 	return read_poll_timeout(airoha_qdma_rr, val,
 				 val & SDN_CNTR_PARAM_CFG_RW_DONE_MASK,
@@ -2187,6 +2189,9 @@ static int airoha_qdma_init_flow_counter(struct airoha_qdma *qdma)
 {
 	const int flow_count_group_max_idx[] = { 63, 31, 127 };
 	int i;
+
+	airoha_qdma_set(qdma, REG_SDN_CNTR_CFG,
+			SDN_CNTR_EN | SDN_CNTR_CPU_RX_EN);
 
 	for (i = 0; i < ARRAY_SIZE(flow_count_group_max_idx); i++) {
 		int err, index = flow_count_group_max_idx[i];
