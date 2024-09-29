@@ -320,7 +320,7 @@ config QORIQ_THERMAL
 config AIROHA_THERMAL
 	tristate "Airoha thermal sensor driver"
 	depends on ARCH_AIROHA || COMPILE_TEST
-	depends on HAS_IOMEM
+	depends on MFD_SYSCON
 	depends on OF
 	help
 	  Enable this to plug the Airoha thermal sensor driver into the Linux
