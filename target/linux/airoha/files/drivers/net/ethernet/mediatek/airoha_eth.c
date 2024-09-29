@@ -2293,7 +2293,9 @@ static int airoha_qdma_init_qos(struct airoha_qdma *qdma)
 	airoha_qdma_clear(qdma, REG_INGRESS_TRTCM_CFG,
 			  INGRESS_TRTCM_MODE_MASK);
 	/* rx rate_limit default settings */
-	airoha_qdma_init_rx_meter(qdma);
+	err = airoha_qdma_init_rx_meter(qdma);
+	if (err)
+		return err;
 
 	/* xmit ring drop default setting */
 	airoha_qdma_set(qdma, REG_TX_RING_BLOCKING(0),
