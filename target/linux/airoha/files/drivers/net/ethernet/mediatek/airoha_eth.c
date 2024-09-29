@@ -808,14 +808,6 @@ enum {
 };
 
 enum {
-	RATE_LIMIT_INGRESS_TRTCM,
-	RATE_LIMIT_SLA_TRTCM,
-	RATE_LIMIT_EGRESS_QUEUE,
-	RATE_LIMIT_EGRESS_TRTCM,
-	RATE_LIMIT_GLB_RATECTL,
-};
-
-enum {
 	TRTCM_MISC_MODE,
 	TRTCM_TOKEN_RATE_MODE,
 	TRTCM_BUCKETSIZE_SHIFT_MODE,
@@ -823,6 +815,7 @@ enum {
 };
 
 #define DEFAULT_RX_METER_RATE			1000000
+#define MAX_TOKEN_SIZE_OFFSET			17
 #define TXQ_CNGST_GLOBAL_MAX_THR		((HW_DSCP_NUM * 9) / 10)
 #define TXQ_CNGST_GLOBAL_MIN_THR		(HW_DSCP_NUM / 2)
 #define TXQ_CNGST_CHAN_MAX_THR			(HW_DSCP_NUM / 2)
@@ -2074,10 +2067,11 @@ static int airoha_qdma_set_rl_config(struct airoha_qdma *qdma, int qid,
 	return airoha_qdma_set_rl_param(qdma, qid, addr, TRTCM_MISC_MODE, val);
 }
 
-static int airoha_qdma_set_rx_token_rate(struct airoha_qdma *qdma, int qid,
-					 u32 addr)
+static int airoha_qdma_set_rx_token_bucket(struct airoha_qdma *qdma, int qid,
+					   u32 addr)
 {
 	u32 val, config, tick, unit, rate, rate_frac;
+	int err;
 
 	if (airoha_qdma_get_rl_param(qdma, qid, addr, TRTCM_MISC_MODE,
 				     &config, NULL))
@@ -2100,22 +2094,12 @@ static int airoha_qdma_set_rx_token_rate(struct airoha_qdma *qdma, int qid,
 	rate = FIELD_PREP(TRTCM_TOKEN_RATE_MASK, rate) |
 	       FIELD_PREP(TRTCM_TOKEN_RATE_FRACTION_MASK, rate_frac);
 
-	return airoha_qdma_set_rl_param(qdma, qid, addr, TRTCM_TOKEN_RATE_MODE,
-					rate);
-}
+	err = airoha_qdma_set_rl_param(qdma, qid, addr, TRTCM_TOKEN_RATE_MODE,
+				       rate);
+	if (err)
+		return err;
 
-static int airoha_qdma_set_token_size(struct airoha_qdma *qdma, int qid, u32 addr)
-{
-	u32 unit, val;
-
-	if (airoha_qdma_get_rl_param(qdma, qid, addr, TRTCM_MISC_MODE,
-				     &val, NULL))
-		return -EINVAL;
-
-	unit = (val & TRTCM_TICK_SEL) ? 16 : 1024;
-	/* FIXME: compute token size shift */
-	val = unit / 2;
-
+	val = min_t(u32, __fls(DEFAULT_RX_METER_RATE), MAX_TOKEN_SIZE_OFFSET);
 	return airoha_qdma_set_rl_param(qdma, qid, addr,
 					TRTCM_BUCKETSIZE_SHIFT_MODE, val);
 }
@@ -2153,13 +2137,8 @@ static int airoha_qdma_init_rx_meter(struct airoha_qdma *qdma)
 		if (err)
 			return err;
 
-		err = airoha_qdma_set_rx_token_rate(qdma, i,
-						    REG_INGRESS_TRTCM_CFG);
-		if (err)
-			return err;
-
-		err = airoha_qdma_set_token_size(qdma, i,
-						 REG_INGRESS_TRTCM_CFG);
+		err = airoha_qdma_set_rx_token_bucket(qdma, i,
+						      REG_INGRESS_TRTCM_CFG);
 		if (err)
 			return err;
 	}
