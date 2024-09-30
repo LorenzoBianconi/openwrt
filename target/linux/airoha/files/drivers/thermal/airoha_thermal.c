@@ -23,6 +23,12 @@
 #define   EN7581_SENSE2_EN			BIT(2)
 #define   EN7581_SENSE1_EN			BIT(1)
 #define   EN7581_SENSE0_EN			BIT(0)
+#define EN7581_TEMPMONCTL1			0x804
+/* period unit calculated in BUS clock * 256 scaling-up */
+#define   EN7581_PERIOD_UNIT			GENMASK(9, 0)
+#define EN7581_TEMPMONCTL2			0x808
+#define   EN7581_FILT_INTERVAL			GENMASK(25, 16)
+#define   EN7581_SEN_INTERVAL			GENMASK(9, 0)
 #define EN7581_TEMPMONINT			0x80C
 #define   EN7581_STAGE3_INT_EN			BIT(31)
 #define   EN7581_STAGE2_INT_EN			BIT(30)
@@ -52,10 +58,16 @@
 #define   EN7581_HINTEN1			BIT(6)
 #define   EN7581_CINTEN1			BIT(5)
 #define   EN7581_NOHOTINTEN0			BIT(4)
-#define   EN7581_HOFSINTEN0			BIT(3)
-#define   EN7581_LOFSINTEN0			BIT(2)
-#define   EN7581_HINTEN0			BIT(1)
-#define   EN7581_CINTEN0			BIT(0)
+/* Similar to COLD and HOT also these seems to be swapped in documentation */
+#define   EN7581_LOFSINTEN0			BIT(3) /* In documentation: BIT(2) */
+#define   EN7581_HOFSINTEN0			BIT(2) /* In documentation: BIT(3) */
+/* It seems documentation have these swapped as the HW
+ * - Fire BIT(1) when lower than EN7581_COLD_THRE
+ * - Fire BIT(0) and BIT(5) when higher than EN7581_HOT2NORMAL_THRE or
+ *     EN7581_HOT_THRE
+ */
+#define   EN7581_CINTEN0			BIT(1) /* In documentation: BIT(0) */
+#define   EN7581_HINTEN0			BIT(0) /* In documentation: BIT(1) */
 #define EN7581_TEMPMONINTSTS			0x810
 #define   EN7581_STAGE3_INT_STAT		BIT(31)
 #define   EN7581_STAGE2_INT_STAT		BIT(30)
@@ -85,16 +97,36 @@
 #define   EN7581_HINTSTS1			BIT(6)
 #define   EN7581_CINTSTS1			BIT(5)
 #define   EN7581_NOHOTINTSTS0			BIT(4)
-#define   EN7581_HOFSINTSTS0			BIT(3)
-#define   EN7581_LOFSINTSTS0			BIT(2)
-#define   EN7581_HINTSTS0			BIT(1)
-#define   EN7581_CINTSTS0			BIT(0)
+/* Similar to COLD and HOT also these seems to be swapped in documentation */
+#define   EN7581_LOFSINTSTS0			BIT(3) /* In documentation: BIT(2) */
+#define   EN7581_HOFSINTSTS0			BIT(2) /* In documentation: BIT(3) */
+/* It seems documentation have these swapped as the HW
+ * - Fire BIT(1) when lower than EN7581_COLD_THRE
+ * - Fire BIT(0) and BIT(5) when higher than EN7581_HOT2NORMAL_THRE or
+ *     EN7581_HOT_THRE
+ *
+ * To clear things, we swap the define but we keep them documented here.
+ */
+#define   EN7581_CINTSTS0			BIT(1) /* In documentation: BIT(0) */
+#define   EN7581_HINTSTS0			BIT(0) /* In documentation: BIT(1)*/
+/* Monitor will take the bigger threshold between HOT2NORMAL and HOT
+ * and will fire both HOT2NORMAL and HOT interrupt when higher than the 2
+ *
+ * It has also been observed that not setting HOT2NORMAL makes the monitor
+ * treat COLD threshold as HOT2NORMAL.
+ */
 #define EN7581_TEMPH2NTHRE			0x824
+/* It seems HOT2NORMAL is actually NORMAL2HOT */
 #define   EN7581_HOT2NORMAL_THRE		GENMASK(11, 0)
 #define EN7581_TEMPHTHRE			0x828
 #define   EN7581_HOT_THRE			GENMASK(11, 0)
+/* Monitor will use this as HOT2NORMAL (fire interrupt when lower than...)*/
 #define EN7581_TEMPCTHRE			0x82c
 #define   EN7581_COLD_THRE			GENMASK(11, 0)
+#define EN7581_TEMPOFFSETL			0x830
+#define   EN7581_LOW_OFFSET			GENMASK(11, 0)
+#define EN7581_TEMPOFFSETH			0x834
+#define   EN7581_HIGH_OFFSET			GENMASK(11, 0)
 #define EN7581_TEMPMSRCTL0			0x838
 #define   EN7581_MSRCTL3			GENMASK(11, 9)
 #define   EN7581_MSRCTL2			GENMASK(8, 6)
@@ -130,6 +162,7 @@
 #define   EN7581_MSRCTL_10SAMPLE_MAX_MIX_AVG8	0x4
 #define   EN7581_MSRCTL_18SAMPLE_MAX_MIX_AVG16	0x5
 #define EN7581_TEMPAHBPOLL			0x840
+#define   EN7581_ADC_POLL_INTVL			GENMASK(31, 0)
 /* PTPSPARE0,2 reg are used to store efuse info for calibrated temp offset */
 #define EN7581_EFUSE_TEMP_OFFSET_REG		0xf20 /* PTPSPARE0 */
 #define   EN7581_EFUSE_TEMP_OFFSET		GENMASK(31, 16)
@@ -228,17 +261,25 @@ static int airoha_thermal_set_trips(struct thermal_zone_device *tz, int low,
 {
 	struct airoha_thermal_priv *priv = tz->devdata;
 
-	/* Validate low and high and clamp them to sane values */
-	if (low < RAW_TO_TEMP(priv, 0))
-		low = -30000;
-	if (high > RAW_TO_TEMP(priv, FIELD_MAX(EN7581_DOUT_TADC_MASK)))
-		high = 110000;
+	if (high != INT_MAX) {
+		/* Validate high and clamp them a sane value */
+		if (high > RAW_TO_TEMP(priv, FIELD_MAX(EN7581_DOUT_TADC_MASK)))
+			high = 110000;
 
-	/* Set low and high trip point (shift by 4 to follow monitor limitation) */
-	writel(TEMP_TO_RAW(priv, low) >> 4, priv->base + EN7581_TEMPCTHRE);
-	/* Set the HOT to NORMAL to 5°C less than hot trip point */
-	writel(TEMP_TO_RAW(priv, high - 5000) >> 4, priv->base + EN7581_TEMPH2NTHRE);
-	writel(TEMP_TO_RAW(priv, high) >> 4, priv->base + EN7581_TEMPHTHRE);
+		/* We offset the high temp of 1°C to trigger correct event */
+		writel(TEMP_TO_RAW(priv, high) >> 4,
+		       priv->base + EN7581_TEMPOFFSETH);
+	}
+
+	if (low != -INT_MAX) {
+		/* Validate low and clamp them to a sane value */
+		if (low < RAW_TO_TEMP(priv, 0))
+			low = -33000;
+
+		/* We offset the low temp of 1°C to trigger correct event */
+		writel(TEMP_TO_RAW(priv, low) >> 4,
+		       priv->base + EN7581_TEMPOFFSETL);
+	}
 
 	/* Enable sensor 0 monitor */
 	writel(EN7581_SENSE0_EN, priv->base + EN7581_TEMPMONCTL0);
@@ -258,13 +299,11 @@ static irqreturn_t airoha_thermal_irq(int irq, void *data)
 	u32 status;
 
 	status = readl(priv->base + EN7581_TEMPMONINTSTS);
-	switch (status & (EN7581_LOFSINTEN0 | EN7581_HOFSINTEN0 |
-			  EN7581_NOHOTINTEN0)) {
-	case EN7581_LOFSINTEN0:
-	case EN7581_HOFSINTEN0:
+	switch (status & (EN7581_HOFSINTSTS0 | EN7581_LOFSINTSTS0)) {
+	case EN7581_HOFSINTSTS0:
 		event = THERMAL_TRIP_VIOLATED;
 		break;
-	case EN7581_NOHOTINTEN0:
+	case EN7581_LOFSINTSTS0:
 		event = THERMAL_EVENT_UNSPECIFIED;
 		break;
 	default:
@@ -312,9 +351,6 @@ static void airoha_thermal_setup_adc_val(struct device *dev,
 
 static void airoha_thermal_setup_monitor(struct airoha_thermal_priv *priv)
 {
-	/* Configure AHB pool time to 200ms based on BUS clock */
-	writel(200, priv->base + EN7581_TEMPAHBPOLL);
-
 	/* Set measure mode */
 	writel(FIELD_PREP(EN7581_MSRCTL0, EN7581_MSRCTL_6SAMPLE_MAX_MIX_AVG4),
 	       priv->base + EN7581_TEMPMSRCTL0);
@@ -351,9 +387,25 @@ static void airoha_thermal_setup_monitor(struct airoha_thermal_priv *priv)
 	writel(FIELD_PREP(EN7581_ADC_VOLTAGE_SHIFT, 4),
 	       priv->base + EN7581_TEMPADCVOLTAGESHIFT);
 
-	/* Enable COLD, HOT and HOT2NORMAL interrupt */
-	writel(EN7581_LOFSINTEN0 | EN7581_HOFSINTEN0 | EN7581_NOHOTINTEN0,
+	/* Enable LOW and HIGH interrupt */
+	writel(EN7581_HOFSINTEN0 | EN7581_LOFSINTEN0,
 	       priv->base + EN7581_TEMPMONINT);
+
+	/* BUS clock is 300MHz counting unit is 3 * 68.64 * 256 = 52.715us */
+	writel(FIELD_PREP(EN7581_PERIOD_UNIT, 3),
+	       priv->base + EN7581_TEMPMONCTL1);
+
+	/*
+	 * filt interval is 1 * 52.715us = 52.715us,
+	 * sen interval is 379 * 52.715us = 19.97ms
+	 */
+	writel(FIELD_PREP(EN7581_FILT_INTERVAL, 1) |
+	       FIELD_PREP(EN7581_FILT_INTERVAL, 379),
+	       priv->base + EN7581_TEMPMONCTL2);
+
+	/* AHB poll is set to 146 * 68.64 = 10.02us */
+	writel(FIELD_PREP(EN7581_ADC_POLL_INTVL, 146),
+	       priv->base + EN7581_TEMPAHBPOLL);
 }
 
 static int airoha_thermal_probe(struct platform_device *pdev)
