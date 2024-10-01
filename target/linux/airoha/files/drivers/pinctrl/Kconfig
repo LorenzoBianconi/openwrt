@@ -37,7 +37,11 @@ config PINCTRL_AIROHA
 	depends on ARCH_AIROHA || COMPILE_TEST
 	select PINMUX
 	select GENERIC_PINCONF
+	select GENERIC_PINCTRL_GROUPS
+	select GENERIC_PINMUX_FUNCTIONS
 	select GPIOLIB
+	select GPIOLIB_IRQCHIP
+	select REGMAP_MMIO
 	help
 	  Say yes here to support pin controller and gpio driver
 	  on Airoha EN7581 SoC.
