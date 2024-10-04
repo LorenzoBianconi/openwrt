@@ -67,7 +67,8 @@
 #define EIP93_REG_PE_RDR_BASE			0x84
 #define EIP93_REG_PE_RING_CONFIG		0x88
 #define   EIP93_PE_EN_EXT_TRIG			BIT(31)
-/* #define   EIP93_PE_RING_OFFSET		GENMASK(23, 15) NOT DOCUMENTED? */
+/* Absent in later revision of eip93 */
+/* #define   EIP93_PE_RING_OFFSET		GENMASK(23, 15) */
 #define   EIP93_PE_RING_SIZE			GENMASK(9, 0)
 #define EIP93_REG_PE_RING_THRESH		0x8c
 #define   EIPR93_PE_TIMEROUT_EN			BIT(31)
@@ -303,32 +304,32 @@
 #define EIP93_REG_PE_ARC4STATE			0x700
 
 struct sa_record {
-	u32		sa_cmd0_word;
-	u32		sa_cmd1_word;
-	u32		sa_key[8];
-	u32		sa_i_digest[8];
-	u32		sa_o_digest[8];
-	u32		sa_spi;
-	u32		sa_seqnum[2];
-	u32		sa_seqmum_mask[2];
-	u32		sa_nonce;
+	u32 sa_cmd0_word;
+	u32 sa_cmd1_word;
+	u32 sa_key[8];
+	u8 sa_i_digest[32];
+	u8 sa_o_digest[32];
+	u32 sa_spi;
+	u32 sa_seqnum[2];
+	u32 sa_seqmum_mask[2];
+	u32 sa_nonce;
 } __packed;
 
 struct sa_state {
-	u32	state_iv[4];
-	u32	state_byte_cnt[2];
-	u32	state_i_digest[8];
+	u32 state_iv[4];
+	u32 state_byte_cnt[2];
+	u8 state_i_digest[32];
 } __packed;
 
 struct eip93_descriptor {
-	u32			pe_ctrl_stat_word;
-	u32			src_addr;
-	u32			dst_addr;
-	u32			sa_addr;
-	u32			state_addr;
-	u32			arc4_addr;
-	u32			user_id;
-	u32			pe_length_word;
+	u32 pe_ctrl_stat_word;
+	u32 src_addr;
+	u32 dst_addr;
+	u32 sa_addr;
+	u32 state_addr;
+	u32 arc4_addr;
+	u32 user_id;
+	u32 pe_length_word;
 } __packed;
 
 #endif

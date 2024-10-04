@@ -11,11 +11,13 @@
 #include <crypto/hmac.h>
 #include <crypto/sha1.h>
 #include <crypto/sha2.h>
+#include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 
 #include "eip93-cipher.h"
+#include "eip93-hash.h"
 #include "eip93-common.h"
 #include "eip93-main.h"
 #include "eip93-regs.h"
@@ -27,7 +29,7 @@ int mtk_parse_ctrl_stat_err(struct mtk_device *mtk, int err)
 	if (!err)
 		return 0;
 
-	switch (err) {
+	switch (err & ~EIP93_PE_CTRL_PE_EXT_ERR_CODE) {
 	case EIP93_PE_CTRL_PE_AUTH_ERR:
 	case EIP93_PE_CTRL_PE_PAD_ERR:
 		return -EBADMSG;
@@ -37,7 +39,7 @@ int mtk_parse_ctrl_stat_err(struct mtk_device *mtk, int err)
 	case EIP93_PE_CTRL_PE_EXT_ERR:
 		break;
 	default:
-		dev_err(mtk->dev, "Unhandled error %x\n", err);
+		dev_err(mtk->dev, "Unhandled error 0x%08x\n", err);
 		return -EINVAL;
 	}
 
@@ -58,7 +60,7 @@ int mtk_parse_ctrl_stat_err(struct mtk_device *mtk, int err)
 	case EIP93_PE_CTRL_PE_EXT_ERR_BLOCK_SIZE_ERR:
 		return -EBADMSG;
 	default:
-		dev_err(mtk->dev, "Unhandled ext error %x\n", ext_err);
+		dev_err(mtk->dev, "Unhandled ext error 0x%08x\n", ext_err);
 		return -EINVAL;
 	}
 }
@@ -96,7 +98,7 @@ static void *mtk_ring_next_rptr(struct mtk_device *mtk,
 	return ptr;
 }
 
-static int mtk_put_descriptor(struct mtk_device *mtk,
+int mtk_put_descriptor(struct mtk_device *mtk,
 			      struct eip93_descriptor *desc)
 {
 	struct eip93_descriptor *cdesc;
@@ -155,12 +157,6 @@ void *mtk_get_descriptor(struct mtk_device *mtk)
 	atomic_inc(&mtk->ring->free);
 	spin_unlock_irqrestore(&mtk->ring->read_lock, irqflags);
 	return ptr;
-}
-
-static int mtk_get_free_sa_state(struct mtk_device *mtk)
-{
-	return ida_alloc_max(&mtk->ring->sa_state_ida, MTK_RING_NUM - 1,
-			     GFP_KERNEL);
 }
 
 static void mtk_free_sg_copy(const int len, struct scatterlist **sg)
@@ -370,11 +366,13 @@ void mtk_set_sa_record(struct sa_record *sa_record, const unsigned int keylen,
 	}
 
 	sa_record->sa_cmd0_word |= EIP93_SA_CMD_DIGEST_3WORD;
+	if (IS_HASH(flags)) {
+		sa_record->sa_cmd1_word |= EIP93_SA_CMD_COPY_PAD;
+		sa_record->sa_cmd1_word |= EIP93_SA_CMD_COPY_DIGEST;
+	}
 
 	if (IS_HMAC(flags)) {
 		sa_record->sa_cmd1_word |= EIP93_SA_CMD_HMAC;
-		sa_record->sa_cmd1_word |= EIP93_SA_CMD_COPY_PAD;
-		sa_record->sa_cmd1_word |= EIP93_SA_CMD_COPY_DIGEST;
 		sa_record->sa_cmd1_word |= EIP93_SA_CMD_COPY_HEADER;
 	}
 
@@ -410,7 +408,7 @@ static int mtk_scatter_combine(struct mtk_device *mtk,
 		rctx->sa_state_base = 0;
 
 	if (split < datalen) {
-		state_addr = rctx->sa_state_base_ctr;
+		state_addr = rctx->sa_state_ctr_base;
 		n = split;
 	} else {
 		state_addr = rctx->sa_state_base;
@@ -529,8 +527,7 @@ int mtk_send_req(struct crypto_async_request *async,
 	struct sa_state *sa_state;
 	struct eip93_descriptor cdesc;
 	u32 flags = rctx->flags;
-	int idx;
-	int offsetin = 0, err = -ENOMEM;
+	int offsetin = 0, err;
 	u32 datalen = rctx->assoclen + rctx->textsize;
 	u32 split = datalen;
 	u32 start, end, ctr, blocks;
@@ -545,16 +542,13 @@ int mtk_send_req(struct crypto_async_request *async,
 
 	memcpy(iv, reqiv, rctx->ivsize);
 
-	idx = mtk_get_free_sa_state(mtk);
-	if (idx < 0)
-		goto send_err;
-	rctx->sa_state_idx = idx;
-	rctx->sa_state = MTK_RING_SA_STATE_ADDR(mtk->ring->sa_state, idx);
-	rctx->sa_state_base = MTK_RING_SA_STATE_DMA(mtk->ring->sa_state_dma, idx);
-	memcpy(rctx->sa_state->state_iv, iv, rctx->ivsize);
+	rctx->sa_state = kzalloc(sizeof(*rctx->sa_state), GFP_KERNEL);
+	if (!rctx->sa_state)
+		return -ENOMEM;
 
 	sa_state = rctx->sa_state;
 
+	memcpy(sa_state->state_iv, iv, rctx->ivsize);
 	if (IS_RFC3686(flags)) {
 		sa_state->state_iv[0] = ctx->sa_nonce;
 		sa_state->state_iv[1] = iv[0];
@@ -575,18 +569,23 @@ int mtk_send_req(struct crypto_async_request *async,
 			 */
 			iv[3] = 0xffffffff;
 			crypto_inc((u8 *)iv, AES_BLOCK_SIZE);
-			idx = mtk_get_free_sa_state(mtk);
-			if (idx < 0)
-				goto free_state;
-			rctx->sa_state_ctr_idx = idx;
-			rctx->sa_state_ctr = MTK_RING_SA_STATE_ADDR(mtk->ring->sa_state, idx);
-			rctx->sa_state_base_ctr = MTK_RING_SA_STATE_DMA(mtk->ring->sa_state_dma,
-									idx);
+
+			rctx->sa_state_ctr = kzalloc(sizeof(*rctx->sa_state_ctr),
+						     GFP_KERNEL);
+			if (!rctx->sa_state_ctr)
+				goto free_sa_state;
 
 			memcpy(rctx->sa_state_ctr->state_iv, reqiv, rctx->ivsize);
 			memcpy(sa_state->state_iv, iv, rctx->ivsize);
+
+			rctx->sa_state_ctr_base = dma_map_single(mtk->dev, rctx->sa_state_ctr,
+					     			 sizeof(*rctx->sa_state_ctr),
+								 DMA_TO_DEVICE);
 		}
 	}
+
+	rctx->sa_state_base = dma_map_single(mtk->dev, rctx->sa_state,
+					     sizeof(*rctx->sa_state), DMA_TO_DEVICE);
 
 skip_iv:
 
@@ -610,32 +609,33 @@ skip_iv:
 	 */
 	if (!dma_map_sg(mtk->dev, dst, rctx->dst_nents, DMA_BIDIRECTIONAL)) {
 		err = -ENOMEM;
-		goto free_dma;
+		goto free_sa_state_ctr;
 	}
 
-	if (src != dst) {
-		if (!dma_map_sg(mtk->dev, src, rctx->src_nents, DMA_TO_DEVICE)) {
-			err = -ENOMEM;
-			goto free_sg_dma;
-		}
+	if (src != dst &&
+	    !dma_map_sg(mtk->dev, src, rctx->src_nents, DMA_TO_DEVICE)) {
+		err = -ENOMEM;
+		goto free_sg_dma;
 	}
 
-	err = mtk_scatter_combine(mtk, rctx, datalen, split, offsetin);
-
-	return err;
+	return mtk_scatter_combine(mtk, rctx, datalen, split, offsetin);
 
 free_sg_dma:
 	dma_unmap_sg(mtk->dev, dst, rctx->dst_nents, DMA_BIDIRECTIONAL);
-free_dma:
-	dma_unmap_single(mtk->dev, rctx->sa_state_base, rctx->ivsize,
-			 DMA_TO_DEVICE);
-free_state:
-	if (rctx->sa_state)
-		ida_free(&mtk->ring->sa_state_ida, rctx->sa_state_idx);
-
-	if (rctx->sa_state_ctr)
-		ida_free(&mtk->ring->sa_state_ida, rctx->sa_state_ctr_idx);
-
+free_sa_state_ctr:
+	if (rctx->sa_state_ctr) {
+		dma_unmap_single(mtk->dev, rctx->sa_state_ctr_base,
+				 sizeof(*rctx->sa_state_ctr),
+				 DMA_TO_DEVICE);
+		kfree(rctx->sa_state_ctr);
+	}
+free_sa_state:
+	if (rctx->sa_state) {
+		dma_unmap_single(mtk->dev, rctx->sa_state_base,
+				 sizeof(*rctx->sa_state),
+				 DMA_TO_DEVICE);
+		kfree(rctx->sa_state);
+	}
 send_err:
 	return err;
 }
@@ -673,7 +673,7 @@ process_tag:
 		if (!IS_HASH_MD5(flags)) {
 			otag = sg_virt(rctx->sg_dst) + len;
 			for (i = 0; i < (authsize / 4); i++)
-				otag[i] = ntohl(otag[i]);
+				otag[i] = be32_to_cpu(otag[i]);
 		}
 	}
 
@@ -687,74 +687,133 @@ process_tag:
 void mtk_handle_result(struct mtk_device *mtk, struct mtk_cipher_reqctx *rctx,
 		       u8 *reqiv)
 {
-	if (!IS_ECB(rctx->flags))
-		memcpy(reqiv, rctx->sa_state->state_iv, rctx->ivsize);
+	if (rctx->sa_state_ctr)
+		dma_unmap_single(mtk->dev, rctx->sa_state_ctr_base,
+				 sizeof(*rctx->sa_state_ctr),
+				 DMA_FROM_DEVICE);
 
 	if (rctx->sa_state)
-		ida_free(&mtk->ring->sa_state_ida, rctx->sa_state_idx);
+		dma_unmap_single(mtk->dev, rctx->sa_state_base,
+				 sizeof(*rctx->sa_state),
+				 DMA_FROM_DEVICE);
 
+	if (!IS_ECB(rctx->flags))
+		memcpy(reqiv, rctx->sa_state->state_iv, rctx->ivsize);
+	
 	if (rctx->sa_state_ctr)
-		ida_free(&mtk->ring->sa_state_ida, rctx->sa_state_ctr_idx);
+		kfree(rctx->sa_state_ctr);
+	if (rctx->sa_state)
+		kfree(rctx->sa_state);
 }
 
 /* basically this is set hmac - key */
-int mtk_authenc_setkey(struct crypto_shash *cshash, struct sa_record *sa,
+int mtk_authenc_setkey(struct crypto_aead *aead, struct sa_record *sa,
 		       const u8 *authkey, unsigned int authkeylen)
 {
-	int bs = crypto_shash_blocksize(cshash);
-	int ds = crypto_shash_digestsize(cshash);
-	int ss = crypto_shash_statesize(cshash);
+	struct crypto_tfm *tfm = crypto_aead_tfm(aead);
+	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(tfm);
+	struct crypto_ahash *ahash_tfm;
+	struct mtk_hash_reqctx *rctx;
+	struct scatterlist sg[1];
+	struct ahash_request *req;
+	DECLARE_CRYPTO_WAIT(wait);
+	const char *alg_name;
 	u8 *ipad, *opad;
-	unsigned int i, err;
+	int i, ret;
 
-	SHASH_DESC_ON_STACK(shash, cshash);
-
-	shash->tfm = cshash;
-
-	/* auth key
-	 *
-	 * EIP93 can only authenticate with hash of the key
-	 * do software shash until EIP93 hash function complete.
-	 */
-	ipad = kcalloc(2, SHA256_BLOCK_SIZE + ss, GFP_KERNEL);
+	ipad = kcalloc(2, SHA256_BLOCK_SIZE, GFP_KERNEL);
 	if (!ipad)
 		return -ENOMEM;
+	opad = ipad + SHA256_BLOCK_SIZE;
 
-	opad = ipad + SHA256_BLOCK_SIZE + ss;
+	switch ((ctx->flags & MTK_HASH_MASK)) {
+	case MTK_HASH_SHA256:
+		alg_name = "sha256-eip93";
+		break;
+	case MTK_HASH_SHA224:
+		alg_name = "sha224-eip93";
+		break;
+	case MTK_HASH_SHA1:
+		alg_name = "sha1-eip93";
+		break;
+	case MTK_HASH_MD5:
+		alg_name = "md5-eip93";
+		break;
+	default: /* Impossible */
+		ret = -EINVAL;
+		goto err_alg;
+	}
 
-	if (authkeylen > bs) {
-		err = crypto_shash_digest(shash, authkey,
-					  authkeylen, ipad);
-		if (err)
-			return err;
+	ahash_tfm = crypto_alloc_ahash(alg_name, 0, 0);
+	if (IS_ERR(ahash_tfm)) {
+		ret = PTR_ERR(ahash_tfm);
+		goto err_alg;
+	}
 
-		authkeylen = ds;
+	req = ahash_request_alloc(ahash_tfm, GFP_KERNEL);
+	if (!req) {
+		ret = -ENOMEM;
+		goto err_ahash;
+	}
+
+	rctx = ahash_request_ctx(req);
+	crypto_init_wait(&wait);
+	ahash_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
+				   crypto_req_done, &wait);
+
+	/* Hash the key if > SHA256_BLOCK_SIZE */
+	if (authkeylen > SHA256_BLOCK_SIZE) {
+		sg_init_one(&sg[0], authkey, authkeylen);
+
+		ahash_request_set_crypt(req, sg, ipad, authkeylen);
+		ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
+
+		authkeylen = ctx->authsize;
 	} else {
 		memcpy(ipad, authkey, authkeylen);
 	}
 
-	memset(ipad + authkeylen, 0, bs - authkeylen);
-	memcpy(opad, ipad, bs);
+	/* Copy to opad */
+	memset(ipad + authkeylen, 0, SHA256_BLOCK_SIZE - authkeylen);
+	memcpy(opad, ipad, SHA256_BLOCK_SIZE);
 
-	for (i = 0; i < bs; i++) {
+	/* Pad with HMAC constants */
+	for (i = 0; i < SHA256_BLOCK_SIZE; i++) {
 		ipad[i] ^= HMAC_IPAD_VALUE;
 		opad[i] ^= HMAC_OPAD_VALUE;
 	}
 
-	err = crypto_shash_init(shash) ?:
-		crypto_shash_update(shash, ipad, bs) ?:
-		crypto_shash_export(shash, ipad) ?:
-		crypto_shash_init(shash) ?:
-		crypto_shash_update(shash, opad, bs) ?:
-		crypto_shash_export(shash, opad);
+	/* Disable HASH_FINALIZE for ipad and opad hash */
+	rctx->no_finalize = true;
 
-	if (err)
-		return err;
+	/* Hash ipad */
+	sg_init_one(&sg[0], ipad, SHA256_BLOCK_SIZE);
+	ahash_request_set_crypt(req, sg, sa->sa_i_digest, SHA256_BLOCK_SIZE);
+	ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
+	if (ret)
+		goto exit;
 
-	/* add auth key */
-	memcpy(&sa->sa_i_digest, ipad, SHA256_DIGEST_SIZE);
-	memcpy(&sa->sa_o_digest, opad, SHA256_DIGEST_SIZE);
+	/* Hash opad */
+	sg_init_one(&sg[0], opad, SHA256_BLOCK_SIZE);
+	ahash_request_set_crypt(req, sg, sa->sa_o_digest, SHA256_BLOCK_SIZE);
+	ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
 
+	if (!IS_HASH_MD5(ctx->flags)) {
+		for (i = 0; i < SHA256_DIGEST_SIZE / sizeof(u32); i++) {
+			u32 *ipad_hash = (u32 *)sa->sa_i_digest;
+			u32 *opad_hash = (u32 *)sa->sa_o_digest;
+
+			ipad_hash[i] = cpu_to_be32(ipad_hash[i]);
+			opad_hash[i] = cpu_to_be32(opad_hash[i]);
+		}
+	}
+
+exit:
+	ahash_request_free(req);
+err_ahash:
+	crypto_free_ahash(ahash_tfm);
+err_alg:
 	kfree(ipad);
-	return 0;
+
+	return ret;
 }

@@ -25,6 +25,7 @@
 #include "eip93-aes.h"
 #include "eip93-des.h"
 #include "eip93-aead.h"
+#include "eip93-hash.h"
 
 static struct mtk_alg_template *mtk_algs[] = {
 	&mtk_alg_ecb_des,
@@ -51,6 +52,14 @@ static struct mtk_alg_template *mtk_algs[] = {
 	&mtk_alg_authenc_hmac_sha1_rfc3686_aes,
 	&mtk_alg_authenc_hmac_sha224_rfc3686_aes,
 	&mtk_alg_authenc_hmac_sha256_rfc3686_aes,
+	&mtk_alg_md5,
+	&mtk_alg_sha1,
+	&mtk_alg_sha224,
+	&mtk_alg_sha256,
+	&mtk_alg_hmac_md5,
+	&mtk_alg_hmac_sha1,
+	&mtk_alg_hmac_sha224,
+	&mtk_alg_hmac_sha256,
 };
 
 inline void mtk_irq_disable(struct mtk_device *mtk, u32 mask)
@@ -79,6 +88,9 @@ static void mtk_unregister_algs(unsigned int i)
 			break;
 		case MTK_ALG_TYPE_AEAD:
 			crypto_unregister_aead(&mtk_algs[j]->alg.aead);
+			break;
+		case MTK_ALG_TYPE_HASH:
+			crypto_unregister_ahash(&mtk_algs[i]->alg.ahash);
 			break;
 		}
 	}
@@ -143,6 +155,9 @@ static int mtk_register_algs(struct mtk_device *mtk, u32 supported_algo_flags)
 			break;
 		case MTK_ALG_TYPE_AEAD:
 			ret = crypto_register_aead(&mtk_algs[i]->alg.aead);
+			break;
+		case MTK_ALG_TYPE_HASH:
+			ret = crypto_register_ahash(&mtk_algs[i]->alg.ahash);
 			break;
 		}
 		if (ret)
@@ -236,6 +251,9 @@ get_more:
 	if (desc_flags & MTK_DESC_AEAD)
 		mtk_aead_handle_result(async, err);
 
+	if (desc_flags & MTK_DESC_HASH)
+		mtk_hash_handle_result(async, err);
+
 	goto get_more;
 }
 
@@ -258,7 +276,7 @@ static irqreturn_t mtk_irq_handler(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 
-/* TODO: error handler; for now just clear ALL */
+	/* Ingore errors in AUTO mode, handled by the RDR */
 	mtk_irq_clear(mtk, irq_status);
 	if (irq_status)
 		mtk_irq_disable(mtk, irq_status);
@@ -361,11 +379,6 @@ static int mtk_desc_init(struct mtk_device *mtk)
 	writel(val, mtk->base + EIP93_REG_PE_RING_CONFIG);
 
 	atomic_set(&mtk->ring->free, MTK_RING_NUM - 1);
-	/* Create State record DMA pool */
-	mtk->ring->sa_state = dmam_alloc_coherent(mtk->dev, sizeof(struct sa_state) * MTK_RING_NUM,
-						  &mtk->ring->sa_state_dma, GFP_KERNEL);
-	if (!mtk->ring->sa_state)
-		return -ENOMEM;
 
 	return 0;
 }
@@ -382,7 +395,6 @@ static void mtk_cleanup(struct mtk_device *mtk)
 
 	mtk_desc_free(mtk);
 
-	ida_destroy(&mtk->ring->sa_state_ida);
 	idr_destroy(&mtk->ring->crypto_async_idr);
 }
 
@@ -425,7 +437,6 @@ static int mtk_crypto_probe(struct platform_device *pdev)
 
 	spin_lock_init(&mtk->ring->read_lock);
 	spin_lock_init(&mtk->ring->write_lock);
-	ida_init(&mtk->ring->sa_state_ida);
 
 	spin_lock_init(&mtk->ring->idr_lock);
 	idr_init(&mtk->ring->crypto_async_idr);
@@ -445,12 +456,13 @@ static int mtk_crypto_probe(struct platform_device *pdev)
 
 	ver = readl(mtk->base + EIP93_REG_PE_REVISION);
 	/* EIP_EIP_NO:MAJOR_HW_REV:MINOR_HW_REV:HW_PATCH,PE(ALGO_FLAGS) */
-	dev_info(mtk->dev, "EIP%lu:%lx:%lx:%lx,PE(0x%x)\n",
+	dev_info(mtk->dev, "EIP%lu:%lx:%lx:%lx,PE(0x%x:0x%x)\n",
 		 FIELD_GET(EIP93_PE_REVISION_EIP_NO, ver),
 		 FIELD_GET(EIP93_PE_REVISION_MAJ_HW_REV, ver),
 		 FIELD_GET(EIP93_PE_REVISION_MIN_HW_REV, ver),
 		 FIELD_GET(EIP93_PE_REVISION_HW_PATCH, ver),
-		 algo_flags);
+		 algo_flags,
+		 readl(mtk->base + EIP93_REG_PE_OPTION_0));
 
 	return 0;
 }
