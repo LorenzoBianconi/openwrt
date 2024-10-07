@@ -2634,18 +2634,6 @@ static int airoha_qdma_set_tx_sched(struct airoha_gdm_port *port,
 		airoha_qdma_clear(port->qdma, REG_QUEUE_CLOSE_CFG(port->id),
 				  TXQ_DISABLE_CHAN_QUEUE_MASK(port->id, i));
 
-	/* enable packets counter */
-	airoha_qdma_wr(port->qdma, REG_CNTR_CFG(port->id << 1),
-		       CNTR_EN_MASK | CNTR_ALL_QUEUE_EN_MASK |
-		       CNTR_ALL_DSCP_RING_EN_MASK |
-		       FIELD_PREP(CNTR_CHAN_MASK, port->id));
-	/* enable drop counter */
-	airoha_qdma_wr(port->qdma, REG_CNTR_CFG((port->id << 1) + 1),
-		       CNTR_EN_MASK | CNTR_ALL_QUEUE_EN_MASK |
-		       CNTR_ALL_DSCP_RING_EN_MASK |
-		       FIELD_PREP(CNTR_SRC_MASK, 4) |
-		       FIELD_PREP(CNTR_CHAN_MASK, port->id));
-
 	for (i = 0; i < n_weights; i++) {
 		u32 status;
 		int err;
@@ -2706,21 +2694,6 @@ static int airoha_qdma_set_tx_ets_sched(struct airoha_gdm_port *port,
 	return airoha_qdma_set_tx_sched(port, mode, w, ARRAY_SIZE(w));
 }
 
-static int airoha_qdma_get_tx_ets_stats(struct airoha_gdm_port *port,
-					struct tc_ets_qopt_offload *opt)
-{
-	struct tc_qopt_offload_stats *stats = &opt->stats;
-	u32 val;
-
-	val = airoha_qdma_rr(port->qdma, REG_CNTR_VAL(port->id << 1));
-	_bstats_update(stats->bstats, 0, val);
-
-	val = airoha_qdma_rr(port->qdma, REG_CNTR_VAL((port->id << 1) + 1));
-	stats->qstats->drops += val;
-
-	return 0;
-}
-
 static int airoha_tc_setup_qdisc_ets(struct airoha_gdm_port *port,
 				     struct tc_ets_qopt_offload *opt)
 {
@@ -2730,8 +2703,6 @@ static int airoha_tc_setup_qdisc_ets(struct airoha_gdm_port *port,
 	case TC_ETS_DESTROY:
 		/* PRIO is default qdisc scheduler */
 		return airoha_qdma_set_tx_prio_sched(port);
-	case TC_ETS_STATS:
-		return airoha_qdma_get_tx_ets_stats(port, opt);
 	default:
 		return -EOPNOTSUPP;
 	}
