@@ -2214,7 +2214,8 @@ static int airoha_qdma_set_token_bucket(struct airoha_qdma *qdma, int chan,
 					TRTCM_BUCKETSIZE_SHIFT_MODE, val);
 }
 
-static int airoha_qdma_init_tx_meter(struct airoha_gdm_port *port)
+static int airoha_qdma_set_tx_meter(struct airoha_gdm_port *port,
+				    u32 rate, u32 bucket_size)
 {
 	int err;
 
@@ -2225,8 +2226,8 @@ static int airoha_qdma_init_tx_meter(struct airoha_gdm_port *port)
 		return err;
 
 	return airoha_qdma_set_token_bucket(port->qdma, port->id,
-					    REG_EGRESS_TRTCM_CFG,
-					    DEF_METER_RATE, DEF_METER_RATE);
+					    REG_EGRESS_TRTCM_CFG, rate,
+					    bucket_size);
 }
 
 static int airoha_qdma_init(struct platform_device *pdev,
@@ -2598,9 +2599,8 @@ static netdev_tx_t airoha_dev_xmit(struct sk_buff *skb,
 	int i, qid;
 	u8 fport;
 
-	msg0 = 0;
-	//msg0 = FIELD_PREP(QDMA_ETH_TXMSG_CHAN_MASK, port->id) |
-	//       FIELD_PREP(QDMA_ETH_TXMSG_QUEUE_MASK, queue);
+	msg0 = FIELD_PREP(QDMA_ETH_TXMSG_CHAN_MASK, port->id) |
+	       FIELD_PREP(QDMA_ETH_TXMSG_QUEUE_MASK, queue);
 	if (skb->ip_summed == CHECKSUM_PARTIAL)
 		msg0 |= FIELD_PREP(QDMA_ETH_TXMSG_TCO_MASK, 1) |
 			FIELD_PREP(QDMA_ETH_TXMSG_UCO_MASK, 1) |
@@ -2770,6 +2770,32 @@ airoha_ethtool_get_rmon_stats(struct net_device *dev,
 	} while (u64_stats_fetch_retry(&port->stats.syncp, start));
 }
 
+static int airoha_tc_setup_qdisc_tbf(struct airoha_gdm_port *port,
+				     struct tc_tbf_qopt_offload *opt)
+{
+	switch (opt->command) {
+	case TC_TBF_REPLACE: {
+		u32 rate;
+
+		if (opt->parent != TC_H_ROOT)
+			return -EINVAL;
+
+		/* rate in kbps */
+		rate = div_u64(opt->replace_params.rate.rate_bytes_ps, 1000);
+		rate = rate * 8;
+
+		return airoha_qdma_set_tx_meter(port, rate,
+						opt->replace_params.max_size);
+	}
+	case TC_TBF_DESTROY:
+		return airoha_qdma_set_rl_config(port->qdma, port->id,
+						 REG_EGRESS_TRTCM_CFG, false,
+						 TRTCM_METER_MODE);
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 static int airoha_qdma_set_tx_sched(struct airoha_gdm_port *port,
 				    enum tx_sched_mode mode,
 				    const u16 *weights, u8 n_weights)
@@ -2860,6 +2886,8 @@ static int airoha_tc_setup(struct net_device *dev, enum tc_setup_type type,
 	struct airoha_gdm_port *port = netdev_priv(dev);
 
 	switch (type) {
+	case TC_SETUP_QDISC_TBF:
+		return airoha_tc_setup_qdisc_tbf(port, type_data);
 	case TC_SETUP_QDISC_ETS:
 		return airoha_tc_setup_qdisc_ets(port, type_data);
 	default:
@@ -2952,24 +2980,6 @@ static int airoha_alloc_gdm_port(struct airoha_eth *eth, struct device_node *np)
 	return register_netdev(dev);
 }
 
-static int airoha_init_gdm_ports(struct airoha_eth *eth)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
-		int err;
-
-		if (!eth->ports[i])
-			continue;
-
-		err = airoha_qdma_init_tx_meter(eth->ports[i]);
-		if (err)
-			return err;
-	}
-
-	return 0;
-}
-
 static int airoha_probe(struct platform_device *pdev)
 {
 	struct device_node *np;
@@ -3044,10 +3054,6 @@ static int airoha_probe(struct platform_device *pdev)
 			goto error;
 		}
 	}
-
-	err = airoha_init_gdm_ports(eth);
-	if (err)
-		goto error;
 
 	return 0;
 
