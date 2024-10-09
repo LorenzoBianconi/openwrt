@@ -57,7 +57,7 @@
 #define MTK_DESC_LAST			BIT(3)
 #define MTK_DESC_FAKE_HMAC		BIT(4)
 #define MTK_DESC_PRNG			BIT(5)
-#define MTK_DESC_AHASH			BIT(6)
+#define MTK_DESC_HASH			BIT(6)
 #define MTK_DESC_AEAD			BIT(7)
 #define MTK_DESC_SKCIPHER		BIT(8)
 #define MTK_DESC_ASYNC			BIT(9)
@@ -84,13 +84,13 @@
 #define IS_ENCRYPT(dir)			((dir) & MTK_ENCRYPT)
 #define IS_DECRYPT(dir)			((dir) & MTK_DECRYPT)
 
-#define IS_CIPHER(flags)		((flags) & (MTK_ALG_DES || \
-						    MTK_ALG_3DES ||  \
+#define IS_CIPHER(flags)		((flags) & (MTK_ALG_DES | \
+						    MTK_ALG_3DES |  \
 						    MTK_ALG_AES))
 
-#define IS_HASH(flags)			((flags) & (MTK_HASH_MD5 ||  \
-						    MTK_HASH_SHA1 ||   \
-						    MTK_HASH_SHA224 || \
+#define IS_HASH(flags)			((flags) & (MTK_HASH_MD5 |  \
+						    MTK_HASH_SHA1 |   \
+						    MTK_HASH_SHA224 | \
 						    MTK_HASH_SHA256))
 
 /**
@@ -131,15 +131,12 @@ struct mtk_ring {
 	/* aync idr */
 	spinlock_t			idr_lock;
 	struct idr			crypto_async_idr;
-	/* sa_state */
-	struct ida			sa_state_ida;
-	struct sa_state			*sa_state;
-	dma_addr_t			sa_state_dma;
 };
 
 enum mtk_alg_type {
 	MTK_ALG_TYPE_AEAD,
 	MTK_ALG_TYPE_SKCIPHER,
+	MTK_ALG_TYPE_HASH,
 };
 
 struct mtk_alg_template {
@@ -149,6 +146,7 @@ struct mtk_alg_template {
 	union {
 		struct aead_alg		aead;
 		struct skcipher_alg	skcipher;
+		struct ahash_alg	ahash;
 	} alg;
 };
 

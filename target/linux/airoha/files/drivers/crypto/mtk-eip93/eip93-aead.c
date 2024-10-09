@@ -61,13 +61,12 @@ static int mtk_aead_cra_init(struct crypto_tfm *tfm)
 	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(tfm);
 	struct mtk_alg_template *tmpl = container_of(tfm->__crt_alg,
 				struct mtk_alg_template, alg.aead.base);
-	u32 flags = tmpl->flags;
-	char *alg_base;
 
 	crypto_aead_set_reqsize(__crypto_aead_cast(tfm),
 				sizeof(struct mtk_cipher_reqctx));
 
 	ctx->mtk = tmpl->mtk;
+	ctx->flags = tmpl->flags;
 	ctx->type = tmpl->type;
 	ctx->set_assoc = true;
 
@@ -75,33 +74,12 @@ static int mtk_aead_cra_init(struct crypto_tfm *tfm)
 	if (!ctx->sa_record)
 		return -ENOMEM;
 
-	/* software workaround for now */
-	if (IS_HASH_MD5(flags))
-		alg_base = "md5";
-	if (IS_HASH_SHA1(flags))
-		alg_base = "sha1";
-	if (IS_HASH_SHA224(flags))
-		alg_base = "sha224";
-	if (IS_HASH_SHA256(flags))
-		alg_base = "sha256";
-
-	ctx->shash = crypto_alloc_shash(alg_base, 0, CRYPTO_ALG_NEED_FALLBACK);
-
-	if (IS_ERR(ctx->shash)) {
-		dev_err(ctx->mtk->dev, "base driver %s could not be loaded.\n",
-			alg_base);
-		return PTR_ERR(ctx->shash);
-	}
-
 	return 0;
 }
 
 static void mtk_aead_cra_exit(struct crypto_tfm *tfm)
 {
 	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(tfm);
-
-	if (ctx->shash)
-		crypto_free_shash(ctx->shash);
 
 	dma_unmap_single(ctx->mtk->dev, ctx->sa_record_base,
 			 sizeof(*ctx->sa_record), DMA_TO_DEVICE);
@@ -113,9 +91,6 @@ static int mtk_aead_setkey(struct crypto_aead *ctfm, const u8 *key,
 {
 	struct crypto_tfm *tfm = crypto_aead_tfm(ctfm);
 	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(tfm);
-	struct mtk_alg_template *tmpl = container_of(tfm->__crt_alg,
-				struct mtk_alg_template, alg.skcipher.base);
-	u32 flags = tmpl->flags;
 	struct crypto_authenc_keys keys;
 	struct crypto_aes_ctx aes;
 	struct sa_record *sa_record = ctx->sa_record;
@@ -125,7 +100,7 @@ static int mtk_aead_setkey(struct crypto_aead *ctfm, const u8 *key,
 	if (crypto_authenc_extractkeys(&keys, key, len))
 		return -EINVAL;
 
-	if (IS_RFC3686(flags)) {
+	if (IS_RFC3686(ctx->flags)) {
 		if (keys.enckeylen < CTR_RFC3686_NONCE_SIZE)
 			return -EINVAL;
 
@@ -134,7 +109,7 @@ static int mtk_aead_setkey(struct crypto_aead *ctfm, const u8 *key,
 		       CTR_RFC3686_NONCE_SIZE);
 	}
 
-	switch ((flags & MTK_ALG_MASK)) {
+	switch ((ctx->flags & MTK_ALG_MASK)) {
 	case MTK_ALG_DES:
 		ret = verify_aead_des_key(ctfm, keys.enckey, keys.enckeylen);
 		break;
@@ -152,7 +127,7 @@ static int mtk_aead_setkey(struct crypto_aead *ctfm, const u8 *key,
 
 	ctx->blksize = crypto_aead_blocksize(ctfm);
 	/* Encryption key */
-	mtk_set_sa_record(sa_record, keys.enckeylen, flags);
+	mtk_set_sa_record(sa_record, keys.enckeylen, ctx->flags);
 	sa_record->sa_cmd0_word &= ~EIP93_SA_CMD_OPCODE;
 	sa_record->sa_cmd0_word |= FIELD_PREP(EIP93_SA_CMD_OPCODE,
 					      EIP93_SA_CMD_OPCODE_BASIC_OUT_ENC_HASH);
@@ -165,7 +140,7 @@ static int mtk_aead_setkey(struct crypto_aead *ctfm, const u8 *key,
 	sa_record->sa_nonce = nonce;
 
 	/* authentication key */
-	ret = mtk_authenc_setkey(ctx->shash, sa_record, keys.authkey,
+	ret = mtk_authenc_setkey(ctfm, sa_record, keys.authkey,
 				 keys.authkeylen);
 
 	ctx->set_assoc = true;
@@ -229,10 +204,8 @@ static int mtk_aead_encrypt(struct aead_request *req)
 {
 	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 	struct mtk_cipher_reqctx *rctx = aead_request_ctx(req);
-	struct mtk_alg_template *tmpl = container_of(req->base.tfm->__crt_alg,
-				struct mtk_alg_template, alg.aead.base);
 
-	rctx->flags = tmpl->flags;
+	rctx->flags = ctx->flags;
 	rctx->flags |= MTK_ENCRYPT;
 	if (ctx->set_assoc) {
 		mtk_aead_setassoc(ctx, req);
@@ -251,14 +224,12 @@ static int mtk_aead_decrypt(struct aead_request *req)
 {
 	struct mtk_crypto_ctx *ctx = crypto_tfm_ctx(req->base.tfm);
 	struct mtk_cipher_reqctx *rctx = aead_request_ctx(req);
-	struct mtk_alg_template *tmpl = container_of(req->base.tfm->__crt_alg,
-				struct mtk_alg_template, alg.aead.base);
 
 	ctx->sa_record->sa_cmd0_word |= EIP93_SA_CMD_DIRECTION_IN;
 	ctx->sa_record->sa_cmd1_word &= ~(EIP93_SA_CMD_COPY_PAD |
 					  EIP93_SA_CMD_COPY_DIGEST);
 
-	rctx->flags = tmpl->flags;
+	rctx->flags = ctx->flags;
 	rctx->flags |= MTK_DECRYPT;
 	if (ctx->set_assoc) {
 		mtk_aead_setassoc(ctx, req);
@@ -290,7 +261,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_md5_cbc_aes = {
 				"authenc(hmac(md5-eip93), cbc(aes-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -317,7 +289,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha1_cbc_aes = {
 				"authenc(hmac(sha1-eip93),cbc(aes-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -344,7 +317,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha224_cbc_aes = {
 				"authenc(hmac(sha224-eip93),cbc(aes-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -371,7 +345,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha256_cbc_aes = {
 				"authenc(hmac(sha256-eip93),cbc(aes-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = AES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -399,7 +374,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_md5_rfc3686_aes = {
 			"authenc(hmac(md5-eip93),rfc3686(ctr(aes-eip93)))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = 1,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -427,7 +403,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha1_rfc3686_aes = {
 			"authenc(hmac(sha1-eip93),rfc3686(ctr(aes-eip93)))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = 1,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -455,7 +432,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha224_rfc3686_aes = {
 			"authenc(hmac(sha224-eip93),rfc3686(ctr(aes-eip93)))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = 1,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -483,7 +461,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha256_rfc3686_aes = {
 			"authenc(hmac(sha256-eip93),rfc3686(ctr(aes-eip93)))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = 1,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -510,7 +489,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_md5_cbc_des = {
 				"authenc(hmac(md5-eip93),cbc(des-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -537,7 +517,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha1_cbc_des = {
 				"authenc(hmac(sha1-eip93),cbc(des-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -564,7 +545,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha224_cbc_des = {
 				"authenc(hmac(sha224-eip93),cbc(des-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -591,7 +573,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha256_cbc_des = {
 				"authenc(hmac(sha256-eip93),cbc(des-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0,
@@ -618,7 +601,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_md5_cbc_des3_ede = {
 				"authenc(hmac(md5-eip93),cbc(des3_ede-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0x0,
@@ -645,7 +629,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha1_cbc_des3_ede = {
 				"authenc(hmac(sha1-eip93),cbc(des3_ede-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0x0,
@@ -672,7 +657,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha224_cbc_des3_ede = {
 			"authenc(hmac(sha224-eip93),cbc(des3_ede-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0x0,
@@ -699,7 +685,8 @@ struct mtk_alg_template mtk_alg_authenc_hmac_sha256_cbc_des3_ede = {
 			"authenc(hmac(sha256-eip93),cbc(des3_ede-eip93))",
 			.cra_priority = MTK_CRA_PRIORITY,
 			.cra_flags = CRYPTO_ALG_ASYNC |
-					CRYPTO_ALG_KERN_DRIVER_ONLY,
+					CRYPTO_ALG_KERN_DRIVER_ONLY |
+					CRYPTO_ALG_ALLOCATES_MEMORY,
 			.cra_blocksize = DES3_EDE_BLOCK_SIZE,
 			.cra_ctxsize = sizeof(struct mtk_crypto_ctx),
 			.cra_alignmask = 0x0,
