@@ -721,11 +721,6 @@ int mtk_authenc_setkey(struct crypto_aead *aead, struct sa_record *sa,
 	u8 *ipad, *opad;
 	int i, ret;
 
-	ipad = kcalloc(2, SHA256_BLOCK_SIZE, GFP_KERNEL);
-	if (!ipad)
-		return -ENOMEM;
-	opad = ipad + SHA256_BLOCK_SIZE;
-
 	switch ((ctx->flags & MTK_HASH_MASK)) {
 	case MTK_HASH_SHA256:
 		alg_name = "sha256-eip93";
@@ -740,21 +735,25 @@ int mtk_authenc_setkey(struct crypto_aead *aead, struct sa_record *sa,
 		alg_name = "md5-eip93";
 		break;
 	default: /* Impossible */
-		ret = -EINVAL;
-		goto err_alg;
+		return -EINVAL;
 	}
 
 	ahash_tfm = crypto_alloc_ahash(alg_name, 0, 0);
-	if (IS_ERR(ahash_tfm)) {
-		ret = PTR_ERR(ahash_tfm);
-		goto err_alg;
-	}
+	if (IS_ERR(ahash_tfm))
+		return PTR_ERR(ahash_tfm);
 
 	req = ahash_request_alloc(ahash_tfm, GFP_KERNEL);
 	if (!req) {
 		ret = -ENOMEM;
 		goto err_ahash;
 	}
+
+	ipad = kcalloc(2, SHA256_BLOCK_SIZE, GFP_KERNEL);
+	if (!ipad) {
+		ret = -ENOMEM;
+		goto err_req;
+	}
+	opad = ipad + SHA256_BLOCK_SIZE;
 
 	rctx = ahash_request_ctx(req);
 	crypto_init_wait(&wait);
@@ -789,14 +788,30 @@ int mtk_authenc_setkey(struct crypto_aead *aead, struct sa_record *sa,
 	/* Hash ipad */
 	sg_init_one(&sg[0], ipad, SHA256_BLOCK_SIZE);
 	ahash_request_set_crypt(req, sg, sa->sa_i_digest, SHA256_BLOCK_SIZE);
-	ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
+	ret = crypto_ahash_init(req);
+	if (ret)
+		goto exit;
+
+	/* Disable HASH_FINALIZE for ipad hash */
+	rctx->no_finalize = true;
+
+	ret = crypto_wait_req(crypto_ahash_finup(req), &wait);
 	if (ret)
 		goto exit;
 
 	/* Hash opad */
 	sg_init_one(&sg[0], opad, SHA256_BLOCK_SIZE);
 	ahash_request_set_crypt(req, sg, sa->sa_o_digest, SHA256_BLOCK_SIZE);
-	ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
+	ret = crypto_ahash_init(req);
+	if (ret)
+		goto exit;
+
+	/* Disable HASH_FINALIZE for opad hash */
+	rctx->no_finalize = true;
+
+	ret = crypto_wait_req(crypto_ahash_finup(req), &wait);
+	if (ret)
+		goto exit;
 
 	if (!IS_HASH_MD5(ctx->flags)) {
 		for (i = 0; i < SHA256_DIGEST_SIZE / sizeof(u32); i++) {
@@ -809,11 +824,11 @@ int mtk_authenc_setkey(struct crypto_aead *aead, struct sa_record *sa,
 	}
 
 exit:
+	kfree(ipad);
+err_req:
 	ahash_request_free(req);
 err_ahash:
 	crypto_free_ahash(ahash_tfm);
-err_alg:
-	kfree(ipad);
 
 	return ret;
 }
