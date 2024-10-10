@@ -383,7 +383,7 @@ static int airoha_pwm_probe(struct platform_device *pdev)
 	pc = devm_kzalloc(dev, sizeof(*pc), GFP_KERNEL);
 	if (!pc)
 		return -ENOMEM;
-	
+
 	pc->np = dev->of_node;
 	pc->chip.dev = dev;
 	pc->regmap = regmap;
