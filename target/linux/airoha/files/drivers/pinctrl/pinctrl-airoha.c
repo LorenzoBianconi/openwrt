@@ -13,7 +13,6 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
-#include <linux/mfd/airoha-en7581-mfd.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -2895,20 +2894,17 @@ static int airoha_pinctrl_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct airoha_pinctrl *pinctrl;
-	struct airoha_mfd *mfd;
 	struct regmap *map;
 	int err, i;
 
 	/* Assign parent MFD of_node to dev */
 	device_set_of_node_from_dev(dev, dev->parent);
-	mfd = dev_get_drvdata(dev->parent);
 
 	pinctrl = devm_kzalloc(dev, sizeof(*pinctrl), GFP_KERNEL);
 	if (!pinctrl)
 		return -ENOMEM;
 
-	pinctrl->regmap = devm_regmap_init_mmio(dev, mfd->base,
-						&regmap_config);
+	pinctrl->regmap = device_node_to_regmap(dev->parent->of_node);
 	if (IS_ERR(pinctrl->regmap))
 		return PTR_ERR(pinctrl->regmap);
 
@@ -2962,10 +2958,17 @@ static int airoha_pinctrl_probe(struct platform_device *pdev)
 	return airoha_pinctrl_add_gpiochip(pinctrl, pdev);
 }
 
+static const struct of_device_id airoha_pinctrl_of_match[] = {
+	{ .compatible = "airoha,en7581-pinctrl" },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, airoha_pinctrl_of_match);
+
 static struct platform_driver airoha_pinctrl_driver = {
 	.probe = airoha_pinctrl_probe,
 	.driver = {
 		.name = "pinctrl-airoha",
+		.of_match_table = airoha_pinctrl_of_match,
 	},
 };
 module_platform_driver(airoha_pinctrl_driver);
