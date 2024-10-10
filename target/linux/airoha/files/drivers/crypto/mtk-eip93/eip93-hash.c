@@ -172,6 +172,7 @@ static int _mtk_hash_init(struct ahash_request *req, struct sa_state *sa_state,
 
 	rctx->len = 0;
 	rctx->left_last = 0;
+	rctx->no_finalize = false;
 	INIT_LIST_HEAD(&rctx->blocks);
 
 	return 0;
@@ -530,14 +531,20 @@ static int mtk_hash_hmac_setkey(struct crypto_ahash *ahash, const u8 *key,
 		opad[i] ^= HMAC_OPAD_VALUE;
 	}
 
-	/* Disable HASH_FINALIZE for opad hash */
-	rctx->no_finalize = true;
-
 	sg_init_one(&sg[0], opad, SHA256_BLOCK_SIZE);
 
 	/* Hash opad */
 	ahash_request_set_crypt(req, sg, ctx->opad, SHA256_BLOCK_SIZE);
-	ret = crypto_wait_req(crypto_ahash_digest(req), &wait);
+	ret = crypto_ahash_init(req);
+	if (ret)
+		goto exit;
+
+	/* Disable HASH_FINALIZE for opad hash */
+	rctx->no_finalize = true;
+
+	ret = crypto_wait_req(crypto_ahash_finup(req), &wait);
+	if (ret)
+		goto exit;
 
 	if (!IS_HASH_MD5(ctx->flags)) {
 		u32 *opad_hash = (u32 *)ctx->opad;
@@ -546,6 +553,7 @@ static int mtk_hash_hmac_setkey(struct crypto_ahash *ahash, const u8 *key,
 			opad_hash[i] = cpu_to_be32(opad_hash[i]);
 	}
 
+exit:
 	kfree(opad);
 err_req:
 	ahash_request_free(req);
