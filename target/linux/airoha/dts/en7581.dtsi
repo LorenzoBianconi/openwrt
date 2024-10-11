@@ -353,7 +353,7 @@
 		};
 
 		mfd: mfd@1fbf0200 {
-			compatible = "airoha,en7581-gpio-sysctl";
+			compatible = "syscon", "simple-mfd";
 			reg = <0x0 0x1fbf0200 0x0 0xc0>;
 
 			interrupt-parent = <&gic>;
@@ -366,6 +366,14 @@
 			#interrupt-cells = <2>;
 
 			#pwm-cells = <3>;
+
+			pio: pinctrl {
+				compatible = "airoha,en7581-pinctrl";
+			};
+
+			pwm {
+				compatible = "airoha,en7581-pwm";
+			};
 		};
 
 		i2cclock: i2cclock@0 {
