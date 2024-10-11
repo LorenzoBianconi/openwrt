@@ -636,7 +636,7 @@ free_sa_state:
 				 DMA_TO_DEVICE);
 		kfree(rctx->sa_state);
 	}
-send_err:
+
 	return err;
 }
 
