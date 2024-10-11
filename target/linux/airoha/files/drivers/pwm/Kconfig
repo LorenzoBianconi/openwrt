@@ -46,6 +46,7 @@ config PWM_AIROHA
 	tristate "Airoha PWM support"
 	depends on ARCH_AIROHA || COMPILE_TEST
 	depends on HAS_IOMEM && OF
+	select REGMAP_MMIO
 	help
 	  Generic PWM framework driver for Airoha SoC.
 

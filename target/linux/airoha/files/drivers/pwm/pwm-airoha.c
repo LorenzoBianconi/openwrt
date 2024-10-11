@@ -74,8 +74,8 @@ struct airoha_pwm {
 #define PWM_NUM_SIPO	17
 
 /* The PWM hardware supports periods between 4 ms and 1 s */
-#define PERIOD_MIN_NS	4 * NSEC_PER_MSEC
-#define PERIOD_MAX_NS	1 * NSEC_PER_SEC
+#define PERIOD_MIN_NS	(4 * NSEC_PER_MSEC)
+#define PERIOD_MAX_NS	(1 * NSEC_PER_SEC)
 /* It is represented internally as 1/250 s between 1 and 250 */
 #define PERIOD_MIN	1
 #define PERIOD_MAX	250
@@ -158,7 +158,7 @@ static int airoha_pwm_sipo_init(struct airoha_pwm *pc)
 				SERIAL_GPIO_MODE);
 	else
 		regmap_clear_bits(pc->regmap, REG_SIPO_FLASH_MODE_CFG,
-				SERIAL_GPIO_MODE);
+				  SERIAL_GPIO_MODE);
 
 	if (!of_property_read_u32(pc->np, "sipo-clock-divisor",
 				  &sipo_clock_divisor)) {
@@ -370,15 +370,10 @@ static const struct pwm_ops airoha_pwm_ops = {
 static int airoha_pwm_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct regmap *regmap;
 	struct airoha_pwm *pc;
 
 	/* Assign parent MFD of_node to dev */
 	device_set_of_node_from_dev(dev, dev->parent);
-
-	regmap = device_node_to_regmap(dev->parent->of_node);
-	if (IS_ERR(regmap))
-		return PTR_ERR(regmap);
 
 	pc = devm_kzalloc(dev, sizeof(*pc), GFP_KERNEL);
 	if (!pc)
@@ -386,9 +381,12 @@ static int airoha_pwm_probe(struct platform_device *pdev)
 
 	pc->np = dev->of_node;
 	pc->chip.dev = dev;
-	pc->regmap = regmap;
 	pc->chip.ops = &airoha_pwm_ops;
 	pc->chip.npwm = PWM_NUM_GPIO + PWM_NUM_SIPO;
+
+	pc->regmap = device_node_to_regmap(dev->parent->of_node);
+	if (IS_ERR(pc->regmap))
+		return PTR_ERR(pc->regmap);
 
 	platform_set_drvdata(pdev, pc);
 
