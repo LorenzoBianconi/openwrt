@@ -123,9 +123,10 @@
 /* Monitor will use this as HOT2NORMAL (fire interrupt when lower than...)*/
 #define EN7581_TEMPCTHRE			0x82c
 #define   EN7581_COLD_THRE			GENMASK(11, 0)
-#define EN7581_TEMPOFFSETL			0x830
+/* Also LOW and HIGH offset register are swapped */
+#define EN7581_TEMPOFFSETL			0x830 /* In documentation: 0x834 */
 #define   EN7581_LOW_OFFSET			GENMASK(11, 0)
-#define EN7581_TEMPOFFSETH			0x834
+#define EN7581_TEMPOFFSETH			0x834 /* In documentation: 0x830 */
 #define   EN7581_HIGH_OFFSET			GENMASK(11, 0)
 #define EN7581_TEMPMSRCTL0			0x838
 #define   EN7581_MSRCTL3			GENMASK(11, 9)
