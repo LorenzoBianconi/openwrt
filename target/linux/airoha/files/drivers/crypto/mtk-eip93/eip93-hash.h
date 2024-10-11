@@ -35,28 +35,27 @@ struct mtk_hash_reqctx {
 	/* Don't enable HASH_FINALIZE when last block is sent */
 	bool			no_finalize;
 
-	/* 
+	/*
 	 * EIP93 requires data to be accumulated in block of 64 bytes
 	 * for intermediate hash calculation.
 	 */
 	u64			len;
 	u32			left_last;
-	struct list_head 	blocks;
+	struct list_head	blocks;
 };
 
 struct mkt_hash_block {
-	struct list_head 	list;
+	struct list_head	list;
 	u8			data[SHA256_BLOCK_SIZE] __aligned(sizeof(u32));
 	dma_addr_t		data_dma;
 };
 
 struct mtk_hash_export_state {
-
 	u64			len;
 	u32			left_last;
 	struct sa_state		*sa_state;
 	dma_addr_t		sa_state_base;
-	struct list_head 	blocks;
+	struct list_head	blocks;
 };
 
 void mtk_hash_handle_result(struct crypto_async_request *async, int err);
