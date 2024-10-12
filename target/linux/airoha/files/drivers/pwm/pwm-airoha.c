@@ -372,9 +372,6 @@ static int airoha_pwm_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct airoha_pwm *pc;
 
-	/* Assign parent MFD of_node to dev */
-	device_set_of_node_from_dev(dev, dev->parent);
-
 	pc = devm_kzalloc(dev, sizeof(*pc), GFP_KERNEL);
 	if (!pc)
 		return -ENOMEM;

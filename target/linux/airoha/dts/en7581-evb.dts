@@ -76,7 +76,7 @@
 		btn0 {
 			label = "reset";
 			linux,code = <KEY_RESTART>;
-			gpios = <&mfd 0 GPIO_ACTIVE_LOW>;
+			gpios = <&en7581_pinctrl 0 GPIO_ACTIVE_LOW>;
 		};
 	};
 
@@ -86,7 +86,7 @@
 		pinctrl-0 = <&pwm_gpio18_idx10_pins>;
 		lan4_green {
 			label = "pon:green";
-			pwms = <&mfd 10 4000000 0>;
+			pwms = <&en7581_pwm 10 4000000 0>;
 			max-brightness = <255>;
 			active-low;
 		};
@@ -100,7 +100,7 @@
 			label = "pwr";
 			color = <LED_COLOR_ID_RED>;
 			function = LED_FUNCTION_POWER;
-			gpios = <&mfd 17 GPIO_ACTIVE_LOW>;
+			gpios = <&en7581_pinctrl 17 GPIO_ACTIVE_LOW>;
 			default-state = "on";
 		};
 
@@ -108,7 +108,7 @@
 			label = "los";
 			color = <LED_COLOR_ID_GREEN>;
 			function = LED_FUNCTION_STATUS;
-			gpios = <&mfd 19 GPIO_ACTIVE_LOW>;
+			gpios = <&en7581_pinctrl 19 GPIO_ACTIVE_LOW>;
 			default-state = "on";
 		};
 
@@ -116,75 +116,73 @@
 			label = "internet";
 			color = <LED_COLOR_ID_GREEN>;
 			function = LED_FUNCTION_STATUS;
-			gpios = <&mfd 20 GPIO_ACTIVE_LOW>;
+			gpios = <&en7581_pinctrl 20 GPIO_ACTIVE_LOW>;
 			default-state = "on";
 		};
 	};
 };
 
-&mfd {
-	gpio-ranges = <&mfd 0 13 47>;
+&en7581_pinctrl {
+	gpio-ranges = <&en7581_pinctrl 0 13 47>;
 
-	pio: pinctrl {
-		mdio_pins: mdio-pins {
-			mux {
-				function = "mdio";
-				groups = "mdio";
-			};
-
-			conf {
-				pins = "gpio2";
-				output-high;
-			};
+	mdio_pins: mdio-pins {
+		mux {
+			function = "mdio";
+			groups = "mdio";
 		};
 
-		pcie0_rst_pins: pcie0-rst-pins {
-			conf {
-				pins = "pcie_reset0";
-				drive-open-drain = <1>;
-			};
+		conf {
+			pins = "gpio2";
+			output-high;
 		};
+	};
 
-		pcie1_rst_pins: pcie1-rst-pins {
-			conf {
-				pins = "pcie_reset1";
-				drive-open-drain = <1>;
-			};
+	pcie0_rst_pins: pcie0-rst-pins {
+		conf {
+			pins = "pcie_reset0";
+			drive-open-drain = <1>;
 		};
+	};
 
-		gswp1_led0_pins: gswp1-led0-pins {
-			mux {
-				function = "phy1_led0";
-				pins = "gpio33";
-			};
+	pcie1_rst_pins: pcie1-rst-pins {
+		conf {
+			pins = "pcie_reset1";
+			drive-open-drain = <1>;
 		};
+	};
 
-		gswp2_led0_pins: gswp2-led0-pins {
-			mux {
-				function = "phy2_led0";
-				pins = "gpio34";
-			};
+	gswp1_led0_pins: gswp1-led0-pins {
+		mux {
+			function = "phy1_led0";
+			pins = "gpio33";
 		};
+	};
 
-		gswp3_led0_pins: gswp3-led0-pins {
-			mux {
-				function = "phy3_led0";
-				pins = "gpio35";
-			};
+	gswp2_led0_pins: gswp2-led0-pins {
+		mux {
+			function = "phy2_led0";
+			pins = "gpio34";
 		};
+	};
 
-		gswp4_led0_pins: gswp4-led0-pins {
-			mux {
-				function = "phy4_led0";
-				pins = "gpio42";
-			};
+	gswp3_led0_pins: gswp3-led0-pins {
+		mux {
+			function = "phy3_led0";
+			pins = "gpio35";
 		};
+	};
 
-		pwm_gpio18_idx10_pins: pwm-gpio18-idx10-pins {
-			function = "pwm";
-			pins = "gpio18";
-			output-enable;
+	gswp4_led0_pins: gswp4-led0-pins {
+		mux {
+			function = "phy4_led0";
+			pins = "gpio42";
 		};
+	};
+
+	pwm_gpio18_idx10_pins: pwm-gpio18-idx10-pins {
+		function = "pwm";
+		pins = "gpio18";
+		output-enable;
 	};
 };
 

@@ -2440,8 +2440,9 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 	chip->base = -1;
 	chip->ngpio = AIROHA_NUM_PINS;
 
-	if (!of_property_read_bool(dev->of_node, "interrupt-controller"))
-		goto out;
+	chip->irq.default_type = IRQ_TYPE_NONE;
+	chip->irq.handler = handle_simple_irq;
+	gpio_irq_chip_set_chip(&chip->irq, &airoha_gpio_irq_chip);
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -2454,10 +2455,6 @@ static int airoha_pinctrl_add_gpiochip(struct airoha_pinctrl *pinctrl,
 		return err;
 	}
 
-	gpio_irq_chip_set_chip(&chip->irq, &airoha_gpio_irq_chip);
-	chip->irq.default_type = IRQ_TYPE_NONE;
-	chip->irq.handler = handle_simple_irq;
-out:
 	return devm_gpiochip_add_data(dev, chip, pinctrl);
 }
 
@@ -2896,9 +2893,6 @@ static int airoha_pinctrl_probe(struct platform_device *pdev)
 	struct airoha_pinctrl *pinctrl;
 	struct regmap *map;
 	int err, i;
-
-	/* Assign parent MFD of_node to dev */
-	device_set_of_node_from_dev(dev, dev->parent);
 
 	pinctrl = devm_kzalloc(dev, sizeof(*pinctrl), GFP_KERNEL);
 	if (!pinctrl)
