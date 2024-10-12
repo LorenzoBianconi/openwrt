@@ -99,7 +99,7 @@ static void *mtk_ring_next_rptr(struct mtk_device *mtk,
 }
 
 int mtk_put_descriptor(struct mtk_device *mtk,
-			      struct eip93_descriptor *desc)
+		       struct eip93_descriptor *desc)
 {
 	struct eip93_descriptor *cdesc;
 	struct eip93_descriptor *rdesc;
@@ -579,7 +579,7 @@ int mtk_send_req(struct crypto_async_request *async,
 			memcpy(sa_state->state_iv, iv, rctx->ivsize);
 
 			rctx->sa_state_ctr_base = dma_map_single(mtk->dev, rctx->sa_state_ctr,
-					     			 sizeof(*rctx->sa_state_ctr),
+								 sizeof(*rctx->sa_state_ctr),
 								 DMA_TO_DEVICE);
 		}
 	}
@@ -623,19 +623,17 @@ skip_iv:
 free_sg_dma:
 	dma_unmap_sg(mtk->dev, dst, rctx->dst_nents, DMA_BIDIRECTIONAL);
 free_sa_state_ctr:
-	if (rctx->sa_state_ctr) {
+	if (rctx->sa_state_ctr)
 		dma_unmap_single(mtk->dev, rctx->sa_state_ctr_base,
 				 sizeof(*rctx->sa_state_ctr),
 				 DMA_TO_DEVICE);
-		kfree(rctx->sa_state_ctr);
-	}
+	kfree(rctx->sa_state_ctr);
 free_sa_state:
-	if (rctx->sa_state) {
+	if (rctx->sa_state)
 		dma_unmap_single(mtk->dev, rctx->sa_state_base,
 				 sizeof(*rctx->sa_state),
 				 DMA_TO_DEVICE);
-		kfree(rctx->sa_state);
-	}
+	kfree(rctx->sa_state);
 
 	return err;
 }
@@ -699,11 +697,9 @@ void mtk_handle_result(struct mtk_device *mtk, struct mtk_cipher_reqctx *rctx,
 
 	if (!IS_ECB(rctx->flags))
 		memcpy(reqiv, rctx->sa_state->state_iv, rctx->ivsize);
-	
-	if (rctx->sa_state_ctr)
-		kfree(rctx->sa_state_ctr);
-	if (rctx->sa_state)
-		kfree(rctx->sa_state);
+
+	kfree(rctx->sa_state_ctr);
+	kfree(rctx->sa_state);
 }
 
 /* basically this is set hmac - key */

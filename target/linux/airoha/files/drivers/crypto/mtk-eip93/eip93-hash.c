@@ -1,5 +1,5 @@
-/* SPDX-License-Identifier: GPL-2.0
- *
+// SPDX-License-Identifier: GPL-2.0
+/*
  * Copyright (C) 2024
  *
  * Christian Marangi <ansuelsmth@gmail.com
@@ -72,19 +72,23 @@ static struct sa_state *mtk_hash_get_sa_state(struct ahash_request *req,
 	case MTK_HASH_SHA256:
 		u32 sha256_init[] = { SHA256_H0, SHA256_H1, SHA256_H2, SHA256_H3,
 				SHA256_H4, SHA256_H5, SHA256_H6, SHA256_H7 };
+
 		memcpy(sa_state->state_i_digest, sha256_init, sizeof(sha256_init));
 		break;
 	case MTK_HASH_SHA224:
 		u32 sha224_init[] = { SHA224_H0, SHA224_H1, SHA224_H2, SHA224_H3,
 				SHA224_H4, SHA224_H5, SHA224_H6, SHA224_H7 };
+
 		memcpy(sa_state->state_i_digest, sha224_init, sizeof(sha224_init));
 		break;
 	case MTK_HASH_SHA1:
 		u32 sha1_init[] = { SHA1_H0, SHA1_H1, SHA1_H2, SHA1_H3, SHA1_H4 };
+
 		memcpy(sa_state->state_i_digest, sha1_init, sizeof(sha1_init));
 		break;
 	case MTK_HASH_MD5:
 		u32 md5_init[] = { MD5_H0, MD5_H1, MD5_H2, MD5_H3 };
+
 		memcpy(sa_state->state_i_digest, md5_init, sizeof(md5_init));
 		break;
 	default: /* Impossible */
@@ -133,14 +137,14 @@ static int _mtk_hash_init(struct ahash_request *req, struct sa_state *sa_state,
 	sa_record->sa_cmd0_word &= ~EIP93_SA_CMD_DIGEST_LENGTH;
 	sa_record->sa_cmd0_word |= FIELD_PREP(EIP93_SA_CMD_DIGEST_LENGTH,
 					      digestsize / sizeof(u32));
-	
+
 	/*
 	 * HMAC special handling
 	 * Enabling CMD_HMAC force the inner hash to be always finalized.
 	 * This cause problems on handling message > 64 byte as we
 	 * need to produce intermediate inner hash on sending intermediate
 	 * 64 bytes blocks.
-	 * 
+	 *
 	 * To handle this, enable CMD_HMAC only on the last block.
 	 * We make a duplicate of sa_record and on the last descriptor,
 	 * we pass a dedicated sa_record with CMD_HMAC enabled to make
@@ -280,8 +284,8 @@ static int mtk_hash_update(struct ahash_request *req)
 	/* If the request is 0 length, do nothing */
 	if (!to_consume)
 		return 0;
-	
-	/* 
+
+	/*
 	 * Check if we are at a second iteration.
 	 * 1. Try to fill the first block to 64byte (if not already)
 	 * 2. Send full block (if we have more data to consume)
@@ -312,7 +316,7 @@ static int mtk_hash_update(struct ahash_request *req)
 		}
 	}
 
-	/* 
+	/*
 	 * Consume remaining data.
 	 * 1. Loop until we consume all the data in block of 64bytes
 	 * 2. Send full block of 64bytes
@@ -331,7 +335,7 @@ static int mtk_hash_update(struct ahash_request *req)
 					   read);
 
 		list_add(&block->list, &rctx->blocks);
-		
+
 		to_consume -= to_read;
 		rctx->left_last = SHA256_BLOCK_SIZE - to_read;
 
@@ -346,7 +350,7 @@ static int mtk_hash_update(struct ahash_request *req)
 		}
 	}
 
-	/* 
+	/*
 	 * Update counter with processed bytes.
 	 * This is also used to check if we are at the second iteration
 	 * of an update().
@@ -370,7 +374,7 @@ void mtk_hash_handle_result(struct crypto_async_request *async, int err)
 	dma_unmap_single(rctx->mtk->dev, rctx->sa_state_base,
 			 sizeof(*sa_state), DMA_FROM_DEVICE);
 
-	/* 
+	/*
 	 * With no_finalize assume SHA256_DIGEST_SIZE buffer is passed.
 	 * This is to handle SHA224 that have a 32 byte intermediate digest.
 	 */
@@ -429,7 +433,7 @@ static int mtk_hash_final(struct ahash_request *req)
 		mtk_hash_free_sa_state(req);
 		mtk_hash_free_sa_record(req);
 
-		return 0;	
+		return 0;
 	}
 
 	/* Send last block */
@@ -448,7 +452,7 @@ static int mtk_hash_final(struct ahash_request *req)
 static int mtk_hash_finup(struct ahash_request *req)
 {
 	int ret;
-	
+
 	ret = mtk_hash_update(req);
 	if (ret)
 		return ret;
@@ -581,7 +585,7 @@ static int mtk_hash_cra_init(struct crypto_tfm *tfm)
 static int mtk_hash_digest(struct ahash_request *req)
 {
 	int ret;
-	
+
 	ret = mtk_hash_init(req);
 	if (ret)
 		return ret;

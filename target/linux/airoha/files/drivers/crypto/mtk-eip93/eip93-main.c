@@ -276,7 +276,7 @@ static irqreturn_t mtk_irq_handler(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 
-	/* Ingore errors in AUTO mode, handled by the RDR */
+	/* Ignore errors in AUTO mode, handled by the RDR */
 	mtk_irq_clear(mtk, irq_status);
 	if (irq_status)
 		mtk_irq_disable(mtk, irq_status);
@@ -447,7 +447,7 @@ static int mtk_crypto_probe(struct platform_device *pdev)
 
 	/* Init finished, enable RDR interrupt */
 	mtk_irq_enable(mtk, EIP93_INT_RDR_THRESH);
-	
+
 	ret = mtk_register_algs(mtk, algo_flags);
 	if (ret) {
 		mtk_cleanup(mtk);
