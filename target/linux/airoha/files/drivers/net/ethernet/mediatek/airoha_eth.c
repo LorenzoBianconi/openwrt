@@ -3,6 +3,7 @@
  * Copyright (c) 2024 AIROHA Inc
  * Author: Lorenzo Bianconi <lorenzo@kernel.org>
  */
+#include <linux/debugfs.h>
 #include <linux/etherdevice.h>
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
@@ -881,6 +882,7 @@ struct airoha_gdm_port {
 	int id;
 
 	struct airoha_hw_stats stats;
+	struct dentry *debugfs_dir;
 };
 
 struct airoha_eth {
@@ -2677,6 +2679,7 @@ static netdev_tx_t airoha_dev_xmit(struct sk_buff *skb,
 
 	skb_tx_timestamp(skb);
 	netdev_tx_sent_queue(txq, skb->len);
+
 	if (netif_xmit_stopped(txq) || !netdev_xmit_more())
 		airoha_qdma_rmw(qdma, REG_TX_CPU_IDX(qid),
 				TX_RING_CPU_IDX_MASK,
@@ -2802,9 +2805,18 @@ static int airoha_qdma_set_tx_sched(struct airoha_gdm_port *port,
 {
 	int i;
 
-	for (i = 0; i < AIROHA_NUM_TX_RING; i++)
+	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
+		int id = (port->id << 3) + i;
+
 		airoha_qdma_clear(port->qdma, REG_QUEUE_CLOSE_CFG(port->id),
 				  TXQ_DISABLE_CHAN_QUEUE_MASK(port->id, i));
+		/* Tx-cpu transfered count */
+		airoha_qdma_wr(port->qdma, REG_CNTR_VAL(id), 0);
+		airoha_qdma_wr(port->qdma, REG_CNTR_CFG(id),
+			       CNTR_EN_MASK | CNTR_ALL_DSCP_RING_EN_MASK |
+			       FIELD_PREP(CNTR_CHAN_MASK, port->id) |
+			       FIELD_PREP(CNTR_QUEUE_MASK, i));
+	}
 
 	for (i = 0; i < n_weights; i++) {
 		u32 status;
@@ -2911,6 +2923,61 @@ static const struct ethtool_ops airoha_ethtool_ops = {
 	.get_rmon_stats		= airoha_ethtool_get_rmon_stats,
 };
 
+static int airoha_tx_qos_show(struct seq_file *s, void *data)
+{
+	struct airoha_gdm_port *port = s->private;
+	int i;
+
+	seq_puts(s, "     queue |     weight |    hw-queued\n");
+
+	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
+		u32 val, queued, weight;
+		int err;
+
+		airoha_qdma_wr(port->qdma, REG_TXWRR_WEIGHT_CFG,
+			       FIELD_PREP(TWRR_CHAN_IDX_MASK, port->id) |
+			       FIELD_PREP(TWRR_QUEUE_IDX_MASK, i));
+
+		err = read_poll_timeout(airoha_qdma_rr, val,
+					val & TWRR_RW_CMD_DONE,
+					USEC_PER_MSEC, 10 * USEC_PER_MSEC,
+					true, port->qdma,
+					REG_TXWRR_WEIGHT_CFG);
+		if (err)
+			return err;
+
+		val = airoha_qdma_rr(port->qdma, REG_TXWRR_WEIGHT_CFG);
+		weight = FIELD_GET(TWRR_VALUE_MASK, val);
+		queued = airoha_qdma_rr(port->qdma,
+					REG_CNTR_VAL((port->id << 3) + i));
+
+		seq_printf(s, " %9d |  %9d | %12d\n", i, weight, queued);
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(airoha_tx_qos);
+
+static int airoha_register_port_debugfs(struct airoha_gdm_port *port)
+{
+	struct airoha_eth *eth = port->qdma->eth;
+	const char *name;
+
+	name = devm_kasprintf(eth->dev, GFP_KERNEL, "airoha-eth:%d",
+			      port->id);
+	if (!name)
+		return -ENOMEM;
+
+	port->debugfs_dir = debugfs_create_dir(name, NULL);
+	if (IS_ERR(port->debugfs_dir))
+		return PTR_ERR(port->debugfs_dir);
+
+	debugfs_create_file("qos-tx-counters", 0400, port->debugfs_dir,
+			    port, &airoha_tx_qos_fops);
+
+	return 0;
+}
+
 static int airoha_alloc_gdm_port(struct airoha_eth *eth, struct device_node *np)
 {
 	const __be32 *id_ptr = of_get_property(np, "reg", NULL);
@@ -2976,6 +3043,10 @@ static int airoha_alloc_gdm_port(struct airoha_eth *eth, struct device_node *np)
 	port->dev = dev;
 	port->id = id;
 	eth->ports[index] = port;
+
+	err = airoha_register_port_debugfs(port);
+	if (err)
+		return err;
 
 	return register_netdev(dev);
 }
@@ -3087,6 +3158,7 @@ static void airoha_remove(struct platform_device *pdev)
 			continue;
 
 		airoha_dev_stop(port->dev);
+		debugfs_remove(port->debugfs_dir);
 		unregister_netdev(port->dev);
 	}
 
