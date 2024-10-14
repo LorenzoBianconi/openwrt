@@ -575,6 +575,7 @@
 
 #define REG_EGRESS_RATE_METER_CFG		0x100c
 #define EGRESS_RATE_METER_EN_MASK		BIT(31)
+#define EGRESS_RATE_METER_MODE_MASK		BIT(30)
 #define EGRESS_RATE_METER_EQ_RATE_EN_MASK	BIT(17)
 #define EGRESS_RATE_METER_WINDOW_SZ_MASK	GENMASK(16, 12)
 #define EGRESS_RATE_METER_TIMESLICE_MASK	GENMASK(10, 0)
@@ -778,6 +779,7 @@ enum trtcm_param {
 #define MAX_TOKEN_SIZE_OFFSET			17
 #define TRTCM_TOKEN_RATE_MASK			GENMASK(23, 6)
 #define TRTCM_TOKEN_RATE_FRACTION_MASK		GENMASK(5, 0)
+#define TRTCM_TOKEN_BUCKET_SIZE_MASK		GENMASK(5, 0)
 
 enum tx_sched_mode {
 	TC_SCH_WRR8,
@@ -2958,6 +2960,70 @@ static int airoha_tx_qos_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(airoha_tx_qos);
 
+static int airoha_tx_meter_show(struct seq_file *s, void *data)
+{
+	struct airoha_gdm_port *port = s->private;
+	u32 trtcm_cfg;
+	int i;
+
+	seq_puts(s, "   channel |      unit |       mode |      rate |       size\n");
+
+	trtcm_cfg = airoha_qdma_rr(port->qdma, REG_EGRESS_TRTCM_CFG);
+	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
+		u32 tick, unit, rate, bucket_size, rl_mode_cfg, val;
+		int err;
+
+		err = airoha_qdma_get_rl_param(port->qdma, i,
+					       REG_EGRESS_TRTCM_CFG,
+					       TRTCM_MISC_MODE, &rl_mode_cfg,
+					       NULL);
+		if (err)
+			return err;
+
+		if (!(rl_mode_cfg & TRTCM_METER_MODE))
+			continue;
+
+		err = airoha_qdma_get_rl_param(port->qdma, i,
+					       REG_EGRESS_TRTCM_CFG,
+					       TRTCM_TOKEN_RATE_MODE,
+					       &val, NULL);
+		if (err)
+			return err;
+
+		tick = FIELD_GET(INGRESS_FAST_TICK_MASK, trtcm_cfg);
+		if (rl_mode_cfg & TRTCM_TICK_SEL)
+			tick *= FIELD_GET(INGRESS_SLOW_TICK_RATIO_MASK,
+					  trtcm_cfg);
+		if (!tick)
+			return -EINVAL;
+
+		unit = (rl_mode_cfg & TRTCM_PKT_MODE) ? 1000000 / tick : 8000 / tick;
+		if (!unit)
+			return -EINVAL;
+
+		rate = FIELD_GET(TRTCM_TOKEN_RATE_MASK, val) * unit;
+		rate = rate + FIELD_GET(TRTCM_TOKEN_RATE_FRACTION_MASK, val);
+
+		err = airoha_qdma_get_rl_param(port->qdma, i,
+					       REG_EGRESS_TRTCM_CFG,
+					       TRTCM_BUCKETSIZE_SHIFT_MODE,
+					       &val, NULL);
+		if (err)
+			return err;
+
+		bucket_size = 1 << FIELD_GET(TRTCM_TOKEN_BUCKET_SIZE_MASK, val);
+
+		seq_printf(s, " %9d | %9d |         %c%c | %9d |  %9d\n",
+			   i, unit,
+			   rl_mode_cfg & TRTCM_TICK_SEL ? 'S': 'F',
+			   rl_mode_cfg & TRTCM_PKT_MODE ? 'P': 'B',
+			   rate, bucket_size);
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(airoha_tx_meter);
+
 static int airoha_register_port_debugfs(struct airoha_gdm_port *port)
 {
 	struct airoha_eth *eth = port->qdma->eth;
@@ -2974,6 +3040,8 @@ static int airoha_register_port_debugfs(struct airoha_gdm_port *port)
 
 	debugfs_create_file("qos-tx-counters", 0400, port->debugfs_dir,
 			    port, &airoha_tx_qos_fops);
+	debugfs_create_file("qos-tx-meters", 0400, port->debugfs_dir,
+			    port, &airoha_tx_meter_fops);
 
 	return 0;
 }
