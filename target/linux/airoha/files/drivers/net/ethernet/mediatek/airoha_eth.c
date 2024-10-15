@@ -1508,7 +1508,8 @@ static int airoha_fe_init(struct airoha_eth *eth)
 	airoha_fe_set(eth, REG_GDM_MISC_CFG,
 		      GDM2_RDM_ACK_WAIT_PREF_MASK |
 		      GDM2_CHN_VLD_MODE_MASK);
-	airoha_fe_rmw(eth, REG_CDM2_FWD_CFG, CDM2_OAM_QSEL_MASK, 15);
+	airoha_fe_rmw(eth, REG_CDM2_FWD_CFG, CDM2_OAM_QSEL_MASK,
+		      FIELD_PREP(CDM2_OAM_QSEL_MASK, 15));
 
 	/* init fragment and assemble Force Port */
 	/* NPU Core-3, NPU Bridge Channel-3 */
@@ -3097,6 +3098,27 @@ static int airoha_tx_qos_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(airoha_tx_qos);
 
+static int airoha_xmit_rings_show(struct seq_file *s, void *data)
+{
+	struct airoha_gdm_port *port = s->private;
+	struct airoha_qdma *qdma = port->qdma;
+	int i;
+
+	seq_puts(s, "     queue | hw-queued |      head |      tail |\n");
+	for (i = 0; i < ARRAY_SIZE(qdma->q_tx); i++) {
+		struct airoha_queue *q = &qdma->q_tx[i];
+
+		if (!q->ndesc)
+			continue;
+
+		seq_printf(s, " %9d | %9d | %9d | %9d |\n",
+			   i, q->queued, q->head, q->tail);
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(airoha_xmit_rings);
+
 static int airoha_tx_meter_show(struct seq_file *s, void *data)
 {
 	struct airoha_gdm_port *port = s->private;
@@ -3179,6 +3201,8 @@ static int airoha_register_port_debugfs(struct airoha_gdm_port *port)
 			    port, &airoha_tx_qos_fops);
 	debugfs_create_file("qos-tx-meters", 0400, port->debugfs_dir,
 			    port, &airoha_tx_meter_fops);
+	debugfs_create_file("xmit-rings", 0400, eth->debugfs_dir, port,
+			    &airoha_xmit_rings_fops);
 
 	return 0;
 }
