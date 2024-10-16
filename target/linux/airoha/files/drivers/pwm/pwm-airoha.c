@@ -48,6 +48,15 @@
 #define REG_CYCLE_CFG_VALUE(_n)		(0x0098 + ((_n) << 2))
 #define WAVE_GEN_CYCLE_MASK(_n)		GENMASK(7 + ((_n) << 3), ((_n) << 3))
 
+#define EN7581_NUM_BUCKETS		8
+
+struct airoha_pwm_bucket {
+	/* Bitmask of PWM channels using this bucket */
+	u64 used;
+	u64 period_ns;
+	u64 duty_ns;
+};
+
 struct airoha_pwm {
 	struct pwm_chip chip;
 
@@ -56,12 +65,7 @@ struct airoha_pwm {
 	struct device_node *np;
 	u64 initialized;
 
-	struct {
-		/* Bitmask of PWM channels using this bucket */
-		u64 used;
-		u64 period_ns;
-		u64 duty_ns;
-	} bucket[8];
+	struct airoha_pwm_bucket bucket[EN7581_NUM_BUCKETS];
 };
 
 /*
@@ -146,43 +150,53 @@ static int airoha_pwm_consume_generator(struct airoha_pwm *pc,
 
 static int airoha_pwm_sipo_init(struct airoha_pwm *pc)
 {
-	u32 clk_divr_val = 3, sipo_clock_delay = 1;
-	u32 val, sipo_clock_divisor = 32;
+	u32 clk_divr_val, sipo_clock_delay, sipo_clock_divisor;
+	u32 val;
 
 	if (!(pc->initialized >> PWM_NUM_GPIO))
 		return 0;
 
-	/* Select the right shift register chip */
-	if (of_property_read_bool(pc->np, "hc74595"))
+	/*
+	 * Select the right shift register chip.
+	 * By default 74HC164 is assumed. With this enabled
+	 * 74HC595 chip is used that requires the latch pin
+	 * to be triggered to apply the configuration.
+	 */
+	if (of_property_read_bool(pc->np, "airoha,74hc595-mode"))
 		regmap_set_bits(pc->regmap, REG_SIPO_FLASH_MODE_CFG,
 				SERIAL_GPIO_MODE);
 	else
 		regmap_clear_bits(pc->regmap, REG_SIPO_FLASH_MODE_CFG,
 				  SERIAL_GPIO_MODE);
 
-	if (!of_property_read_u32(pc->np, "sipo-clock-divisor",
-				  &sipo_clock_divisor)) {
-		switch (sipo_clock_divisor) {
-		case 4:
-			clk_divr_val = 0;
-			break;
-		case 8:
-			clk_divr_val = 1;
-			break;
-		case 16:
-			clk_divr_val = 2;
-			break;
-		case 32:
-			clk_divr_val = 3;
-			break;
-		default:
-			return -EINVAL;
-		}
+	if (of_property_read_u32(pc->np, "airoha,sipo-clock-divisor",
+				 &sipo_clock_divisor))
+		sipo_clock_divisor = 32;
+
+	switch (sipo_clock_divisor) {
+	case 4:
+		clk_divr_val = 0;
+		break;
+	case 8:
+		clk_divr_val = 1;
+		break;
+	case 16:
+		clk_divr_val = 2;
+		break;
+	case 32:
+		clk_divr_val = 3;
+		break;
+	default:
+		return -EINVAL;
 	}
+
 	/* Configure shift register timings */
 	regmap_write(pc->regmap, REG_SGPIO_CLK_DIVR, clk_divr_val);
 
-	of_property_read_u32(pc->np, "sipo-clock-delay", &sipo_clock_delay);
+	if (of_property_read_u32(pc->np, "airoha,sipo-clock-delay",
+				 &sipo_clock_delay))
+		sipo_clock_delay = 1;
+
 	if (sipo_clock_delay < 1 || sipo_clock_delay > sipo_clock_divisor / 2)
 		return -EINVAL;
 
