@@ -2,21 +2,15 @@
 
 IP=192.168.83.115
 DST=192.168.83.120
-RATE=500mbit
+RATE=200000
 NSTRICT=8
 #QUANTA="quanta 3528 1514 1514 1514 1514 1514"
 QUANTA=""
 PORT0=6001
 QUEUE0=0
-FLOWID0=""
-#FLOWID0="flowid 1:1"
-PRIO0=2
 PORT1=6002
 QUEUE1=5
-PRIO1=3
-#FLOWID1="flowid 1:2"
-FLOWID1=""
-TIME=60
+TIME=30
 
 brctl addbr br0
 sleep 1
@@ -28,24 +22,26 @@ ip a a $IP/24 dev br0
 ip link set dev br0 up
 sleep 2
 ping -c 10 $DST
+sleep 2
+for i in $(seq 8); do
+echo $RATE > /sys/class/net/eth0/queues/tx-$i/tx_maxrate
+done
 
-#tc qdisc replace dev eth0 root handle 1: tbf rate $RATE burst 10kb limit 1M
 tc filter del dev eth0 egress
-#tc qdisc replace dev eth0 root handle 1: ets bands 8 strict $NSTRICT $QUANTA
+# Comment it out to be fully offloaded
+#tc qdisc replace dev eth0 root handle 1: ets bands 8 strict $NSTRICT $QUANTA priomap 7 6 5 4 3 2 1 0
 tc qdisc add dev eth0 clsact
 sleep 2
-tc filter add dev eth0 protocol ip egress flower ip_proto tcp dst_port $PORT0 action skbedit queue $QUEUE0 $FLOWID0
-tc filter add dev eth0 protocol ip egress flower ip_proto tcp dst_port $PORT1 action skbedit queue $QUEUE1 $FLOWID1
+tc filter add dev eth0 protocol ip egress flower ip_proto tcp dst_port $PORT0 action skbedit queue $QUEUE0
+tc filter add dev eth0 protocol ip egress flower ip_proto tcp dst_port $PORT1 action skbedit queue $QUEUE1
 
 tc qdisc show dev eth0
 tc filter show dev eth0 egress
+cat /sys/kernel/debug/airoha-eth:1/qos-tx-meters
+sleep 5
 
-iperf3 -c $DST -p $PORT0 -t $((TIME*10)) > /dev/null &
-for i in $(seq 3); do
+iperf3 -c $DST -p $PORT0 -t $((TIME*20)) > /dev/null &
+for i in $(seq 15); do
 	sleep 10
 	iperf3 -c $DST -p $PORT1 -t $TIME > /dev/null
-done &
-while sleep 1; do
-clear
-cat /sys/kernel/debug/airoha-eth:1/qos-tx-counters
 done
