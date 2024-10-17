@@ -546,14 +546,8 @@
 #define INGRESS_SLOW_TICK_RATIO_MASK	GENMASK(29, 16)
 #define INGRESS_FAST_TICK_MASK		GENMASK(15, 0)
 
-#define REG_HQOS_MODE_CFG		0x0090
-#define HQOS_MODE_EN_MASK		BIT(31)
-
 #define REG_QUEUE_CLOSE_CFG(_n)		(0x00a0 + ((_n) & 0xfc))
 #define TXQ_DISABLE_CHAN_QUEUE_MASK(_n, _m)	BIT((_m) + (((_n) & 0x3) << 3))
-
-#define REG_DBG_CNTMEM_EN		0x0600
-#define DBG_CNTRMEM_EN_MASK		BIT(31)
 
 #define REG_TXQ_DIS_CFG_BASE(_n)	((_n) ? 0x20a0 : 0x00a0)
 #define REG_TXQ_DIS_CFG(_n, _m)		(REG_TXQ_DIS_CFG_BASE((_n)) + (_m) << 2)
@@ -579,14 +573,8 @@
 #define REG_FWD_DSCP_LOW_THR		0x1004
 #define FWD_DSCP_LOW_THR_MASK		GENMASK(17, 0)
 
-#define REG_TXQ_MIN_DSCP_THR		0x1008
-#define TXC_MIN_DSCP_THR_MASK		GENMASK(31, 16)
-#define TXQ_MIN_DSCP_THR_MASK		GENMASK(15, 0)
-
 #define REG_EGRESS_RATE_METER_CFG		0x100c
 #define EGRESS_RATE_METER_EN_MASK		BIT(31)
-#define EGRESS_RATE_METER_PEEK_EN_MASK		BIT(30)
-#define EGRESS_RATE_METER_PEEK_DUR_MASK		GENMASK(29, 18)
 #define EGRESS_RATE_METER_EQ_RATE_EN_MASK	BIT(17)
 #define EGRESS_RATE_METER_WINDOW_SZ_MASK	GENMASK(16, 12)
 #define EGRESS_RATE_METER_TIMESLICE_MASK	GENMASK(10, 0)
@@ -621,11 +609,6 @@
 #define REG_PSE_BUF_USAGE_CFG		0x1028
 #define PSE_BUF_ESTIMATE_EN_MASK	BIT(29)
 
-#define REG_TXQ_CNGST_NOBLOCKING_CFG		0x102c
-#define TXQ_CNGST_NOBLOCKING_EN_MASK(_n)	BIT(_n)
-
-#define REG_TXQ_CNGST_CHANNEL_NOBLOCKING_CFG	0x1030
-
 #define REG_CHAN_QOS_MODE(_n)		(0x1040 + ((_n) << 2))
 #define CHAN_QOS_MODE_MASK(_n)		GENMASK(2 + ((_n) << 2), (_n) << 2)
 
@@ -635,50 +618,9 @@
 #define GLB_SLOW_TICK_RATIO_MASK	GENMASK(29, 16)
 #define GLB_FAST_TICK_MASK		GENMASK(15, 0)
 
-#define REG_CNGST_WRED_NORM_CFG		0x1090
-
-#define REG_CNGST_WRED_DEI_CFG		0x1094
-#define WRED_THR_SHIFT_MASK(_n)		GENMASK(4 + (_n) * 5, 3 + (_n) * 5)
-#define WRED_THR_CFG_MASK(_n)		GENMASK(2 + (_n) * 5, (_n) * 5)
-
 #define REG_TXQ_CNGST_CFG		0x10a0
-#define TXQ_CNGST_DROP_EN_MASK		BIT(31)
-#define TXQ_CNGST_DEI_DROP_EN_MASK	BIT(30)
-#define TXQ_DYN_CNGST_EN_MASK		BIT(29)
-#define TXQ_DYN_CNGST_CONFIG_TRIG_MASK	BIT(18)
-#define TXQ_DYN_CNGST_PACKET_TRIG_MASK	BIT(17)
-#define TXQ_DYN_CNGST_TIME_TRIG_MASK	BIT(16)
-#define TXQ_DYN_CNGST_TICKSEL_MASK	GENMASK(15, 0)
-
-#define REG_TXQ_DYN_TOTAL_THR		0x10a4
-#define TXQ_CNGST_TOTAL_MAX_THR_MASK	GENMASK(31, 16)
-#define TXQ_CNGST_TOTAL_MIN_THR_MASK	GENMASK(15, 0)
-
-#define REG_TXQ_DYN_CHAN_THR_CFG	0x10a8
-#define TXQ_CNGST_CHAN_MAX_THR_MASK	GENMASK(31, 16)
-#define TXQ_CNGST_CHAN_MIN_THR_MASK	GENMASK(15, 0)
-
-#define REG_TXQ_DYN_QUEUE_THR_CFG	0x10ac
-#define TXQ_CNGST_QUEUE_MAX_THR_MASK	GENMASK(31, 16)
-#define TXQ_CNGST_QUEUE_MIN_THR_MASK	GENMASK(15, 0)
-
-#define REG_QOS_AGING_CFG		0x10bc
-#define QOS_AGING_EN_MASK		BIT(31)
-#define QOS_AGING_METHOD_MASK		BIT(30)
-#define QOS_AGING_FAST_REPLACE_MASK	BIT(29)
-#define QOS_AGING_TIME_MASK		GENMASK(15, 0)
-
-#define REG_TXQ_DEI_TOTAL_THR			0x10d4
-#define TXQ_CNGST_DEI_TOTAL_MAX_THR_MASK	GENMASK(31, 16)
-#define TXQ_CNGST_DEI_TOTAL_MIN_THR_MASK	GENMASK(15, 0)
-
-#define REG_TXQ_DEI_CHAN_THR			0x10d8
-#define TXQ_CNGST_DEI_CHAN_MAX_THR_MASK		GENMASK(31, 16)
-#define TXQ_CNGST_DEI_CHAN_MIN_THR_MASK		GENMASK(15, 0)
-
-#define REG_TXQ_DEI_QUEUE_THR			0x10dc
-#define TXQ_CNGST_DEI_QUEUE_MAX_THR_MASK	GENMASK(31, 16)
-#define TXQ_CNGST_DEI_QUEUE_MIN_THR_MASK	GENMASK(15, 0)
+#define TXQ_CNGST_DROP_EN		BIT(31)
+#define TXQ_CNGST_DEI_DROP_EN		BIT(30)
 
 #define REG_SLA_TRTCM_CFG		0x1150
 #define SLA_TRTCM_EN_MASK		BIT(31)
@@ -818,13 +760,6 @@ enum {
 	FE_PSE_PORT_DROP = 0xf,
 };
 
-#define TXQ_CNGST_GLOBAL_MAX_THR	((HW_DSCP_NUM * 9) / 10)
-#define TXQ_CNGST_GLOBAL_MIN_THR	(HW_DSCP_NUM / 2)
-#define TXQ_CNGST_CHAN_MAX_THR		(HW_DSCP_NUM / 2)
-#define TXQ_CNGST_CHAN_MIN_THR		256
-#define TXQ_CNGST_QUEUE_MAX_THR		(HW_DSCP_NUM / 2)
-#define TXQ_CNGST_QUEUE_MIN_THR		32
-
 enum rl_param_type {
 	TRTCM_MISC_MODE, /* meter_en, pps_mode, tick_sel */
 	TRTCM_TOKEN_RATE_MODE,
@@ -838,7 +773,7 @@ enum trtcm_param {
 	TRTCM_METER_MODE = BIT(2),
 };
 
-#define DEF_METER_RATE				100000
+#define DEF_METER_RATE				1000000
 #define MIN_TOKEN_SIZE				4096
 #define MAX_TOKEN_SIZE_OFFSET			17
 #define TRTCM_TOKEN_RATE_MASK			GENMASK(23, 6)
@@ -888,11 +823,9 @@ struct airoha_tx_irq_queue {
 	struct airoha_qdma *qdma;
 
 	struct napi_struct napi;
-	u32 *q;
 
 	int size;
-	int queued;
-	u16 head;
+	u32 *q;
 };
 
 struct airoha_hw_stats {
@@ -1794,48 +1727,52 @@ static int airoha_qdma_init_rx(struct airoha_qdma *qdma)
 static int airoha_qdma_tx_napi_poll(struct napi_struct *napi, int budget)
 {
 	struct airoha_tx_irq_queue *irq_q;
+	int id, done = 0, irq_queued;
 	struct airoha_qdma *qdma;
 	struct airoha_eth *eth;
-	int id, done = 0;
+	u32 status, head;
 
 	irq_q = container_of(napi, struct airoha_tx_irq_queue, napi);
 	qdma = irq_q->qdma;
 	id = irq_q - &qdma->q_tx_irq[0];
 	eth = qdma->eth;
 
-	while (irq_q->queued > 0 && done < budget) {
-		u32 val = irq_q->q[irq_q->head];
-		u32 index, desc_ctrl, qid;
+	status = airoha_qdma_rr(qdma, REG_IRQ_STATUS(id));
+	head = FIELD_GET(IRQ_HEAD_IDX_MASK, status);
+	head = head % irq_q->size;
+	irq_queued = FIELD_GET(IRQ_ENTRY_LEN_MASK, status);
+
+	while (irq_queued > 0 && done < budget) {
+		u32 qid, val = irq_q->q[head];
 		struct airoha_qdma_desc *desc;
 		struct airoha_queue_entry *e;
-		struct netdev_queue *txq;
 		struct airoha_queue *q;
-		u16 queue;
+		u32 index, desc_ctrl;
+		struct sk_buff *skb;
 
 		if (val == 0xff)
 			break;
 
-		irq_q->q[irq_q->head] = 0xff; /* mark as done */
-		irq_q->head = (irq_q->head + 1) % irq_q->size;
-		irq_q->queued--;
+		irq_q->q[head] = 0xff; /* mark as done */
+		head = (head + 1) % irq_q->size;
+		irq_queued--;
 		done++;
 
 		qid = FIELD_GET(IRQ_RING_IDX_MASK, val);
 		if (qid >= ARRAY_SIZE(qdma->q_tx))
-			break;
+			continue;
 
 		q = &qdma->q_tx[qid];
 		if (!q->ndesc)
-			break;
-
-		spin_lock_bh(&q->lock);
+			continue;
 
 		index = FIELD_GET(IRQ_DESC_IDX_MASK, val);
 		if (index >= q->ndesc)
-			goto unlock;
+			continue;
 
-		e = &q->entry[index];
-		if (!e->skb)
+		spin_lock_bh(&q->lock);
+
+		if (!q->queued)
 			goto unlock;
 
 		desc = &q->desc[index];
@@ -1845,22 +1782,27 @@ static int airoha_qdma_tx_napi_poll(struct napi_struct *napi, int budget)
 		    !(desc_ctrl & QDMA_DESC_DROP_MASK))
 			goto unlock;
 
-		q->queued--;
+		e = &q->entry[index];
+		skb = e->skb;
+
 		dma_unmap_single(eth->dev, e->dma_addr, e->dma_len,
 				 DMA_TO_DEVICE);
-
 		WRITE_ONCE(desc->msg0, 0);
 		WRITE_ONCE(desc->msg1, 0);
+		q->queued--;
 
-		queue = skb_get_queue_mapping(e->skb);
-		txq = netdev_get_tx_queue(e->skb->dev, queue);
-		netdev_tx_completed_queue(txq, 1, e->skb->len);
-		if (netif_tx_queue_stopped(txq) &&
-		    q->ndesc - q->queued >= q->free_thr)
-			netif_tx_wake_queue(txq);
+		if (skb) {
+			u16 queue = skb_get_queue_mapping(skb);
+			struct netdev_queue *txq;
 
-		dev_kfree_skb_any(e->skb);
-		e->skb = NULL;
+			txq = netdev_get_tx_queue(skb->dev, queue);
+			netdev_tx_completed_queue(txq, 1, skb->len);
+			if (netif_tx_queue_stopped(txq) &&
+			    q->ndesc - q->queued >= q->free_thr)
+				netif_tx_wake_queue(txq);
+
+			dev_kfree_skb_any(skb);
+		}
 unlock:
 		spin_unlock_bh(&q->lock);
 	}
@@ -1910,6 +1852,10 @@ static int airoha_qdma_init_tx_queue(struct airoha_queue *q,
 		val = FIELD_PREP(QDMA_DESC_DONE_MASK, 1);
 		WRITE_ONCE(q->desc[i].ctrl, cpu_to_le32(val));
 	}
+
+	/* xmit ring drop default setting */
+	airoha_qdma_set(qdma, REG_TX_RING_BLOCKING(qid),
+			TX_RING_IRQ_BLOCKING_TX_DROP_EN_MASK);
 
 	airoha_qdma_wr(qdma, REG_TX_RING_BASE(qid), dma_addr);
 	airoha_qdma_rmw(qdma, REG_TX_CPU_IDX(qid), TX_RING_CPU_IDX_MASK,
@@ -2029,128 +1975,52 @@ static int airoha_qdma_init_hfwd_queues(struct airoha_qdma *qdma)
 
 static void airoha_qdma_init_qos(struct airoha_qdma *qdma)
 {
-	int i;
-
 	airoha_qdma_clear(qdma, REG_TXWRR_MODE_CFG, TWRR_WEIGHT_SCALE_MASK);
 	airoha_qdma_set(qdma, REG_TXWRR_MODE_CFG, TWRR_WEIGHT_BASE_MASK);
 
+	airoha_qdma_clear(qdma, REG_PSE_BUF_USAGE_CFG,
+			  PSE_BUF_ESTIMATE_EN_MASK);
+
+	airoha_qdma_set(qdma, REG_EGRESS_RATE_METER_CFG,
+			EGRESS_RATE_METER_EN_MASK |
+			EGRESS_RATE_METER_EQ_RATE_EN_MASK);
 	/* 2047us x 31 = 63.457ms */
 	airoha_qdma_rmw(qdma, REG_EGRESS_RATE_METER_CFG,
-			EGRESS_RATE_METER_EN_MASK |
-			EGRESS_RATE_METER_EQ_RATE_EN_MASK |
-			EGRESS_RATE_METER_WINDOW_SZ_MASK |
+			EGRESS_RATE_METER_WINDOW_SZ_MASK,
+			FIELD_PREP(EGRESS_RATE_METER_WINDOW_SZ_MASK, 0x1f));
+	airoha_qdma_rmw(qdma, REG_EGRESS_RATE_METER_CFG,
 			EGRESS_RATE_METER_TIMESLICE_MASK,
-			EGRESS_RATE_METER_EN_MASK |
-			EGRESS_RATE_METER_EQ_RATE_EN_MASK |
-			FIELD_PREP(EGRESS_RATE_METER_WINDOW_SZ_MASK, 0x1f) |
 			FIELD_PREP(EGRESS_RATE_METER_TIMESLICE_MASK, 0x7ff));
-	airoha_qdma_clear(qdma, REG_EGRESS_RATE_METER_CFG,
-			  EGRESS_RATE_METER_PEEK_EN_MASK);
 
-	/* ratelimit init - fast-tick 25us */
-	airoha_qdma_rmw(qdma, REG_GLB_TRTCM_CFG,
-			GLB_TRTCM_EN_MASK | GLB_FAST_TICK_MASK |
-			GLB_SLOW_TICK_RATIO_MASK,
-			GLB_TRTCM_EN_MASK |
-			FIELD_PREP(GLB_FAST_TICK_MASK, 25) |
+	/* ratelimit init */
+	airoha_qdma_set(qdma, REG_GLB_TRTCM_CFG, GLB_TRTCM_EN_MASK);
+	/* fast-tick 25us */
+	airoha_qdma_rmw(qdma, REG_GLB_TRTCM_CFG, GLB_FAST_TICK_MASK,
+			FIELD_PREP(GLB_FAST_TICK_MASK, 25));
+	airoha_qdma_rmw(qdma, REG_GLB_TRTCM_CFG, GLB_SLOW_TICK_RATIO_MASK,
 			FIELD_PREP(GLB_SLOW_TICK_RATIO_MASK, 40));
-	airoha_qdma_rmw(qdma, REG_EGRESS_TRTCM_CFG,
-			EGRESS_TRTCM_EN_MASK | EGRESS_FAST_TICK_MASK |
-			EGRESS_SLOW_TICK_RATIO_MASK,
-			EGRESS_TRTCM_EN_MASK |
-			FIELD_PREP(EGRESS_FAST_TICK_MASK, 25) |
-			FIELD_PREP(EGRESS_SLOW_TICK_RATIO_MASK, 40));
-	airoha_qdma_rmw(qdma, REG_INGRESS_TRTCM_CFG,
-			INGRESS_TRTCM_EN_MASK | INGRESS_FAST_TICK_MASK |
-			INGRESS_SLOW_TICK_RATIO_MASK,
-			INGRESS_TRTCM_EN_MASK |
-			FIELD_PREP(INGRESS_FAST_TICK_MASK, 125) |
-			FIELD_PREP(INGRESS_SLOW_TICK_RATIO_MASK, 8));
-	airoha_qdma_rmw(qdma, REG_SLA_TRTCM_CFG,
-			SLA_TRTCM_EN_MASK | SLA_FAST_TICK_MASK |
-			SLA_SLOW_TICK_RATIO_MASK,
-			SLA_TRTCM_EN_MASK |
-			FIELD_PREP(SLA_FAST_TICK_MASK, 25) |
-			FIELD_PREP(SLA_SLOW_TICK_RATIO_MASK, 40));
 
+	airoha_qdma_set(qdma, REG_EGRESS_TRTCM_CFG, EGRESS_TRTCM_EN_MASK);
+	airoha_qdma_rmw(qdma, REG_EGRESS_TRTCM_CFG, EGRESS_FAST_TICK_MASK,
+			FIELD_PREP(EGRESS_FAST_TICK_MASK, 25));
+	airoha_qdma_rmw(qdma, REG_EGRESS_TRTCM_CFG,
+			EGRESS_SLOW_TICK_RATIO_MASK,
+			FIELD_PREP(EGRESS_SLOW_TICK_RATIO_MASK, 40));
+
+	airoha_qdma_set(qdma, REG_INGRESS_TRTCM_CFG, INGRESS_TRTCM_EN_MASK);
 	airoha_qdma_clear(qdma, REG_INGRESS_TRTCM_CFG,
 			  INGRESS_TRTCM_MODE_MASK);
+	airoha_qdma_rmw(qdma, REG_INGRESS_TRTCM_CFG, INGRESS_FAST_TICK_MASK,
+			FIELD_PREP(INGRESS_FAST_TICK_MASK, 125));
+	airoha_qdma_rmw(qdma, REG_INGRESS_TRTCM_CFG,
+			INGRESS_SLOW_TICK_RATIO_MASK,
+			FIELD_PREP(INGRESS_SLOW_TICK_RATIO_MASK, 8));
 
-	for (i = 0; i < ARRAY_SIZE(qdma->q_tx); i++) {
-		if (!qdma->q_tx[i].ndesc)
-			continue;
-
-		/* xmit ring drop default setting */
-		airoha_qdma_set(qdma, REG_TX_RING_BLOCKING(i),
-				TX_RING_IRQ_BLOCKING_TX_DROP_EN_MASK);
-		airoha_qdma_clear(qdma, REG_TX_RING_BLOCKING(i),
-				  TX_RING_IRQ_BLOCKING_MAX_TH_TXRING_EN_MASK |
-				  TX_RING_IRQ_BLOCKING_MIN_TH_TXRING_EN_MASK);
-	}
-
-	airoha_qdma_wr(qdma, REG_TXQ_DYN_TOTAL_THR,
-		       FIELD_PREP(TXQ_CNGST_TOTAL_MAX_THR_MASK,
-				  TXQ_CNGST_GLOBAL_MAX_THR) |
-		       FIELD_PREP(TXQ_CNGST_TOTAL_MIN_THR_MASK,
-				  TXQ_CNGST_GLOBAL_MIN_THR));
-	airoha_qdma_wr(qdma, REG_TXQ_DYN_CHAN_THR_CFG,
-		       FIELD_PREP(TXQ_CNGST_CHAN_MAX_THR_MASK,
-				  TXQ_CNGST_CHAN_MAX_THR) |
-		       FIELD_PREP(TXQ_CNGST_CHAN_MIN_THR_MASK,
-				  TXQ_CNGST_CHAN_MIN_THR));
-	airoha_qdma_wr(qdma, REG_TXQ_DYN_QUEUE_THR_CFG,
-		       FIELD_PREP(TXQ_CNGST_QUEUE_MAX_THR_MASK,
-				  TXQ_CNGST_QUEUE_MAX_THR) |
-		       FIELD_PREP(TXQ_CNGST_QUEUE_MIN_THR_MASK,
-				  TXQ_CNGST_QUEUE_MIN_THR));
-	airoha_qdma_clear(qdma, REG_TXQ_MIN_DSCP_THR,
-			  TXQ_MIN_DSCP_THR_MASK);
-
-	airoha_qdma_wr(qdma, REG_TXQ_DEI_TOTAL_THR,
-		       FIELD_PREP(TXQ_CNGST_DEI_TOTAL_MAX_THR_MASK,
-				  TXQ_CNGST_GLOBAL_MAX_THR >> 1) |
-		       FIELD_PREP(TXQ_CNGST_DEI_TOTAL_MIN_THR_MASK,
-				  TXQ_CNGST_GLOBAL_MIN_THR >> 1));
-	airoha_qdma_wr(qdma, REG_TXQ_DEI_CHAN_THR,
-		       FIELD_PREP(TXQ_CNGST_DEI_CHAN_MAX_THR_MASK,
-				  TXQ_CNGST_CHAN_MAX_THR >> 1) |
-		       FIELD_PREP(TXQ_CNGST_DEI_CHAN_MIN_THR_MASK,
-				  TXQ_CNGST_CHAN_MIN_THR >> 1));
-	airoha_qdma_wr(qdma, REG_TXQ_DEI_QUEUE_THR,
-		       FIELD_PREP(TXQ_CNGST_DEI_QUEUE_MAX_THR_MASK,
-				  TXQ_CNGST_QUEUE_MAX_THR >> 1) |
-		       FIELD_PREP(TXQ_CNGST_DEI_QUEUE_MIN_THR_MASK,
-				  TXQ_CNGST_QUEUE_MIN_THR >> 1));
-
-	airoha_qdma_set(qdma, REG_TXQ_CNGST_CFG,
-			TXQ_CNGST_DROP_EN_MASK | TXQ_CNGST_DEI_DROP_EN_MASK |
-			TXQ_DYN_CNGST_CONFIG_TRIG_MASK |
-			TXQ_DYN_CNGST_PACKET_TRIG_MASK |
-			TXQ_DYN_CNGST_TIME_TRIG_MASK |
-			TXQ_DYN_CNGST_EN_MASK);
-	airoha_qdma_rmw(qdma, REG_TXQ_CNGST_CFG, TXQ_DYN_CNGST_TICKSEL_MASK,
-			FIELD_PREP(TXQ_DYN_CNGST_TICKSEL_MASK, 250));
-
-	airoha_qdma_rmw(qdma, REG_CNGST_WRED_DEI_CFG, WRED_THR_CFG_MASK(0),
-			FIELD_PREP(WRED_THR_CFG_MASK(0), 4));
-	airoha_qdma_rmw(qdma, REG_CNGST_WRED_DEI_CFG, WRED_THR_CFG_MASK(1),
-			FIELD_PREP(WRED_THR_CFG_MASK(1), 4));
-	airoha_qdma_rmw(qdma, REG_CNGST_WRED_DEI_CFG, WRED_THR_CFG_MASK(2),
-			FIELD_PREP(WRED_THR_CFG_MASK(2), 4));
-	airoha_qdma_rmw(qdma, REG_CNGST_WRED_DEI_CFG, WRED_THR_CFG_MASK(3),
-			FIELD_PREP(WRED_THR_CFG_MASK(3), 4));
-	airoha_qdma_rmw(qdma, REG_CNGST_WRED_DEI_CFG, WRED_THR_CFG_MASK(4),
-			FIELD_PREP(WRED_THR_CFG_MASK(4), 4));
-
-	airoha_qdma_set(qdma, REG_DBG_CNTMEM_EN, DBG_CNTRMEM_EN_MASK);
-
-	/* QoS aging */
-	airoha_qdma_set(qdma, REG_QOS_AGING_CFG,
-			QOS_AGING_EN_MASK | QOS_AGING_FAST_REPLACE_MASK);
-	airoha_qdma_clear(qdma, REG_QOS_AGING_CFG, QOS_AGING_METHOD_MASK);
-	airoha_qdma_clear(qdma, REG_HQOS_MODE_CFG, HQOS_MODE_EN_MASK);
-	airoha_qdma_set(qdma, REG_TXQ_CNGST_NOBLOCKING_CFG,
-			TXQ_CNGST_NOBLOCKING_EN_MASK(7));
+	airoha_qdma_set(qdma, REG_SLA_TRTCM_CFG, SLA_TRTCM_EN_MASK);
+	airoha_qdma_rmw(qdma, REG_SLA_TRTCM_CFG, SLA_FAST_TICK_MASK,
+			FIELD_PREP(SLA_FAST_TICK_MASK, 25));
+	airoha_qdma_rmw(qdma, REG_SLA_TRTCM_CFG, SLA_SLOW_TICK_RATIO_MASK,
+			FIELD_PREP(SLA_SLOW_TICK_RATIO_MASK, 40));
 }
 
 static int airoha_qdma_hw_init(struct airoha_qdma *qdma)
@@ -2201,6 +2071,9 @@ static int airoha_qdma_hw_init(struct airoha_qdma *qdma)
 				  RX_DELAY_INT_MASK);
 	}
 
+	airoha_qdma_set(qdma, REG_TXQ_CNGST_CFG,
+			TXQ_CNGST_DROP_EN | TXQ_CNGST_DEI_DROP_EN);
+
 	return 0;
 }
 
@@ -2234,20 +2107,11 @@ static irqreturn_t airoha_irq_handler(int irq, void *dev_instance)
 
 	if (intr[0] & INT_TX_MASK) {
 		for (i = 0; i < ARRAY_SIZE(qdma->q_tx_irq); i++) {
-			struct airoha_tx_irq_queue *irq_q = &qdma->q_tx_irq[i];
-			u32 status, head;
-
 			if (!(intr[0] & TX_DONE_INT_MASK(i)))
 				continue;
 
 			airoha_qdma_irq_disable(qdma, QDMA_INT_REG_IDX0,
 						TX_DONE_INT_MASK(i));
-
-			status = airoha_qdma_rr(qdma, REG_IRQ_STATUS(i));
-			head = FIELD_GET(IRQ_HEAD_IDX_MASK, status);
-			irq_q->head = head % irq_q->size;
-			irq_q->queued = FIELD_GET(IRQ_ENTRY_LEN_MASK, status);
-
 			napi_schedule(&qdma->q_tx_irq[i].napi);
 		}
 	}
@@ -2368,120 +2232,6 @@ static int airoha_qdma_set_chan_tx_meter(struct airoha_gdm_port *port,
 	return airoha_qdma_set_token_bucket(port->qdma, channel,
 					    REG_EGRESS_TRTCM_CFG, rate,
 					    bucket_size);
-}
-
-static int airoha_qdma_set_tx_meter(struct airoha_gdm_port *port, u32 rate,
-				    u32 bucket_size)
-{
-	int i;
-
-	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
-		int err;
-
-		err = airoha_qdma_set_chan_tx_meter(port, i, rate,
-						    bucket_size);
-		if (err)
-			return err;
-	}
-
-	return 0;
-}
-
-static int airoha_qdma_set_chan_tx_sched(struct airoha_gdm_port *port,
-					 int channel, enum tx_sched_mode mode,
-					 const u16 *weights, u8 n_weights)
-{
-	int i;
-
-	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
-		int id = (channel << 3) + i;
-
-		airoha_qdma_clear(port->qdma, REG_QUEUE_CLOSE_CFG(channel),
-				  TXQ_DISABLE_CHAN_QUEUE_MASK(channel, i));
-		/* Tx-cpu transfered count */
-		airoha_qdma_wr(port->qdma, REG_CNTR_VAL(id), 0);
-		airoha_qdma_wr(port->qdma, REG_CNTR_CFG(id),
-			       CNTR_EN_MASK | CNTR_ALL_DSCP_RING_EN_MASK |
-			       FIELD_PREP(CNTR_CHAN_MASK, channel) |
-			       FIELD_PREP(CNTR_QUEUE_MASK, i));
-	}
-
-	for (i = 0; i < n_weights; i++) {
-		u32 status;
-		int err;
-
-		airoha_qdma_wr(port->qdma, REG_TXWRR_WEIGHT_CFG,
-			       TWRR_RW_CMD_MASK |
-			       FIELD_PREP(TWRR_CHAN_IDX_MASK, channel) |
-			       FIELD_PREP(TWRR_QUEUE_IDX_MASK, i) |
-			       FIELD_PREP(TWRR_VALUE_MASK, weights[i]));
-		err = read_poll_timeout(airoha_qdma_rr, status,
-					status & TWRR_RW_CMD_DONE,
-					USEC_PER_MSEC, 10 * USEC_PER_MSEC,
-					true, port->qdma,
-					REG_TXWRR_WEIGHT_CFG);
-		if (err)
-			return err;
-	}
-
-	airoha_qdma_rmw(port->qdma, REG_CHAN_QOS_MODE(channel >> 3),
-			CHAN_QOS_MODE_MASK(channel),
-			mode << __ffs(CHAN_QOS_MODE_MASK(channel)));
-
-	return 0;
-}
-
-static int airoha_qdma_set_tx_sched(struct airoha_gdm_port *port,
-				    enum tx_sched_mode mode,
-				    const u16 *weights, u8 n_weights)
-{
-	int i;
-
-	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
-		int err;
-
-		err = airoha_qdma_set_chan_tx_sched(port, i, mode,
-						    weights, n_weights);
-		if (err)
-			return err;
-	}
-
-	return 0;
-}
-
-static int airoha_qdma_set_tx_prio_sched(struct airoha_gdm_port *port)
-{
-	static const u16 w[AIROHA_NUM_TX_RING] = {};
-
-	return airoha_qdma_set_tx_sched(port, TC_SCH_SP, w, ARRAY_SIZE(w));
-}
-
-static int airoha_qdma_set_tx_ets_sched(struct airoha_gdm_port *port,
-					struct tc_ets_qopt_offload *opt)
-{
-	struct tc_ets_qopt_offload_replace_params *p = &opt->replace_params;
-	enum tx_sched_mode mode = TC_SCH_SP;
-	u16 w[AIROHA_NUM_TX_RING];
-	int i, nstrict = 0;
-
-	if (p->bands != AIROHA_NUM_TX_RING)
-		return -EINVAL;
-
-	for (i = 0; i < p->bands; i++) {
-		w[AIROHA_NUM_TX_RING - 1 - i] = p->weights[i];
-		if (!p->quanta[i])
-			nstrict++;
-	}
-
-	if (nstrict == 7)
-		return -EINVAL;
-
-	if (!nstrict)
-		mode = TC_SCH_WRR8;
-	else if (nstrict < AIROHA_NUM_TX_RING - 1)
-		mode = nstrict + 1;
-
-	return airoha_qdma_set_tx_sched(port, mode, w, ARRAY_SIZE(w));
 }
 
 static int airoha_qdma_init(struct platform_device *pdev,
@@ -2754,7 +2504,6 @@ static int airoha_dev_open(struct net_device *dev)
 {
 	struct airoha_gdm_port *port = netdev_priv(dev);
 	struct airoha_qdma *qdma = port->qdma;
-	const u16 w[AIROHA_NUM_TX_RING] = {};
 	int err;
 
 	netif_tx_start_all_queues(dev);
@@ -2773,11 +2522,7 @@ static int airoha_dev_open(struct net_device *dev)
 			GLOBAL_CFG_TX_DMA_EN_MASK |
 			GLOBAL_CFG_RX_DMA_EN_MASK);
 
-	err = airoha_qdma_set_tx_meter(port, DEF_METER_RATE, DEF_METER_RATE);
-	if (err)
-		return err;
-
-	return airoha_qdma_set_tx_sched(port, TC_SCH_SP, w, ARRAY_SIZE(w));
+	return 0;
 }
 
 static int airoha_dev_stop(struct net_device *dev)
@@ -2848,15 +2593,15 @@ static netdev_tx_t airoha_dev_xmit(struct sk_buff *skb,
 {
 	struct skb_shared_info *sinfo = skb_shinfo(skb);
 	struct airoha_gdm_port *port = netdev_priv(dev);
-	u16 index, qid = skb_get_queue_mapping(skb);
+	int i, qid = skb_get_queue_mapping(skb);
 	u32 msg0, msg1, len = skb_headlen(skb);
 	struct airoha_qdma *qdma = port->qdma;
 	u32 nr_frags = 1 + sinfo->nr_frags;
 	struct netdev_queue *txq;
 	struct airoha_queue *q;
 	void *data = skb->data;
+	u16 index;
 	u8 fport;
-	int i;
 
 	msg0 = FIELD_PREP(QDMA_ETH_TXMSG_CHAN_MASK, port->id) |
 	       FIELD_PREP(QDMA_ETH_TXMSG_QUEUE_MASK, qid);
@@ -2881,9 +2626,6 @@ static netdev_tx_t airoha_dev_xmit(struct sk_buff *skb,
 	fport = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
 	msg1 = FIELD_PREP(QDMA_ETH_TXMSG_FPORT_MASK, fport) |
 	       FIELD_PREP(QDMA_ETH_TXMSG_METER_MASK, 0x7f);
-
-	if (qid >= ARRAY_SIZE(qdma->q_tx))
-		goto error;
 
 	q = &qdma->q_tx[qid];
 	if (WARN_ON_ONCE(!q->ndesc))
@@ -3032,29 +2774,110 @@ airoha_ethtool_get_rmon_stats(struct net_device *dev,
 	} while (u64_stats_fetch_retry(&port->stats.syncp, start));
 }
 
-static int airoha_tc_setup_qdisc_tbf(struct net_device *dev,
-				     struct tc_tbf_qopt_offload *opt)
+static int airoha_dev_set_tx_maxrate(struct net_device *dev,
+				     int queue_index, u32 maxrate)
 {
 	struct airoha_gdm_port *port = netdev_priv(dev);
-	u32 rate;
 
-	switch (opt->command) {
-	case TC_TBF_DESTROY:
-		rate = 0;
-		fallthrough;
-	case TC_TBF_REPLACE:
-		if (opt->parent != TC_H_ROOT)
-			return -EINVAL;
+	return airoha_qdma_set_chan_tx_meter(port, queue_index,
+					     maxrate, maxrate);
+}
 
-		/* rate in kbps */
-		rate = div_u64(opt->replace_params.rate.rate_bytes_ps, 1000);
-		rate = rate * 8;
+static int airoha_qdma_set_chan_tx_sched(struct airoha_gdm_port *port,
+					 int channel, enum tx_sched_mode mode,
+					 const u16 *weights, u8 n_weights)
+{
+	int i;
 
-		return airoha_qdma_set_tx_meter(port, rate,
-						opt->replace_params.max_size);
-	default:
-		return -EOPNOTSUPP;
+	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
+		int id = (channel << 3) + i;
+
+		airoha_qdma_clear(port->qdma, REG_QUEUE_CLOSE_CFG(channel),
+				  TXQ_DISABLE_CHAN_QUEUE_MASK(channel, i));
+		/* Tx-cpu transfered count */
+		airoha_qdma_wr(port->qdma, REG_CNTR_VAL(id), 0);
+		airoha_qdma_wr(port->qdma, REG_CNTR_CFG(id),
+			       CNTR_EN_MASK | CNTR_ALL_DSCP_RING_EN_MASK |
+			       FIELD_PREP(CNTR_CHAN_MASK, channel) |
+			       FIELD_PREP(CNTR_QUEUE_MASK, i));
 	}
+
+	for (i = 0; i < n_weights; i++) {
+		u32 status;
+		int err;
+
+		airoha_qdma_wr(port->qdma, REG_TXWRR_WEIGHT_CFG,
+			       TWRR_RW_CMD_MASK |
+			       FIELD_PREP(TWRR_CHAN_IDX_MASK, channel) |
+			       FIELD_PREP(TWRR_QUEUE_IDX_MASK, i) |
+			       FIELD_PREP(TWRR_VALUE_MASK, weights[i]));
+		err = read_poll_timeout(airoha_qdma_rr, status,
+					status & TWRR_RW_CMD_DONE,
+					USEC_PER_MSEC, 10 * USEC_PER_MSEC,
+					true, port->qdma,
+					REG_TXWRR_WEIGHT_CFG);
+		if (err)
+			return err;
+	}
+
+	airoha_qdma_rmw(port->qdma, REG_CHAN_QOS_MODE(channel >> 3),
+			CHAN_QOS_MODE_MASK(channel),
+			mode << __ffs(CHAN_QOS_MODE_MASK(channel)));
+
+	return 0;
+}
+
+static int airoha_qdma_set_tx_sched(struct airoha_gdm_port *port,
+				    enum tx_sched_mode mode,
+				    const u16 *weights, u8 n_weights)
+{
+	int i;
+
+	for (i = 0; i < AIROHA_NUM_TX_RING; i++) {
+		int err;
+
+		err = airoha_qdma_set_chan_tx_sched(port, i, mode,
+						    weights, n_weights);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+static int airoha_qdma_set_tx_prio_sched(struct airoha_gdm_port *port)
+{
+	static const u16 w[AIROHA_NUM_TX_RING] = {};
+
+	return airoha_qdma_set_tx_sched(port, TC_SCH_SP, w, ARRAY_SIZE(w));
+}
+
+static int airoha_qdma_set_tx_ets_sched(struct airoha_gdm_port *port,
+					struct tc_ets_qopt_offload *opt)
+{
+	struct tc_ets_qopt_offload_replace_params *p = &opt->replace_params;
+	enum tx_sched_mode mode = TC_SCH_SP;
+	u16 w[AIROHA_NUM_TX_RING];
+	int i, nstrict = 0;
+
+	if (p->bands != AIROHA_NUM_TX_RING)
+		return -EINVAL;
+
+	for (i = 0; i < p->bands; i++) {
+		w[AIROHA_NUM_TX_RING - 1 - i] = p->weights[i];
+		if (!p->quanta[i])
+			nstrict++;
+	}
+
+	if (nstrict == 7)
+		return -EINVAL;
+
+	if (!nstrict)
+		mode = TC_SCH_WRR8;
+	else if (nstrict < AIROHA_NUM_TX_RING - 1)
+		mode = nstrict + 1;
+
+	return airoha_qdma_set_tx_sched(port, mode, w, ARRAY_SIZE(w));
 }
 
 static int airoha_tc_setup_qdisc_ets(struct net_device *dev,
@@ -3077,8 +2900,6 @@ static int airoha_tc_setup(struct net_device *dev, enum tc_setup_type type,
 			   void *type_data)
 {
 	switch (type) {
-	case TC_SETUP_QDISC_TBF:
-		return airoha_tc_setup_qdisc_tbf(dev, type_data);
 	case TC_SETUP_QDISC_ETS:
 		return airoha_tc_setup_qdisc_ets(dev, type_data);
 	default:
@@ -3093,6 +2914,7 @@ static const struct net_device_ops airoha_netdev_ops = {
 	.ndo_start_xmit		= airoha_dev_xmit,
 	.ndo_get_stats64        = airoha_dev_get_stats64,
 	.ndo_set_mac_address	= airoha_dev_set_macaddr,
+	.ndo_set_tx_maxrate	= airoha_dev_set_tx_maxrate,
 	.ndo_setup_tc		= airoha_tc_setup,
 };
 
