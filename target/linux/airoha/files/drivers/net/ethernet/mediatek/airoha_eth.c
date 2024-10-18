@@ -1787,6 +1787,7 @@ static int airoha_qdma_tx_napi_poll(struct napi_struct *napi, int budget)
 
 		dma_unmap_single(eth->dev, e->dma_addr, e->dma_len,
 				 DMA_TO_DEVICE);
+		memset(e, 0, sizeof(*e));
 		WRITE_ONCE(desc->msg0, 0);
 		WRITE_ONCE(desc->msg1, 0);
 		q->queued--;
