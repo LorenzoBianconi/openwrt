@@ -7,7 +7,7 @@ NSTRICT=8
 #QUANTA="quanta 3528 1514 1514 1514 1514 1514"
 QUANTA=""
 PORT0=6001
-QUEUE0=0
+QUEUE0=1
 PORT1=6002
 QUEUE1=5
 TIME=30
@@ -40,8 +40,8 @@ tc filter show dev eth0 egress
 cat /sys/kernel/debug/airoha-eth:1/qos-tx-meters
 sleep 5
 
-iperf3 -c $DST -p $PORT0 -t $((TIME*20)) > /dev/null &
+iperf3 -c $DST -p $PORT0 -t $((TIME*30)) > /dev/null &
 for i in $(seq 15); do
-	sleep 10
+	sleep 30
 	iperf3 -c $DST -p $PORT1 -t $TIME > /dev/null
 done
