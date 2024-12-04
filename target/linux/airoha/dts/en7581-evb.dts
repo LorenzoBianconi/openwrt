@@ -239,6 +239,10 @@
 	status = "okay";
 };
 
+&npu {
+	status = "okay";
+};
+
 &eth {
 	status = "okay";
 };
