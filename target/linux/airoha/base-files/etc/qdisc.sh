@@ -1,58 +1,61 @@
 #!/bin/sh
 
+BR=br0
+DEV=eth0
+N_DSA_PORTS=4
 IP=192.168.83.115
 DST=192.168.83.120
 GW=192.168.83.1
-DEV=lan1
-
 RATE="100mbit"
 BURST="4kb"
 LIMIT="4096"
-
 NSTRICT=0
 QUANTA="quanta 1514 1514 1514 1514 1514 3528 1514 1514"
-
 PORT0=6001
-PRIO0=0
-
 PORT1=6002
+PRIO0=0
 PRIO1=5
-
 TIME=30
 
-brctl addbr br0
-sleep 1
-for i in $(seq 4); do
-	ip link set dev lan$i up
-	brctl addif br0 lan$i
-done
-ip a a $IP/24 dev br0
-ip link set dev br0 up
-ip r a default via $GW
+# configure netowrk
+{
+	brctl addbr $BR
+	sleep 1
+	for i in $(seq $N_DSA_PORTS); do
+		ip link set dev lan$i up
+		brctl addif $BR lan$i
+	done
+	ip a a $IP/24 dev $BR
+	ip link set dev $BR up
+	ip r a default via $GW
+} >/dev/null 2>&1
 sleep 2
 ping -c 10 $DST
-sleep 2
 
-#tc filter del dev $DEV egress > /dev/null 2>&1
-tc filter del dev $DEV parent 2: > /dev/null 2>&1
-tc qdisc replace dev $DEV root handle 1: tbf rate $RATE burst $BURST limit $LIMIT
-tc qdisc replace dev $DEV parent 1: handle 2: ets bands 8 strict $NSTRICT $QUANTA
-#tc qdisc add dev $DEV clsact
+tc filter del dev $DEV >/dev/null 2>&1
+tc qdisc replace dev $DEV root handle 10: htb
+for q in $(seq $N_DSA_PORTS); do
+	tc class add dev $DEV parent 10: classid 10:$q htb rate $RATE ceil $RATE
+	sleep 1
+	tc qdisc replace dev $DEV parent 10:$q handle $q: ets bands 8 strict $NSTRICT $QUANTA
+	sleep 1
+	tc filter add dev $DEV protocol ip parent 10: flower ip_proto \
+		tcp dst_port $PORT0 action skbedit priority 0x${q}000$((PRIO0+1)) classid 10:$q
+	tc filter add dev $DEV protocol ip parent 10: flower ip_proto \
+		tcp dst_port $PORT1 action skbedit priority 0x${q}000$((PRIO1+1)) classid 10:$q
+done
 sleep 2
-
-#tc filter add dev $DEV protocol ip egress flower ip_proto tcp dst_port $PORT0 action skbedit priority $PRIO0 flowid 2:$((PRIO0+1))
-#tc filter add dev $DEV protocol ip egress flower ip_proto tcp dst_port $PORT1 action skbedit priority $PRIO1 flowid 2:$((PRIO1+1))
-tc filter add dev $DEV protocol ip parent 2: flower ip_proto tcp dst_port $PORT0 action skbedit priority $PRIO0 flowid 2:$((PRIO0+1))
-tc filter add dev $DEV protocol ip parent 2: flower ip_proto tcp dst_port $PORT1 action skbedit priority $PRIO1 flowid 2:$((PRIO1+1))
 
 echo -e "\n\n********* $DEV *********"
 tc qdisc show dev $DEV
-tc filter show dev $DEV parent 2:
+tc class show dev $DEV
+for q in $(seq $N_DSA_PORTS); do
+	tc filter show dev $DEV parent 10:
+done
 
 echo -e "\n\n"
 cat /sys/kernel/debug/airoha-eth:1/qos-tx-meters
-sleep 10
-
+sleep 2
 iperf3 -c $DST -p $PORT0 -t $((TIME*30)) > /dev/null &
 for i in $(seq 15); do
 	sleep 30
