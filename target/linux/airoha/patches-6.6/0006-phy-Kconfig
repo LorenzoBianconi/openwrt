@@ -1,0 +1,18 @@
+--- a/drivers/net/phy/Kconfig	2024-08-16 00:15:47.941014716 +0200
++++ B/drivers/net/phy/Kconfig	2024-08-15 23:54:21.224541566 +0200
+@@ -177,6 +177,15 @@
+
+ source "drivers/net/phy/aquantia/Kconfig"
+
++config AIROHA_GE_SOC_PHY
++	tristate "Airoha SoC Ethernet PHYs"
++	depends on (ARM64 && ARCH_AIROHA) || COMPILE_TEST
++	help
++	  Supports Airoha SoC built-in Gigabit Ethernet PHYs.
++
++	  Include support for built-in Ethernet PHYs which are present in
++	  the AN7581.
++
+ config AX88796B_PHY
+ 	tristate "Asix PHYs"
+ 	help
