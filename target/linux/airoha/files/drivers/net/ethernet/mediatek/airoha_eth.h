@@ -18,6 +18,7 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 
+#define AIROHA_NPU_NUM_CORES		8
 #define AIROHA_MAX_NUM_GDM_PORTS	1
 #define AIROHA_MAX_NUM_QDMA		2
 #define AIROHA_MAX_NUM_RSTS		3
@@ -236,6 +237,17 @@ struct airoha_npu {
 	struct device_node *np;
 
 	void __iomem *base;
+
+	struct airoha_npu_core {
+		struct airoha_npu *npu;
+		struct mutex mbox_mutex;
+		struct work_struct wdt_work;
+	} cores[AIROHA_NPU_NUM_CORES];
+};
+
+struct airoha_ppe {
+	void *foe;
+	dma_addr_t foe_dma;
 };
 
 struct airoha_eth {
@@ -245,6 +257,7 @@ struct airoha_eth {
 	void __iomem *fe_regs;
 
 	struct airoha_npu *npu;
+	struct airoha_ppe *ppe;
 
 	struct reset_control_bulk_data rsts[AIROHA_MAX_NUM_RSTS];
 	struct reset_control_bulk_data xsi_rsts[AIROHA_MAX_NUM_XSI_RSTS];
@@ -254,6 +267,32 @@ struct airoha_eth {
 	struct airoha_qdma qdma[AIROHA_MAX_NUM_QDMA];
 	struct airoha_gdm_port *ports[AIROHA_MAX_NUM_GDM_PORTS];
 };
+
+u32 airoha_rr(void __iomem *base, u32 offset);
+void airoha_wr(void __iomem *base, u32 offset, u32 val);
+u32 airoha_rmw(void __iomem *base, u32 offset, u32 mask, u32 val);
+
+#define airoha_fe_rr(eth, offset)				\
+	airoha_rr((eth)->fe_regs, (offset))
+#define airoha_fe_wr(eth, offset, val)				\
+	airoha_wr((eth)->fe_regs, (offset), (val))
+#define airoha_fe_rmw(eth, offset, mask, val)			\
+	airoha_rmw((eth)->fe_regs, (offset), (mask), (val))
+#define airoha_fe_set(eth, offset, val)				\
+	airoha_rmw((eth)->fe_regs, (offset), 0, (val))
+#define airoha_fe_clear(eth, offset, val)			\
+	airoha_rmw((eth)->fe_regs, (offset), (val), 0)
+
+#define airoha_qdma_rr(qdma, offset)				\
+	airoha_rr((qdma)->regs, (offset))
+#define airoha_qdma_wr(qdma, offset, val)			\
+	airoha_wr((qdma)->regs, (offset), (val))
+#define airoha_qdma_rmw(qdma, offset, mask, val)		\
+	airoha_rmw((qdma)->regs, (offset), (mask), (val))
+#define airoha_qdma_set(qdma, offset, val)			\
+	airoha_rmw((qdma)->regs, (offset), 0, (val))
+#define airoha_qdma_clear(qdma, offset, val)			\
+	airoha_rmw((qdma)->regs, (offset), (val), 0)
 
 int airoha_ppe_init(struct airoha_eth *eth);
 void airoha_ppe_deinit(struct airoha_eth *eth);
