@@ -3,6 +3,7 @@
 BR=br0
 DEV=eth0
 N_DSA_PORTS=4
+N_XMIT_RINGS=32
 IP=192.168.83.115
 DST=192.168.83.120
 GW=192.168.83.1
@@ -13,7 +14,6 @@ PORT0=6001
 PORT1=6002
 PRIO0=0
 PRIO1=5
-CHAN=1
 TIME=30
 
 # configure netowrk
@@ -31,38 +31,41 @@ TIME=30
 sleep 2
 ping -c 10 $DST
 
-# configure tc policies
-tc filter del dev $DEV >/dev/null 2>&1
-# HTB root qdisc [10:]
-tc qdisc replace dev $DEV root handle 10: htb
-for q in $(seq $N_DSA_PORTS); do
-	# HTB class qdisc [10:x] (associated to hw QoS channels)
-	tc class add dev $DEV parent 10: classid 10:$q		\
-		htb rate "$((RATE*q))mbit" ceil "$((RATE*q))mbit"
-	# ETS qdisc [1:x] (ETS bands associated to hw QoS per-channel queues)
-	tc qdisc replace dev $DEV parent 10:$q handle $q: 	\
-		ets bands 8 strict $NSTRICT $QUANTA
+# configure max rate for each tx ring
+for q in $(seq 0 $N_XMIT_RINGS); do
+	echo $RATE > /sys/class/net/eth0/queues/tx-$q/tx_maxrate
 done
 
-# TC filters - skb priority is associated to ETS bands
-tc filter add dev $DEV protocol ip parent 10:			\
-	flower ip_proto tcp dst_port $PORT0			\
-	action skbedit priority 0x${CHAN}000$((PRIO0+1))	\
-	classid 10:$CHAN
-tc filter add dev $DEV protocol ip parent 10:			\
-	flower ip_proto tcp dst_port $PORT1			\
-	action skbedit priority 0x${CHAN}000$((PRIO1+1))	\
-	classid 10:$CHAN
-sleep 2
+# configure tc policies
+# DRR root qdisc [10:]
+#tc qdisc replace dev $DEV root handle 10: drr
+#for q in $(seq $N_DSA_PORTS); do
+#	
+#	tc class add dev $DEV parent 10: classid 10:$q drr
+
+	# ETS qdisc [1:x] (ETS bands associated to hw QoS per-channel queues)
+#	tc qdisc replace dev $DEV parent 10:$q handle $q: 	\
+#		ets bands 8 strict $NSTRICT $QUANTA
+#done
+
+for q in $(seq $N_DSA_PORTS); do
+	# DRR class qdisc [10:x] (associated to hw QoS channels)
+	
+	# create tc filters on lan ports
+	tc filter del dev lan$q egress
+	sleep 1
+	tc qdisc add dev lan$q clsact
+	tc filter add dev lan$q protocol ip egress			\
+		flower ip_proto tcp dst_port $PORT0			\
+		action skbedit priority 0x${q}000$((PRIO0+1))
+	tc filter add dev lan$q protocol ip egress			\
+		flower ip_proto tcp dst_port $PORT1			\
+		action skbedit priority 0x${q}000$((PRIO1+1))
+done >/dev/null 2>&1
 
 echo -e "\n\n********* QDISC $DEV *********"
 tc qdisc show dev $DEV
-echo -e "********* CLASS $DEV *********"
-tc class show dev $DEV parent 10:
 
-echo -e "\n\n"
-cat /sys/kernel/debug/airoha-eth:1/qos-tx-meters
-sleep 2
 iperf3 -c $DST -p $PORT0 -t $((TIME*30)) > /dev/null &
 for i in $(seq 15); do
 	sleep 30
@@ -71,7 +74,7 @@ done &
 
 while sleep 1; do
 	clear
-	cat /sys/kernel/debug/airoha-eth:1/qos-tx-counters
-	#cat /sys/kernel/debug/airoha-eth:1/xmit-rings
+	#cat /sys/kernel/debug/airoha-eth:1/qos-tx-counters
+	cat /sys/kernel/debug/airoha-eth:1/xmit-rings
 done
 
