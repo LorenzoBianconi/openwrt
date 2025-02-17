@@ -66,7 +66,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.c
-@@ -0,0 +1,521 @@
+@@ -0,0 +1,518 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -327,7 +327,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return IRQ_HANDLED;
 +}
 +
-+static int airoha_npu_ppe_init(struct airoha_npu *npu)
++int airoha_npu_ppe_init(struct airoha_npu *npu)
 +{
 +	struct ppe_mbox_data ppe_data = {
 +		.func_type = NPU_OP_SET,
@@ -341,6 +341,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
 +				   sizeof(struct ppe_mbox_data));
 +}
++EXPORT_SYMBOL_GPL(airoha_npu_ppe_init);
 +
 +int airoha_npu_ppe_deinit(struct airoha_npu *npu)
 +{
@@ -557,10 +558,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	regmap_write(npu->regmap, REG_CR_BOOT_TRIGGER, 0x1);
 +	msleep(100);
 +
-+	err = airoha_npu_ppe_init(npu);
-+	if (err)
-+		return err;
-+
 +	platform_set_drvdata(pdev, npu);
 +
 +	return 0;
@@ -590,7 +587,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +MODULE_DESCRIPTION("Airoha Network Processor Unit driver");
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.h
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,29 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -613,6 +610,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +struct airoha_npu *airoha_npu_get(struct device *dev);
 +void airoha_npu_put(struct airoha_npu *npu);
++int airoha_npu_ppe_init(struct airoha_npu *npu);
 +int airoha_npu_ppe_deinit(struct airoha_npu *npu);
 +int airoha_npu_ppe_flush_sram_entries(struct airoha_npu *npu,
 +				      dma_addr_t foe_addr,

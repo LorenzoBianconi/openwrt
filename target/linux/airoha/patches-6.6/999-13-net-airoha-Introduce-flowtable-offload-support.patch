@@ -450,7 +450,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -0,0 +1,875 @@
+@@ -0,0 +1,879 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -1235,6 +1235,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	if (IS_ERR(npu))
 +		return PTR_ERR(npu);
 +
++	err = airoha_npu_ppe_init(npu);
++	if (err)
++		goto error_npu_put;
++
 +	airoha_ppe_hw_init(eth->ppe);
 +	err = airoha_ppe_flush_sram_entries(eth->ppe, npu);
 +	if (err)
@@ -1258,7 +1262,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	struct net_device *dev = cb_priv;
 +	struct airoha_gdm_port *port = netdev_priv(dev);
 +	struct airoha_eth *eth = port->qdma->eth;
-+	int err;
++	int err = 0;
 +
 +	if (!tc_can_offload(dev) || type != TC_SETUP_CLSFLOWER)
 +		return -EOPNOTSUPP;
