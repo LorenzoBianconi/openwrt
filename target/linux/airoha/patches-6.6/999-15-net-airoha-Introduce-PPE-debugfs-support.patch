@@ -109,7 +109,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
-@@ -0,0 +1,175 @@
+@@ -0,0 +1,181 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -169,13 +169,13 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +	for (i = 0; i < PPE_NUM_ENTRIES; i++) {
 +		const char *state_str, *type_str = "UNKNOWN";
++		void *src_addr = NULL, *dest_addr = NULL;
 +		u16 *src_port = NULL, *dest_port = NULL;
 +		struct airoha_foe_mac_info_common *l2;
 +		unsigned char h_source[ETH_ALEN] = {};
 +		unsigned char h_dest[ETH_ALEN];
 +		struct airoha_foe_entry *hwe;
 +		u32 type, state, ib2, data;
-+		void *src_addr, *dest_addr;
 +		bool ipv6 = false;
 +
 +		hwe = airoha_ppe_foe_get_entry(ppe, i);
@@ -216,11 +216,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			dest_addr = &hwe->ipv6.dest_ip;
 +			ipv6 = true;
 +			break;
++		default:
++			break;
 +		}
 +
-+		seq_puts(m, " orig=");
-+		airoha_debugfs_ppe_print_tuple(m, src_addr, dest_addr,
-+					       src_port, dest_port, ipv6);
++		if (src_addr && dest_addr) {
++			seq_puts(m, " orig=");
++			airoha_debugfs_ppe_print_tuple(m, src_addr, dest_addr,
++						       src_port, dest_port, ipv6);
++		}
 +
 +		switch (type) {
 +		case PPE_PKT_TYPE_IPV4_HNAPT:
@@ -235,6 +239,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			airoha_debugfs_ppe_print_tuple(m, src_addr, dest_addr,
 +						       src_port, dest_port,
 +						       ipv6);
++			break;
++		default:
 +			break;
 +		}
 +
