@@ -1,20 +1,21 @@
-From d55280061ee8a194ab352546f7b75868b1107027 Mon Sep 17 00:00:00 2001
-Message-ID: <d55280061ee8a194ab352546f7b75868b1107027.1738409809.git.lorenzo@kernel.org>
+From 9d1e712faf418a9f16f5873c5b9f9046d0b99d42 Mon Sep 17 00:00:00 2001
+Message-ID: <9d1e712faf418a9f16f5873c5b9f9046d0b99d42.1740089743.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Tue, 3 Sep 2024 23:14:02 +0200
 Subject: [PATCH] PCI: mediatek-gen3: Configure PBUS_CSR registers for EN7581
  SoC
 
-Configure PBus base address and address mask in order to allow the hw
-detecting if a given address is on PCIE0, PCIE1 or PCIE2.
+Configure PBus base address and address mask to allow the hw
+to detect if a given address is on PCIE0, PCIE1 or PCIE2.
 
+Fixes: f6ab898356dd ("PCI: mediatek-gen3: Add Airoha EN7581 support")
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---
- drivers/pci/controller/pcie-mediatek-gen3.c | 30 ++++++++++++++++++++-
- 1 file changed, 29 insertions(+), 1 deletion(-)
+ drivers/pci/controller/pcie-mediatek-gen3.c | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/pci/controller/pcie-mediatek-gen3.c b/drivers/pci/controller/pcie-mediatek-gen3.c
-index aa24ac9aaecc..edac3ca4aac2 100644
+index aa24ac9aaecc..e14a5b88c38d 100644
 --- a/drivers/pci/controller/pcie-mediatek-gen3.c
 +++ b/drivers/pci/controller/pcie-mediatek-gen3.c
 @@ -15,6 +15,7 @@
@@ -33,51 +34,33 @@ index aa24ac9aaecc..edac3ca4aac2 100644
  #include <linux/reset.h>
  
  #include "../pci.h"
-@@ -127,6 +129,13 @@
- 
- #define PCIE_MTK_RESET_TIME_US		10
- 
-+#define PCIE_EN7581_PBUS_ADDR(_n)	(0x00 + ((_n) << 3))
-+#define PCIE_EN7581_PBUS_ADDR_MASK(_n)	(0x04 + ((_n) << 3))
-+#define PCIE_EN7581_PBUS_BASE_ADDR(_n)	\
-+	((_n) == 2 ? 0x28000000 :	\
-+	 (_n) == 1 ? 0x24000000 : 0x20000000)
-+#define PCIE_EN7581_PBUS_BASE_ADDR_MASK	GENMASK(31, 26)
-+
- /* Time in ms needed to complete PCIe reset on EN7581 SoC */
- #define PCIE_EN7581_RESET_TIME_MS	100
- 
-@@ -931,7 +940,8 @@ static int mtk_pcie_parse_port(struct mtk_gen3_pcie *pcie)
+@@ -931,8 +933,9 @@ static int mtk_pcie_parse_port(struct mtk_gen3_pcie *pcie)
  static int mtk_pcie_en7581_power_up(struct mtk_gen3_pcie *pcie)
  {
  	struct device *dev = pcie->dev;
--	int err;
 +	struct regmap *map;
-+	int err, slot;
- 	u32 val;
++	u32 val, args[4];
+ 	int err;
+-	u32 val;
  
  	/*
-@@ -945,6 +955,24 @@ static int mtk_pcie_en7581_power_up(struct mtk_gen3_pcie *pcie)
+ 	 * The controller may have been left out of reset by the bootloader
+@@ -945,6 +948,19 @@ static int mtk_pcie_en7581_power_up(struct mtk_gen3_pcie *pcie)
  	/* Wait for the time needed to complete the reset lines assert. */
  	msleep(PCIE_EN7581_RESET_TIME_MS);
  
-+	map = syscon_regmap_lookup_by_phandle(dev->of_node,
-+					      "mediatek,pbus-csr");
++	map = syscon_regmap_lookup_by_phandle_args(dev->of_node,
++						   "mediatek,pbus-csr",
++						   ARRAY_SIZE(args), args);
 +	if (IS_ERR(map))
 +		return PTR_ERR(map);
 +
 +	/*
-+	 * Configure PBus base address and address mask in order to allow the
-+	 * hw detecting if a given address is on PCIE0, PCIE1 or PCIE2.
++	 * Configure PBus base address and address mask to allow the
++	 * hw to detect if a given address is on PCIE0, PCIE1 or PCIE2.
 +	 */
-+	slot = of_get_pci_domain_nr(dev->of_node);
-+	if (slot < 0)
-+		return slot;
-+
-+	regmap_write(map, PCIE_EN7581_PBUS_ADDR(slot),
-+		     PCIE_EN7581_PBUS_BASE_ADDR(slot));
-+	regmap_write(map, PCIE_EN7581_PBUS_ADDR_MASK(slot),
-+		     PCIE_EN7581_PBUS_BASE_ADDR_MASK);
++	regmap_write(map, args[0], args[1]);
++	regmap_write(map, args[2], args[3]);
 +
  	/*
  	 * Unlike the other MediaTek Gen3 controllers, the Airoha EN7581
