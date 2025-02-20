@@ -15,7 +15,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2714,11 +2714,10 @@ static int airoha_probe(struct platform_
+@@ -2722,11 +2722,10 @@ static int airoha_probe(struct platform_
  		return err;
  	}
  
