@@ -33,11 +33,23 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  
  #include "airoha_regs.h"
  #include "airoha_eth.h"
-@@ -1546,6 +1549,17 @@ static int airoha_dev_open(struct net_de
+@@ -84,6 +87,11 @@ static bool airhoa_is_lan_gdm_port(struc
+ 	return !!eth->ports[1];
+ }
+ 
++static bool airhoa_is_phy_external(struct airoha_gdm_port *port)
++{
++	return port->id != 1;
++}
++
+ static void airoha_set_macaddr(struct airoha_gdm_port *port, const u8 *addr)
+ {
+ 	struct airoha_eth *eth = port->qdma->eth;
+@@ -1554,6 +1562,17 @@ static int airoha_dev_open(struct net_de
  	struct airoha_gdm_port *port = netdev_priv(dev);
  	struct airoha_qdma *qdma = port->qdma;
  
-+	if (!airhoa_is_lan_gdm_port(port)) {
++	if (airhoa_is_phy_external(port)) {
 +		err = phylink_of_phy_connect(port->phylink, dev->dev.of_node, 0);
 +		if (err) {
 +			netdev_err(dev, "%s: could not attach PHY: %d\n", __func__,
@@ -51,11 +63,11 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  	netif_tx_start_all_queues(dev);
  	err = airoha_set_vip_for_gdm_port(port, true);
  	if (err)
-@@ -1602,19 +1616,34 @@ static int airoha_dev_stop(struct net_de
+@@ -1610,19 +1629,34 @@ static int airoha_dev_stop(struct net_de
  		}
  	}
  
-+	if (!airhoa_is_lan_gdm_port(port))
++	if (airhoa_is_phy_external(port))
 +		phylink_stop(port->phylink);
 +
  	return 0;
@@ -75,7 +87,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 +	airoha_set_macaddr(port, mac_addr);
 +
 +	/* Update XFI mac address */
-+	if (!airhoa_is_lan_gdm_port(port)) {
++	if (airhoa_is_phy_external(port)) {
 +		regmap_write(port->xfi_mac, AIROHA_PCS_XFI_MAC_XFI_MACADDRL,
 +			     FIELD_PREP(AIROHA_PCS_XFI_MAC_MACADDRL,
 +					mac_addr[0] << 24 | mac_addr[1] << 16 |
@@ -87,7 +99,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  
  	return 0;
  }
-@@ -2603,6 +2632,199 @@ static int airoha_register_port_debugfs(
+@@ -2603,6 +2637,199 @@ static int airoha_register_port_debugfs(
  	return 0;
  }
  
@@ -287,11 +299,11 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  static int airoha_alloc_gdm_port(struct airoha_eth *eth,
  				 struct device_node *np, int index)
  {
-@@ -2685,6 +2907,23 @@ static int airoha_alloc_gdm_port(struct
+@@ -2681,6 +2908,23 @@ static int airoha_alloc_gdm_port(struct
  	if (err)
  		return err;
  
-+	if (!airhoa_is_lan_gdm_port(port)) {
++	if (airhoa_is_phy_external(port)) {
 +		const u8 *mac_addr = dev->dev_addr;
 +
 +		err = airoha_setup_phylink(dev);
@@ -308,25 +320,25 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 +					mac_addr[4] << 8 | mac_addr[5]));
 +	}
 +
- 	return register_netdev(dev);
+ 	return airoha_register_port_debugfs(port);
  }
  
-@@ -2781,6 +3020,10 @@ error_hw_cleanup:
+@@ -2790,6 +3034,10 @@ error_hw_cleanup:
+ 			continue;
  
- 		if (port && port->dev->reg_state == NETREG_REGISTERED) {
- 			airoha_metadata_dst_free(port);
-+			if (!airhoa_is_lan_gdm_port(port)) {
-+				phylink_destroy(port->phylink);
-+				airoha_pcs_destroy(port->pcs);
-+			}
+ 		airoha_metadata_dst_free(port);
++		if (airhoa_is_phy_external(port)) {
++			phylink_destroy(port->phylink);
++			airoha_pcs_destroy(port->pcs);
++		}
+ 		if (port->dev->reg_state == NETREG_REGISTERED)
  			unregister_netdev(port->dev);
- 		}
  	}
-@@ -2808,6 +3051,10 @@ static void airoha_remove(struct platfor
+@@ -2817,6 +3065,10 @@ static void airoha_remove(struct platfor
  
  		airoha_dev_stop(port->dev);
  		airoha_metadata_dst_free(port);
-+		if (!airhoa_is_lan_gdm_port(port)) {
++		if (airhoa_is_phy_external(port)) {
 +			phylink_destroy(port->phylink);
 +			airoha_pcs_destroy(port->pcs);
 +		}

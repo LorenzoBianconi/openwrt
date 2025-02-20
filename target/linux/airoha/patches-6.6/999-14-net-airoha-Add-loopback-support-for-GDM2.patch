@@ -20,7 +20,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1592,14 +1592,89 @@ static int airoha_dev_set_macaddr(struct
+@@ -1592,14 +1592,81 @@ static int airoha_dev_set_macaddr(struct
  	return 0;
  }
  
@@ -79,7 +79,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	struct airoha_gdm_port *port = netdev_priv(dev);
  	struct airoha_eth *eth = port->qdma->eth;
-+	u32 pse_port = FE_PSE_PORT_PPE1;
++	u32 pse_port;
  
  	airoha_set_macaddr(port, dev->dev_addr);
 -	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
@@ -91,20 +91,12 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		/* If GDM2 is active we can't enable loopback */
 +		if (!eth->ports[1])
 +			airhoha_set_gdm2_loopback(port);
-+
-+		pse_port = FE_PSE_PORT_PPE2;
-+		airoha_fe_set(eth, REG_GDM_FWD_CFG(port->id), GDM_STRIP_CRC);
-+		break;
++		fallthrough;
 +	case 2:
-+		/* Use GDM2 as default WAN port */
 +		pse_port = FE_PSE_PORT_PPE2;
-+		airoha_fe_set(eth, REG_GDM_FWD_CFG(port->id), GDM_STRIP_CRC);
-+		airoha_fe_clear(eth, REG_GDM_LPBK_CFG(2), LPBK_EN_MASK);
-+		airoha_fe_rmw(eth, REG_FE_WAN_PORT,
-+			      WAN1_EN_MASK | WAN1_MASK | WAN0_MASK,
-+			      FIELD_PREP(WAN0_MASK, 2));
 +		break;
 +	default:
++		pse_port = FE_PSE_PORT_PPE1;
 +		break;
 +	}
 +
