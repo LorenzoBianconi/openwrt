@@ -323,28 +323,29 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  	return airoha_register_port_debugfs(port);
  }
  
-@@ -2790,6 +3034,10 @@ error_hw_cleanup:
- 			continue;
- 
- 		airoha_metadata_dst_free(port);
-+		if (airhoa_is_phy_external(port)) {
-+			phylink_destroy(port->phylink);
-+			airoha_pcs_destroy(port->pcs);
-+		}
+@@ -2792,6 +3036,11 @@ error_hw_cleanup:
  		if (port->dev->reg_state == NETREG_REGISTERED)
  			unregister_netdev(port->dev);
+ 		airoha_metadata_dst_free(port);
++
++		if (airhoa_is_phy_external(port)) {
++			phylink_destroy(port->phylink);
++			airoha_pcs_destroy(port->pcs);
++		}
  	}
-@@ -2817,6 +3065,10 @@ static void airoha_remove(struct platfor
- 
+ 	free_netdev(eth->napi_dev);
+ 	platform_set_drvdata(pdev, NULL);
+@@ -2818,6 +3067,10 @@ static void airoha_remove(struct platfor
  		airoha_dev_stop(port->dev);
+ 		unregister_netdev(port->dev);
  		airoha_metadata_dst_free(port);
 +		if (airhoa_is_phy_external(port)) {
 +			phylink_destroy(port->phylink);
 +			airoha_pcs_destroy(port->pcs);
 +		}
- 		unregister_netdev(port->dev);
  	}
  	free_netdev(eth->napi_dev);
+ 
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -468,6 +468,11 @@ struct airoha_gdm_port {

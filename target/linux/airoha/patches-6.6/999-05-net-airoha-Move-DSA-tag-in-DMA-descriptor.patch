@@ -97,7 +97,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	if (dp->tag_ops->proto != DSA_TAG_PROTO_MTK)
 +		return 0;
 +
-+	if (skb_ensure_writable(skb, ETH_HLEN))
++	if (skb_cow_head(skb, 0))
 +		return 0;
 +
 +	ehdr = (struct ethhdr *)skb->data;
@@ -229,20 +229,20 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 -		if (port && port->dev->reg_state == NETREG_REGISTERED)
 +		if (port && port->dev->reg_state == NETREG_REGISTERED) {
-+			airoha_metadata_dst_free(port);
  			unregister_netdev(port->dev);
++			airoha_metadata_dst_free(port);
 +		}
  	}
  	free_netdev(eth->napi_dev);
  	platform_set_drvdata(pdev, NULL);
-@@ -2419,6 +2529,7 @@ static void airoha_remove(struct platfor
- 			continue;
+@@ -2420,6 +2530,7 @@ static void airoha_remove(struct platfor
  
  		airoha_dev_stop(port->dev);
-+		airoha_metadata_dst_free(port);
  		unregister_netdev(port->dev);
++		airoha_metadata_dst_free(port);
  	}
  	free_netdev(eth->napi_dev);
+ 
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -15,6 +15,7 @@

@@ -66,7 +66,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.c
-@@ -0,0 +1,518 @@
+@@ -0,0 +1,519 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -194,7 +194,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	void *addr;
 +	int ret;
 +
-+	addr = kzalloc(size, GFP_ATOMIC | GFP_DMA);
++	addr = kzalloc(size, GFP_ATOMIC);
 +	if (!addr)
 +		return -ENOMEM;
 +
@@ -523,7 +523,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +		irq = platform_get_irq(pdev, i + 1);
 +		if (irq < 0)
-+			return err;
++			return irq;
 +
 +		err = devm_request_irq(dev, irq, airoha_npu_wdt_handler,
 +				       IRQF_SHARED, "airoha-npu-wdt", core);
@@ -533,8 +533,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		INIT_WORK(&core->wdt_work, airoha_npu_wdt_work);
 +	}
 +
-+	if (dma_set_coherent_mask(dev, 0xbfffffff))
-+		dev_warn(dev, "failed coherent DMA configuration\n");
++	err = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
++	if (err)
++		return err;
 +
 +	err = airoha_npu_run_firmware(dev, base, rmem);
 +	if (err)

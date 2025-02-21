@@ -69,14 +69,14 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		struct airoha_gdm_port *port = eth->ports[i];
  
 -		if (port && port->dev->reg_state == NETREG_REGISTERED) {
--			airoha_metadata_dst_free(port);
 +		if (!port)
 +			continue;
 +
-+		airoha_metadata_dst_free(port);
 +		if (port->dev->reg_state == NETREG_REGISTERED)
  			unregister_netdev(port->dev);
+-			airoha_metadata_dst_free(port);
 -		}
++		airoha_metadata_dst_free(port);
  	}
  	free_netdev(eth->napi_dev);
  	platform_set_drvdata(pdev, NULL);
