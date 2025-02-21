@@ -39,3 +39,10 @@ define Device/airoha_an7581-evb-emmc
   DEVICE_PACKAGES := kmod-i2c-an7581
 endef
 TARGET_DEVICES += airoha_an7581-evb-emmc
+
+define Device/airoha_an7581-evb-10g-lan
+  $(call Device/airoha_an7581-evb)
+  DEVICE_MODEL := AN7581 Evaluation Board (SNAND + ETH-SERDES-LAN + PON)
+  DEVICE_DTS := an7581-evb-10g-lan
+endef
+TARGET_DEVICES += airoha_an7581-evb-10g-lan
