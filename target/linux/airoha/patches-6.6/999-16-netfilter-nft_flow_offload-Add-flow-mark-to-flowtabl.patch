@@ -20,7 +20,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  					encap_num:2,
  					in_vlan_ingress:2;
  	u16				mtu;
-+	u32				mark;
++	u32				priority;
  	union {
  		struct {
  			struct dst_entry *dst_cache;
@@ -30,12 +30,12 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		}
  	}
  
-+	if (tuple->mark) {
++	if (tuple->priority) {
 +		struct flow_action_entry *entry;
 +
 +		entry = flow_action_entry_next(flow_rule);
-+		entry->id = FLOW_ACTION_MARK;
-+		entry->mark = tuple->mark;
++		entry->id = FLOW_ACTION_PRIORITY;
++		entry->priority = tuple->priority;
 +	}
 +
  	other_tuple = &flow->tuplehash[!dir].tuple;
@@ -47,14 +47,14 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	return 0;
  }
  
-+static void nft_flow_set_mark(const struct nft_pktinfo *pkt,
-+			      struct flow_offload *flow,
-+			      enum ip_conntrack_dir dir)
++static void nft_flow_set_priority(const struct nft_pktinfo *pkt,
++				  struct flow_offload *flow,
++				  enum ip_conntrack_dir dir)
 +{
 +	struct flow_offload_tuple *tuple;
 +
 +	tuple = &flow->tuplehash[dir].tuple;
-+	tuple->mark = pkt->skb->mark;
++	tuple->priority = pkt->skb->priority;
 +}
 +
  static bool nft_flow_offload_skip(struct sk_buff *skb, int family)
@@ -64,7 +64,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	if (!flow)
  		goto err_flow_alloc;
  
-+	nft_flow_set_mark(pkt, flow, dir);
++	nft_flow_set_priority(pkt, flow, dir);
  	flow_offload_route_init(flow, &route);
  
  	if (tcph) {

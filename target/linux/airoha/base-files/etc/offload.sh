@@ -17,7 +17,7 @@ WAN_SRC_IP6="2001::a"
 WAN_DST_IP="192.168.1.1"
 WAN_DST_IP6="2001::b"
 WAN_IN_PORT=5201
-WAN_OUT_PORT=6001
+WAN_OUT_PORT=5202
 # QoS channel ID for WAN destionation
 WAN_CHANNEL_ID=4
 
@@ -86,10 +86,10 @@ enable_qos_offload() {
 			action skbedit priority 0x${i}000$((PRIO1+1))
 		tc filter add dev lan$i protocol ip ingress		\
 			flower ip_proto tcp dst_port $PORT0		\
-			action skbedit mark $((8*WAN_CHANNEL_ID+PRIO0))
+			action skbedit priority $PRIO0
 		tc filter add dev lan$i protocol ip ingress		\
 			flower ip_proto tcp dst_port $PORT1		\
-			action skbedit mark $((8*WAN_CHANNEL_ID+PRIO1))
+			action skbedit priority $PRIO1
 	done
 
 	# WAN -> LAN
@@ -105,13 +105,18 @@ enable_qos_offload() {
 		ets bands 8 strict $NSTRICT $QUANTA $PRIOMAP
 
 	tc qdisc add dev $WAN_DEV clsact
-	tc filter add dev $WAN_DEV protocol ip ingress		\
-		flower ip_proto tcp dst_port $PORT0		\
-		action skbedit mark $((8*LAN_CHANNEL_ID+PRIO0))
-	tc filter add dev $WAN_DEV protocol ip ingress		\
-		flower ip_proto tcp dst_port $PORT1		\
-		action skbedit mark $((8*LAN_CHANNEL_ID+PRIO1))
-
+	tc filter add dev $WAN_DEV protocol ip egress				\
+		flower ip_proto tcp dst_port $PORT0				\
+		action skbedit priority 0x${WAN_CHANNEL_ID}000$((PRIO0+1))
+	tc filter add dev $WAN_DEV protocol ip egress				\
+		flower ip_proto tcp dst_port $PORT1				\
+		action skbedit priority 0x${WAN_CHANNEL_ID}000$((PRIO1+1))
+	tc filter add dev $WAN_DEV protocol ip ingress				\
+		flower ip_proto tcp dst_port $PORT0				\
+		action skbedit priority $PRIO0
+	tc filter add dev $WAN_DEV protocol ip ingress				\
+		flower ip_proto tcp dst_port $PORT1				\
+		action skbedit priority $PRIO1
 	} >/dev/null 2>&1
 }
 
@@ -136,6 +141,7 @@ enable_qos_offload() {
 	ip link set dev $WAN_DEV mtu $MTU
 	ip link set dev $WAN_DEV up
 
+	sysctl -w net.ipv4.ip_forward_update_priority=0
 	nft flush ruleset
 } >/dev/null 2>&1
 

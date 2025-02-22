@@ -66,7 +66,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.c
-@@ -0,0 +1,519 @@
+@@ -0,0 +1,518 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -194,11 +194,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	void *addr;
 +	int ret;
 +
-+	addr = kzalloc(size, GFP_ATOMIC);
++	addr = kmemdup(p, size, GFP_ATOMIC);
 +	if (!addr)
 +		return -ENOMEM;
 +
-+	memcpy(addr, p, size);
 +	dma_addr = dma_map_single(npu->dev, addr, size, DMA_TO_DEVICE);
 +	ret = dma_mapping_error(npu->dev, dma_addr);
 +	if (ret)
