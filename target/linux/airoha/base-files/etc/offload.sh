@@ -49,6 +49,7 @@ table inet filter {
 		hook ingress priority filter
 		devices = { lan1, lan2, lan3, lan4, ${WAN_DEV} }
 		flags offload;
+		counter
 	}
 	chain forward {
 		type filter hook forward priority filter; policy accept;
