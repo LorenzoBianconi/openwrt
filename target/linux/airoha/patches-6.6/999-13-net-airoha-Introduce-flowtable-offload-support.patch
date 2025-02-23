@@ -450,7 +450,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -0,0 +1,879 @@
+@@ -0,0 +1,897 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -899,9 +899,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		rcu_read_lock();
 +		npu = rcu_dereference(eth->npu);
 +		if (npu)
-+			err = airoha_npu_foe_commit_entry(npu, addr,
-+							  sizeof(*hwe), hash,
-+							  ppe2);
++			err = npu->ops.ppe_foe_commit_entry(npu, addr,
++							    sizeof(*hwe), hash,
++							    ppe2);
 +		rcu_read_unlock();
 +
 +		return err;
@@ -1223,19 +1223,31 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	for (i = 0; i < sram_num_entries; i++)
 +		memset(&hwe[i], 0, sizeof(*hwe));
 +
-+	return airoha_npu_ppe_flush_sram_entries(npu, ppe->foe_dma,
-+						 PPE_SRAM_NUM_ENTRIES);
++	return npu->ops.ppe_flush_sram_entries(npu, ppe->foe_dma,
++					       PPE_SRAM_NUM_ENTRIES);
++}
++
++static struct airoha_npu *airoha_ppe_npu_get(struct airoha_eth *eth)
++{
++	struct airoha_npu *npu = airoha_npu_get(eth->dev);
++
++	if (IS_ERR(npu)) {
++		request_module("airoha-npu");
++		npu = airoha_npu_get(eth->dev);
++	}
++
++	return npu;
 +}
 +
 +static int airoha_ppe_offload_setup(struct airoha_eth *eth)
 +{
-+	struct airoha_npu *npu = airoha_npu_get(eth->dev);
++	struct airoha_npu *npu = airoha_ppe_npu_get(eth);
 +	int err;
 +
 +	if (IS_ERR(npu))
 +		return PTR_ERR(npu);
 +
-+	err = airoha_npu_ppe_init(npu);
++	err = npu->ops.ppe_init(npu);
 +	if (err)
 +		goto error_npu_put;
 +
@@ -1324,10 +1336,16 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +void airoha_ppe_deinit(struct airoha_eth *eth)
 +{
-+	if (eth->npu) {
-+		airoha_npu_ppe_deinit(eth->npu);
-+		airoha_npu_put(eth->npu);
++	struct airoha_npu *npu;
++
++	rcu_read_lock();
++	npu = rcu_dereference(eth->npu);
++	if (npu) {
++		npu->ops.ppe_deinit(npu);
++		airoha_npu_put(npu);
 +	}
++	rcu_read_unlock();
++
 +	rhashtable_destroy(&eth->flow_table);
 +}
 --- a/drivers/net/ethernet/airoha/airoha_regs.h

@@ -66,7 +66,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.c
-@@ -0,0 +1,518 @@
+@@ -0,0 +1,520 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -237,7 +237,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +	ret = request_firmware(&fw, NPU_EN7581_FIRMWARE_RV32, dev);
 +	if (ret)
-+		return ret;
++		return ret == -ENOENT ? -EPROBE_DEFER : ret;
 +
 +	if (fw->size > NPU_EN7581_FIRMWARE_RV32_MAX_SIZE) {
 +		dev_err(dev, "%s: fw size too overlimit (%zu)\n",
@@ -257,7 +257,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +	ret = request_firmware(&fw, NPU_EN7581_FIRMWARE_DATA, dev);
 +	if (ret)
-+		return ret;
++		return ret == -ENOENT ? -EPROBE_DEFER : ret;
 +
 +	if (fw->size > NPU_EN7581_FIRMWARE_DATA_MAX_SIZE) {
 +		dev_err(dev, "%s: fw size too overlimit (%zu)\n",
@@ -326,7 +326,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return IRQ_HANDLED;
 +}
 +
-+int airoha_npu_ppe_init(struct airoha_npu *npu)
++static int airoha_npu_ppe_init(struct airoha_npu *npu)
 +{
 +	struct ppe_mbox_data ppe_data = {
 +		.func_type = NPU_OP_SET,
@@ -340,9 +340,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
 +				   sizeof(struct ppe_mbox_data));
 +}
-+EXPORT_SYMBOL_GPL(airoha_npu_ppe_init);
 +
-+int airoha_npu_ppe_deinit(struct airoha_npu *npu)
++static int airoha_npu_ppe_deinit(struct airoha_npu *npu)
 +{
 +	struct ppe_mbox_data ppe_data = {
 +		.func_type = NPU_OP_SET,
@@ -352,11 +351,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
 +				   sizeof(struct ppe_mbox_data));
 +}
-+EXPORT_SYMBOL_GPL(airoha_npu_ppe_deinit);
 +
-+int airoha_npu_ppe_flush_sram_entries(struct airoha_npu *npu,
-+				      dma_addr_t foe_addr,
-+				      int sram_num_entries)
++static int airoha_npu_ppe_flush_sram_entries(struct airoha_npu *npu,
++					     dma_addr_t foe_addr,
++					     int sram_num_entries)
 +{
 +	struct ppe_mbox_data ppe_data = {
 +		.func_type = NPU_OP_SET,
@@ -371,10 +369,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
 +				   sizeof(struct ppe_mbox_data));
 +}
-+EXPORT_SYMBOL_GPL(airoha_npu_ppe_flush_sram_entries);
 +
-+int airoha_npu_foe_commit_entry(struct airoha_npu *npu, dma_addr_t foe_addr,
-+				u32 entry_size, u32 hash, bool ppe2)
++static int airoha_npu_foe_commit_entry(struct airoha_npu *npu,
++				       dma_addr_t foe_addr,
++				       u32 entry_size, u32 hash, bool ppe2)
 +{
 +	struct ppe_mbox_data ppe_data = {
 +		.func_type = NPU_OP_SET,
@@ -401,7 +399,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
 +				   sizeof(struct ppe_mbox_data));
 +}
-+EXPORT_SYMBOL_GPL(airoha_npu_foe_commit_entry);
 +
 +struct airoha_npu *airoha_npu_get(struct device *dev)
 +{
@@ -491,6 +488,11 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		return -ENOMEM;
 +
 +	npu->dev = dev;
++	npu->ops.ppe_init = airoha_npu_ppe_init;
++	npu->ops.ppe_deinit = airoha_npu_ppe_deinit;
++	npu->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
++	npu->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
++
 +	npu->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
 +	if (IS_ERR(npu->regmap))
 +		return PTR_ERR(npu->regmap);
@@ -538,7 +540,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +	err = airoha_npu_run_firmware(dev, base, rmem);
 +	if (err)
-+		return err;
++		return dev_err_probe(dev, err, "failed to run npu firmware\n");
 +
 +	regmap_write(npu->regmap, REG_CR_NPU_MIB(10),
 +		     rmem->base + NPU_EN7581_FIRMWARE_RV32_MAX_SIZE);
@@ -576,7 +578,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	.probe = airoha_npu_probe,
 +	.remove_new = airoha_npu_remove,
 +	.driver = {
-+		.name = KBUILD_MODNAME,
++		.name = "airoha-npu",
 +		.of_match_table = of_airoha_npu_match,
 +	},
 +};
@@ -587,7 +589,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +MODULE_DESCRIPTION("Airoha Network Processor Unit driver");
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_npu.h
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,34 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -606,14 +608,19 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		spinlock_t lock;
 +		struct work_struct wdt_work;
 +	} cores[NPU_NUM_CORES];
++
++	struct {
++		int (*ppe_init)(struct airoha_npu *npu);
++		int (*ppe_deinit)(struct airoha_npu *npu);
++		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
++					      dma_addr_t foe_addr,
++					      int sram_num_entries);
++		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
++					    dma_addr_t foe_addr,
++					    u32 entry_size, u32 hash,
++					    bool ppe2);
++	} ops;
 +};
 +
 +struct airoha_npu *airoha_npu_get(struct device *dev);
 +void airoha_npu_put(struct airoha_npu *npu);
-+int airoha_npu_ppe_init(struct airoha_npu *npu);
-+int airoha_npu_ppe_deinit(struct airoha_npu *npu);
-+int airoha_npu_ppe_flush_sram_entries(struct airoha_npu *npu,
-+				      dma_addr_t foe_addr,
-+				      int sram_num_entries);
-+int airoha_npu_foe_commit_entry(struct airoha_npu *npu, dma_addr_t foe_addr,
-+				u32 entry_size, u32 hash, bool ppe2);
