@@ -36,7 +36,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #include <linux/etherdevice.h>
  #include <linux/iopoll.h>
  #include <linux/kernel.h>
-@@ -482,6 +483,8 @@ struct airoha_ppe {
+@@ -478,6 +479,8 @@ struct airoha_ppe {
  
  	struct hlist_head *foe_flow;
  	u16 foe_check_time[PPE_NUM_ENTRIES];
@@ -45,7 +45,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  };
  
  struct airoha_eth {
-@@ -535,5 +538,16 @@ int airoha_ppe_setup_tc_block_cb(enum tc
+@@ -531,5 +534,16 @@ int airoha_ppe_setup_tc_block_cb(enum tc
  				 void *cb_priv);
  int airoha_ppe_init(struct airoha_eth *eth);
  void airoha_ppe_deinit(struct airoha_eth *eth);
@@ -64,7 +64,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -377,8 +377,8 @@ static u32 airoha_ppe_foe_get_entry_hash
+@@ -388,8 +388,8 @@ static u32 airoha_ppe_foe_get_entry_hash
  	return hash;
  }
  
@@ -75,7 +75,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	if (hash < PPE_SRAM_NUM_ENTRIES) {
  		u32 *hwe = ppe->foe + hash * sizeof(struct airoha_foe_entry);
-@@ -858,7 +858,7 @@ void airoha_ppe_check_skb(struct airoha_
+@@ -861,7 +861,7 @@ void airoha_ppe_check_skb(struct airoha_
  int airoha_ppe_init(struct airoha_eth *eth)
  {
  	struct airoha_ppe *ppe;
@@ -84,7 +84,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	ppe = devm_kzalloc(eth->dev, sizeof(*ppe), GFP_KERNEL);
  	if (!ppe)
-@@ -879,7 +879,15 @@ int airoha_ppe_init(struct airoha_eth *e
+@@ -882,7 +882,15 @@ int airoha_ppe_init(struct airoha_eth *e
  	if (!ppe->foe_flow)
  		return -ENOMEM;
  
@@ -101,7 +101,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  void airoha_ppe_deinit(struct airoha_eth *eth)
-@@ -895,4 +903,5 @@ void airoha_ppe_deinit(struct airoha_eth
+@@ -898,4 +906,5 @@ void airoha_ppe_deinit(struct airoha_eth
  	rcu_read_unlock();
  
  	rhashtable_destroy(&eth->flow_table);
@@ -182,7 +182,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		if (!hwe)
 +			continue;
 +
-+		state = FIELD_GET(AIROHA_FOE_IB1_STATE, hwe->ib1);
++		state = FIELD_GET(AIROHA_FOE_IB1_BIND_STATE, hwe->ib1);
 +		if (!state)
 +			continue;
 +
@@ -190,7 +190,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			continue;
 +
 +		state_str = ppe_state_str[state % ARRAY_SIZE(ppe_state_str)];
-+		type = FIELD_GET(AIROHA_FOE_IB1_PACKET_TYPE, hwe->ib1);
++		type = FIELD_GET(AIROHA_FOE_IB1_BIND_PACKET_TYPE, hwe->ib1);
 +		if (type < ARRAY_SIZE(ppe_type_str) && ppe_type_str[type])
 +			type_str = ppe_type_str[type];
 +

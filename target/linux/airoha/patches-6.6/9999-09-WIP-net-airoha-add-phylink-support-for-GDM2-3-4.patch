@@ -348,7 +348,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -468,6 +468,11 @@ struct airoha_gdm_port {
+@@ -464,6 +464,11 @@ struct airoha_gdm_port {
  	struct net_device *dev;
  	int id;
  

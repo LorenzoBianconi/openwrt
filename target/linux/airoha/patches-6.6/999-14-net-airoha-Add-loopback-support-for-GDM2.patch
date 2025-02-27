@@ -122,7 +122,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	XSI_USB_VIP_PORT_MASK	= BIT(25),
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -213,21 +213,22 @@ static int airoha_ppe_foe_entry_prepare(
+@@ -216,21 +216,21 @@ static int airoha_ppe_foe_entry_prepare(
  	      AIROHA_FOE_IB1_BIND_TTL;
  	hwe->ib1 = val;
  
@@ -131,7 +131,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	      AIROHA_FOE_IB2_PSE_QOS;
  	if (dsa_port >= 0)
  		val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, dsa_port);
-+
  	if (dev) {
  		struct airoha_gdm_port *port = netdev_priv(dev);
  		u8 pse_port;
@@ -148,7 +147,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	 * for uplink and setting qos bit in ib2
 -	 */
 -
- 	if (is_multicast_ether_addr(dest_mac))
+ 	if (is_multicast_ether_addr(data->eth.h_dest))
  		val |= AIROHA_FOE_IB2_MULTICAST;
  
 --- a/drivers/net/ethernet/airoha/airoha_regs.h

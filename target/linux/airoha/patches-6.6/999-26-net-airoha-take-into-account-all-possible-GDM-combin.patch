@@ -82,8 +82,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	platform_set_drvdata(pdev, NULL);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -221,9 +221,10 @@ static int airoha_ppe_foe_entry_prepare(
- 
+@@ -222,9 +222,10 @@ static int airoha_ppe_foe_entry_prepare(
+ 		val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, dsa_port);
  	if (dev) {
  		struct airoha_gdm_port *port = netdev_priv(dev);
 +		struct airoha_eth *eth = port->qdma->eth;

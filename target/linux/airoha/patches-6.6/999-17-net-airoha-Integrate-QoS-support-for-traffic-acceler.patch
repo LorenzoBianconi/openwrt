@@ -14,22 +14,21 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -199,11 +199,12 @@ static int airoha_get_dsa_port(struct ne
- 
+@@ -200,11 +200,11 @@ static int airoha_get_dsa_port(struct ne
  static int airoha_ppe_foe_entry_prepare(struct airoha_foe_entry *hwe,
  					struct net_device *dev, int type,
--					int l4proto, u8 *src_mac, u8 *dest_mac)
-+					int l4proto, u8 *src_mac, u8 *dest_mac,
-+					u32 priority)
+ 					struct airoha_flow_data *data,
+-					int l4proto)
++					int l4proto, u32 priority)
  {
  	int dsa_port = airoha_get_dsa_port(&dev);
  	struct airoha_foe_mac_info_common *l2;
--	u32 data, ports_pad, val;
-+	u32 channel = 0, data, ports_pad, val;
+-	u32 qdata, ports_pad, val;
++	u32 channel = 0, qdata, ports_pad, val;
  
  	memset(hwe, 0, sizeof(*hwe));
  
-@@ -225,8 +226,11 @@ static int airoha_ppe_foe_entry_prepare(
+@@ -227,8 +227,11 @@ static int airoha_ppe_foe_entry_prepare(
  		if (dsa_port >= 0)
  			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
  		else
@@ -41,20 +40,20 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		channel = channel % AIROHA_NUM_QOS_CHANNELS;
  	}
  
- 	if (is_multicast_ether_addr(dest_mac))
-@@ -238,7 +242,10 @@ static int airoha_ppe_foe_entry_prepare(
+ 	if (is_multicast_ether_addr(data->eth.h_dest))
+@@ -240,7 +243,10 @@ static int airoha_ppe_foe_entry_prepare(
  	if (type == PPE_PKT_TYPE_IPV6_ROUTE_3T)
  		hwe->ipv6.ports = ports_pad;
  
--	data = FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
-+	data = FIELD_PREP(AIROHA_FOE_CHANNEL, channel) |
-+	       FIELD_PREP(AIROHA_FOE_QID, priority % AIROHA_NUM_QOS_QUEUES) |
-+	       FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
+-	qdata = FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
++	qdata = FIELD_PREP(AIROHA_FOE_CHANNEL, channel) |
++		FIELD_PREP(AIROHA_FOE_QID, priority % AIROHA_NUM_QOS_QUEUES) |
++		FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
 +
  	if (type == PPE_PKT_TYPE_BRIDGE) {
- 		hwe->bridge.dest_mac_hi = get_unaligned_be32(dest_mac);
- 		hwe->bridge.dest_mac_lo = get_unaligned_be16(dest_mac + 4);
-@@ -529,6 +536,7 @@ static int airoha_ppe_flow_offload_repla
+ 		hwe->bridge.dest_mac_hi = get_unaligned_be32(data->eth.h_dest);
+ 		hwe->bridge.dest_mac_lo =
+@@ -542,6 +548,7 @@ static int airoha_ppe_flow_offload_repla
  	struct airoha_foe_entry hwe;
  	int err, i, offload_type;
  	u16 addr_type = 0;
@@ -62,7 +61,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u8 l4proto = 0;
  
  	if (rhashtable_lookup(&eth->flow_table, &f->cookie,
-@@ -621,6 +629,9 @@ static int airoha_ppe_flow_offload_repla
+@@ -624,6 +631,9 @@ static int airoha_ppe_flow_offload_repla
  			data.pppoe.sid = act->pppoe.sid;
  			data.pppoe.num++;
  			break;
@@ -72,13 +71,12 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		default:
  			return -EOPNOTSUPP;
  		}
-@@ -631,7 +642,8 @@ static int airoha_ppe_flow_offload_repla
+@@ -634,7 +644,7 @@ static int airoha_ppe_flow_offload_repla
  		return -EINVAL;
  
- 	err = airoha_ppe_foe_entry_prepare(&hwe, odev, offload_type, l4proto,
--					   data.eth.h_source, data.eth.h_dest);
-+					   data.eth.h_source, data.eth.h_dest,
-+					   priority);
+ 	err = airoha_ppe_foe_entry_prepare(&hwe, odev, offload_type,
+-					   &data, l4proto);
++					   &data, l4proto, priority);
  	if (err)
  		return err;
  
