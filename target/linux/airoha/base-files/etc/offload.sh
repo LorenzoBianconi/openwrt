@@ -2,7 +2,7 @@
 
 MTU=8000
 N_DSA_PORTS=4
-BR_DEV=br0
+BR_DEV=br-lan
 LAN_DEV=eth0
 LAN_SRC_IP="192.168.83.115"
 LAN_SRC_IP6="1001::a"
@@ -123,13 +123,12 @@ enable_qos_offload() {
 # NETWORKING
 {
 	# LAN
-	ip link add name $BR_DEV type bridge
-	sleep 1
 	for i in $(seq $N_DSA_PORTS); do
 		ip link set dev lan$i mtu $MTU
 		ip link set dev lan$i up
-		ip link set dev lan$i master $BR_DEV
+		#ip link set dev lan$i master $BR_DEV
 	done
+	ip addr del 192.168.1.1/24 dev $BR_DEV
 	ip addr add ${LAN_SRC_IP}/24 dev $BR_DEV
 	ip -6 addr add ${LAN_SRC_IP6}/64 dev $BR_DEV nodad
 	ip link set dev $BR_DEV mtu $MTU
@@ -143,6 +142,10 @@ enable_qos_offload() {
 
 	sysctl -w net.ipv4.ip_forward_update_priority=0
 	nft flush ruleset
+
+	/etc/init.d/firewall stop
+	/etc/init.d/dnsmasq stop
+	/etc/init.d/dnsmasq disable
 } >/dev/null 2>&1
 
 ping -c 5 $LAN_DST_IP
