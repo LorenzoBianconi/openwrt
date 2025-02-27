@@ -446,7 +446,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -0,0 +1,901 @@
+@@ -0,0 +1,900 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -723,8 +723,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
 +	if (data->vlan.num) {
 +		l2->vlan1 = data->vlan.id;
-+		l2->etype = BIT(8);
-+		l2->etype |= dsa_port >= 0 ? BIT(dsa_port) : 0;
++		l2->etype = dsa_port >= 0 ? BIT(8) | BIT(dsa_port) : 0;
 +	} else if (dsa_port >= 0) {
 +		l2->etype = BIT(15) | BIT(dsa_port);
 +	} else if (type >= PPE_PKT_TYPE_IPV6_ROUTE_3T) {

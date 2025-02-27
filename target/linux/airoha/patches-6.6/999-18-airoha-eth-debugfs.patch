@@ -186,7 +186,7 @@
  u32 airoha_rr(void __iomem *base, u32 offset);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -916,5 +916,4 @@ void airoha_ppe_deinit(struct airoha_eth
+@@ -915,5 +915,4 @@ void airoha_ppe_deinit(struct airoha_eth
  	rcu_read_unlock();
  
  	rhashtable_destroy(&eth->flow_table);

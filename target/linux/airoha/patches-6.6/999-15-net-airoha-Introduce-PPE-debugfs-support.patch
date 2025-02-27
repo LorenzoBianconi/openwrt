@@ -64,7 +64,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -388,8 +388,8 @@ static u32 airoha_ppe_foe_get_entry_hash
+@@ -387,8 +387,8 @@ static u32 airoha_ppe_foe_get_entry_hash
  	return hash;
  }
  
@@ -75,7 +75,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	if (hash < PPE_SRAM_NUM_ENTRIES) {
  		u32 *hwe = ppe->foe + hash * sizeof(struct airoha_foe_entry);
-@@ -861,7 +861,7 @@ void airoha_ppe_check_skb(struct airoha_
+@@ -860,7 +860,7 @@ void airoha_ppe_check_skb(struct airoha_
  int airoha_ppe_init(struct airoha_eth *eth)
  {
  	struct airoha_ppe *ppe;
@@ -84,7 +84,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	ppe = devm_kzalloc(eth->dev, sizeof(*ppe), GFP_KERNEL);
  	if (!ppe)
-@@ -882,7 +882,15 @@ int airoha_ppe_init(struct airoha_eth *e
+@@ -881,7 +881,15 @@ int airoha_ppe_init(struct airoha_eth *e
  	if (!ppe->foe_flow)
  		return -ENOMEM;
  
@@ -101,7 +101,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  void airoha_ppe_deinit(struct airoha_eth *eth)
-@@ -898,4 +906,5 @@ void airoha_ppe_deinit(struct airoha_eth
+@@ -897,4 +905,5 @@ void airoha_ppe_deinit(struct airoha_eth
  	rcu_read_unlock();
  
  	rhashtable_destroy(&eth->flow_table);
