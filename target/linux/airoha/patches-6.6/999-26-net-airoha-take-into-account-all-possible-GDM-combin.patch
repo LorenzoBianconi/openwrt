@@ -33,7 +33,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  static void airoha_set_macaddr(struct airoha_gdm_port *port, const u8 *addr)
-@@ -2664,11 +2672,7 @@ static int airoha_alloc_gdm_port(struct
+@@ -2666,11 +2674,7 @@ static int airoha_alloc_gdm_port(struct
  	if (err)
  		return err;
  
@@ -46,7 +46,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  static int airoha_probe(struct platform_device *pdev)
-@@ -2750,6 +2754,17 @@ static int airoha_probe(struct platform_
+@@ -2752,6 +2756,17 @@ static int airoha_probe(struct platform_
  		}
  	}
  
@@ -64,7 +64,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	return 0;
  
  error_napi_stop:
-@@ -2763,10 +2778,12 @@ error_hw_cleanup:
+@@ -2765,10 +2780,12 @@ error_hw_cleanup:
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
  		struct airoha_gdm_port *port = eth->ports[i];
  
@@ -82,8 +82,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	platform_set_drvdata(pdev, NULL);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -222,9 +222,10 @@ static int airoha_ppe_foe_entry_prepare(
- 		val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, dsa_port);
+@@ -223,9 +223,10 @@ static int airoha_ppe_foe_entry_prepare(
+ 
  	if (dev) {
  		struct airoha_gdm_port *port = netdev_priv(dev);
 +		struct airoha_eth *eth = port->qdma->eth;

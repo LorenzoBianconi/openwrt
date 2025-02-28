@@ -88,7 +88,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	set_bit(DEV_STATE_INITIALIZED, &eth->state);
  
  	return 0;
-@@ -2170,6 +2183,47 @@ static int airoha_tc_htb_alloc_leaf_queu
+@@ -2172,6 +2185,47 @@ static int airoha_tc_htb_alloc_leaf_queu
  	return 0;
  }
  
@@ -136,7 +136,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static void airoha_tc_remove_htb_queue(struct airoha_gdm_port *port, int queue)
  {
  	struct net_device *dev = port->dev;
-@@ -2253,6 +2307,9 @@ static int airoha_dev_tc_setup(struct ne
+@@ -2255,6 +2309,9 @@ static int airoha_dev_tc_setup(struct ne
  		return airoha_tc_setup_qdisc_ets(port, type_data);
  	case TC_SETUP_QDISC_HTB:
  		return airoha_tc_setup_qdisc_htb(port, type_data);
@@ -146,7 +146,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	default:
  		return -EOPNOTSUPP;
  	}
-@@ -2509,6 +2566,7 @@ static void airoha_remove(struct platfor
+@@ -2511,6 +2568,7 @@ static void airoha_remove(struct platfor
  	}
  	free_netdev(eth->napi_dev);
  
@@ -180,7 +180,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #define MTK_HDR_LEN			4
  #define MTK_HDR_XMIT_TAGGED_TPID_8100	1
  #define MTK_HDR_XMIT_TAGGED_TPID_88A8	2
-@@ -195,6 +205,222 @@ struct airoha_hw_stats {
+@@ -195,6 +205,224 @@ struct airoha_hw_stats {
  	u64 rx_len[7];
  };
  
@@ -380,8 +380,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	__be16 dst_port;
 +
 +	struct {
-+		u16 id;
-+		__be16 proto;
++		struct {
++			u16 id;
++			__be16 proto;
++		} hdr[2];
 +		u8 num;
 +	} vlan;
 +	struct {
@@ -403,7 +405,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  struct airoha_qdma {
  	struct airoha_eth *eth;
  	void __iomem *regs;
-@@ -234,6 +460,19 @@ struct airoha_gdm_port {
+@@ -234,6 +462,19 @@ struct airoha_gdm_port {
  	struct metadata_dst *dsa_meta[AIROHA_MAX_DSA_PORTS];
  };
  
@@ -423,7 +425,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  struct airoha_eth {
  	struct device *dev;
  
-@@ -242,6 +481,9 @@ struct airoha_eth {
+@@ -242,6 +483,9 @@ struct airoha_eth {
  
  	struct airoha_npu __rcu *npu;
  
@@ -433,7 +435,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct reset_control_bulk_data rsts[AIROHA_MAX_NUM_RSTS];
  	struct reset_control_bulk_data xsi_rsts[AIROHA_MAX_NUM_XSI_RSTS];
  
-@@ -277,4 +519,10 @@ u32 airoha_rmw(void __iomem *base, u32 o
+@@ -277,4 +521,10 @@ u32 airoha_rmw(void __iomem *base, u32 o
  #define airoha_qdma_clear(qdma, offset, val)			\
  	airoha_rmw((qdma)->regs, (offset), (val), 0)
  
@@ -446,7 +448,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif /* AIROHA_ETH_H */
 --- /dev/null
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -0,0 +1,900 @@
+@@ -0,0 +1,898 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +/*
 + * Copyright (c) 2025 AIROHA Inc
@@ -668,6 +670,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	val = FIELD_PREP(AIROHA_FOE_IB2_PORT_AG, 0x1f);
 +	if (dsa_port >= 0)
 +		val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, dsa_port);
++
 +	if (dev) {
 +		struct airoha_gdm_port *port = netdev_priv(dev);
 +		u8 pse_port;
@@ -722,8 +725,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	}
 +
 +	if (data->vlan.num) {
-+		l2->vlan1 = data->vlan.id;
-+		l2->etype = dsa_port >= 0 ? BIT(8) | BIT(dsa_port) : 0;
++		l2->etype = dsa_port >= 0 ? BIT(dsa_port) : 0;
++		l2->vlan1 = data->vlan.hdr[0].id;
++		if (data->vlan.num == 2)
++			l2->vlan2 = data->vlan.hdr[1].id;
 +	} else if (dsa_port >= 0) {
 +		l2->etype = BIT(15) | BIT(dsa_port);
 +	} else if (type >= PPE_PKT_TYPE_IPV6_ROUTE_3T) {
@@ -1055,22 +1060,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		case FLOW_ACTION_CSUM:
 +			break;
 +		case FLOW_ACTION_VLAN_PUSH:
-+			if (data.vlan.num == 1 ||
++			if (data.vlan.num == 2 ||
 +			    act->vlan.proto != htons(ETH_P_8021Q))
 +				return -EOPNOTSUPP;
 +
-+			data.vlan.id = act->vlan.vid;
-+			data.vlan.proto = act->vlan.proto;
++			data.vlan.hdr[data.vlan.num].id = act->vlan.vid;
++			data.vlan.hdr[data.vlan.num].proto = act->vlan.proto;
 +			data.vlan.num++;
 +			break;
 +		case FLOW_ACTION_VLAN_POP:
 +			break;
 +		case FLOW_ACTION_PPPOE_PUSH:
-+			if (data.pppoe.num == 1)
-+				return -EOPNOTSUPP;
-+
-+			data.pppoe.sid = act->pppoe.sid;
-+			data.pppoe.num++;
 +			break;
 +		default:
 +			return -EOPNOTSUPP;

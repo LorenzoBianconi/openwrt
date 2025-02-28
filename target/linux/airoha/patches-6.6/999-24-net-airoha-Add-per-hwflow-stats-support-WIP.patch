@@ -28,7 +28,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -535,6 +535,28 @@ static void airoha_ppe_foe_flow_remove_e
+@@ -538,6 +538,28 @@ static void airoha_ppe_foe_flow_remove_e
  	spin_unlock_bh(&ppe_lock);
  }
  
@@ -57,7 +57,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_ppe_flow_offload_replace(struct airoha_gdm_port *port,
  					   struct flow_cls_offload *f)
  {
-@@ -756,6 +778,46 @@ static int airoha_ppe_flow_offload_destr
+@@ -754,6 +776,46 @@ static int airoha_ppe_flow_offload_destr
  	return 0;
  }
  
@@ -104,7 +104,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_ppe_flow_offload_cmd(struct airoha_gdm_port *port,
  				       struct flow_cls_offload *f)
  {
-@@ -764,6 +826,8 @@ static int airoha_ppe_flow_offload_cmd(s
+@@ -762,6 +824,8 @@ static int airoha_ppe_flow_offload_cmd(s
  		return airoha_ppe_flow_offload_replace(port, f);
  	case FLOW_CLS_DESTROY:
  		return airoha_ppe_flow_offload_destroy(port, f);

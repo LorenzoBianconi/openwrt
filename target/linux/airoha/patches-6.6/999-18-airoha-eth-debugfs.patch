@@ -1,6 +1,6 @@
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2430,6 +2430,129 @@ static void airoha_metadata_dst_free(str
+@@ -2432,6 +2432,129 @@ static void airoha_metadata_dst_free(str
  	}
  }
  
@@ -130,7 +130,7 @@
  static int airoha_alloc_gdm_port(struct airoha_eth *eth,
  				 struct device_node *np, int index)
  {
-@@ -2507,6 +2630,10 @@ static int airoha_alloc_gdm_port(struct
+@@ -2509,6 +2632,10 @@ static int airoha_alloc_gdm_port(struct
  	if (err)
  		return err;
  
@@ -141,7 +141,7 @@
  	return register_netdev(dev);
  }
  
-@@ -2566,6 +2693,7 @@ static int airoha_probe(struct platform_
+@@ -2568,6 +2695,7 @@ static int airoha_probe(struct platform_
  	strscpy(eth->napi_dev->name, "qdma_eth", sizeof(eth->napi_dev->name));
  	platform_set_drvdata(pdev, eth);
  
@@ -149,7 +149,7 @@
  	err = airoha_hw_init(pdev, eth);
  	if (err)
  		goto error_hw_cleanup;
-@@ -2594,6 +2722,7 @@ error_napi_stop:
+@@ -2596,6 +2724,7 @@ error_napi_stop:
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++)
  		airoha_qdma_stop_napi(&eth->qdma[i]);
  error_hw_cleanup:
@@ -157,7 +157,7 @@
  	for (i = 0; i < ARRAY_SIZE(eth->qdma); i++)
  		airoha_hw_cleanup(&eth->qdma[i]);
  
-@@ -2634,6 +2763,7 @@ static void airoha_remove(struct platfor
+@@ -2636,6 +2765,7 @@ static void airoha_remove(struct platfor
  	free_netdev(eth->napi_dev);
  
  	airoha_ppe_deinit(eth);
@@ -175,7 +175,7 @@
  
  struct airoha_queue_entry {
  	union {
-@@ -501,6 +502,8 @@ struct airoha_eth {
+@@ -503,6 +504,8 @@ struct airoha_eth {
  
  	struct airoha_qdma qdma[AIROHA_MAX_NUM_QDMA];
  	struct airoha_gdm_port *ports[AIROHA_MAX_NUM_GDM_PORTS];
@@ -186,7 +186,7 @@
  u32 airoha_rr(void __iomem *base, u32 offset);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -915,5 +915,4 @@ void airoha_ppe_deinit(struct airoha_eth
+@@ -913,5 +913,4 @@ void airoha_ppe_deinit(struct airoha_eth
  	rcu_read_unlock();
  
  	rhashtable_destroy(&eth->flow_table);

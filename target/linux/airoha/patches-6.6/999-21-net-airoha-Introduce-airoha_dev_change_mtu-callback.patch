@@ -38,7 +38,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static u16 airoha_dev_select_queue(struct net_device *dev, struct sk_buff *skb,
  				   struct net_device *sb_dev)
  {
-@@ -2404,6 +2418,7 @@ static const struct net_device_ops airoh
+@@ -2406,6 +2420,7 @@ static const struct net_device_ops airoh
  	.ndo_init		= airoha_dev_init,
  	.ndo_open		= airoha_dev_open,
  	.ndo_stop		= airoha_dev_stop,
