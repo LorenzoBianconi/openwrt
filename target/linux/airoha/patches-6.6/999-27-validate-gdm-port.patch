@@ -35,7 +35,7 @@
  		return err;
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2832,6 +2832,22 @@ static int airoha_setup_phylink(struct n
+@@ -2601,6 +2601,22 @@ static int airoha_register_port_debugfs(
  	return 0;
  }
  
@@ -56,11 +56,11 @@
 +}
 +
  static int airoha_alloc_gdm_port(struct airoha_eth *eth,
- 				 struct device_node *np, int index)
+ 				 struct device_node *np)
  {
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -545,6 +545,9 @@ u32 airoha_rmw(void __iomem *base, u32 o
+@@ -540,6 +540,9 @@ u32 airoha_rmw(void __iomem *base, u32 o
  #define airoha_qdma_clear(qdma, offset, val)			\
  	airoha_rmw((qdma)->regs, (offset), (val), 0)
  
