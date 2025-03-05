@@ -1,0 +1,72 @@
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -197,7 +197,8 @@ static int airoha_get_dsa_port(struct ne
+ #endif
+ }
+ 
+-static int airoha_ppe_foe_entry_prepare(struct airoha_foe_entry *hwe,
++static int airoha_ppe_foe_entry_prepare(struct airoha_eth *eth,
++					struct airoha_foe_entry *hwe,
+ 					struct net_device *dev, int type,
+ 					struct airoha_flow_data *data,
+ 					int l4proto, u32 priority)
+@@ -223,8 +224,12 @@ static int airoha_ppe_foe_entry_prepare(
+ 
+ 	if (dev) {
+ 		struct airoha_gdm_port *port = netdev_priv(dev);
+-		struct airoha_eth *eth = port->qdma->eth;
+ 		u8 pse_port;
++		int err;
++
++		err = airoha_is_valid_gdm_port(eth, port);
++		if (err)
++			return err;
+ 
+ 		if (dsa_port >= 0 || eth->ports[1])
+ 			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
+@@ -663,7 +668,7 @@ static int airoha_ppe_flow_offload_repla
+ 	    !is_valid_ether_addr(data.eth.h_dest))
+ 		return -EINVAL;
+ 
+-	err = airoha_ppe_foe_entry_prepare(&hwe, odev, offload_type,
++	err = airoha_ppe_foe_entry_prepare(eth, &hwe, odev, offload_type,
+ 					   &data, l4proto, priority);
+ 	if (err)
+ 		return err;
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -2832,6 +2832,22 @@ static int airoha_setup_phylink(struct n
+ 	return 0;
+ }
+ 
++int airoha_is_valid_gdm_port(struct airoha_eth *eth,
++			     struct airoha_gdm_port *port)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
++		if (!eth->ports[i])
++			continue;
++
++		if (eth->ports[i] == port)
++			return 0;
++	}
++
++	return -EINVAL;
++}
++
+ static int airoha_alloc_gdm_port(struct airoha_eth *eth,
+ 				 struct device_node *np, int index)
+ {
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -545,6 +545,9 @@ u32 airoha_rmw(void __iomem *base, u32 o
+ #define airoha_qdma_clear(qdma, offset, val)			\
+ 	airoha_rmw((qdma)->regs, (offset), (val), 0)
+ 
++int airoha_is_valid_gdm_port(struct airoha_eth *eth,
++			     struct airoha_gdm_port *port);
++
+ void airoha_ppe_check_skb(struct airoha_ppe *ppe, u16 hash);
+ int airoha_ppe_setup_tc_block_cb(enum tc_setup_type type, void *type_data,
+ 				 void *cb_priv);
