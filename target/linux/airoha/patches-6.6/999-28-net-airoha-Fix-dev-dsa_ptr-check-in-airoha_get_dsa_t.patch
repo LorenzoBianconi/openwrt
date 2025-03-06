@@ -1,0 +1,51 @@
+From 4106dc39e065439d3839bc3e6c7b06a7a64ecaf1 Mon Sep 17 00:00:00 2001
+Message-ID: <4106dc39e065439d3839bc3e6c7b06a7a64ecaf1.1741257243.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 6 Mar 2025 11:26:23 +0100
+Subject: [PATCH net-next] net: airoha: Fix dev->dsa_ptr check in
+ airoha_get_dsa_tag()
+
+Fix the following warning reported by Smatch static checker in
+airoha_get_dsa_tag routine:
+
+drivers/net/ethernet/airoha/airoha_eth.c:1722 airoha_get_dsa_tag()
+warn: 'dp' isn't an ERR_PTR
+
+dev->dsa_ptr can't be set to an error pointer, it can just be NULL.
+Remove this check since it is already performed in netdev_uses_dsa().
+
+Reported-by: Dan Carpenter <dan.carpenter@linaro.org>
+Closes: https://lore.kernel.org/netdev/Z8l3E0lGOcrel07C@lore-desk/T/#m54adc113fcdd8c5e6c5f65ffd60d8e8b1d483d90
+Fixes: af3cf757d5c9 ("net: airoha: Move DSA tag in DMA descriptor")
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c
+index ff837168845d..021e64d29183 100644
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1711,18 +1711,13 @@ static u32 airoha_get_dsa_tag(struct sk_buff *skb, struct net_device *dev)
+ {
+ #if IS_ENABLED(CONFIG_NET_DSA)
+ 	struct ethhdr *ehdr;
+-	struct dsa_port *dp;
+ 	u8 xmit_tpid;
+ 	u16 tag;
+ 
+ 	if (!netdev_uses_dsa(dev))
+ 		return 0;
+ 
+-	dp = dev->dsa_ptr;
+-	if (IS_ERR(dp))
+-		return 0;
+-
+-	if (dp->tag_ops->proto != DSA_TAG_PROTO_MTK)
++	if (dev->dsa_ptr->tag_ops->proto != DSA_TAG_PROTO_MTK)
+ 		return 0;
+ 
+ 	if (skb_cow_head(skb, 0))
+-- 
+2.48.1
+
