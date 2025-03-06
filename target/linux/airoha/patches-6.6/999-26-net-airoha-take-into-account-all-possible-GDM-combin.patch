@@ -175,11 +175,18 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	platform_set_drvdata(pdev, NULL);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -223,9 +223,10 @@ static int airoha_ppe_foe_entry_prepare(
+@@ -197,7 +197,8 @@ static int airoha_get_dsa_port(struct ne
+ #endif
+ }
  
- 	if (dev) {
+-static int airoha_ppe_foe_entry_prepare(struct airoha_foe_entry *hwe,
++static int airoha_ppe_foe_entry_prepare(struct airoha_eth *eth,
++					struct airoha_foe_entry *hwe,
+ 					struct net_device *dev, int type,
+ 					struct airoha_flow_data *data,
+ 					int l4proto, u32 priority)
+@@ -225,7 +226,7 @@ static int airoha_ppe_foe_entry_prepare(
  		struct airoha_gdm_port *port = netdev_priv(dev);
-+		struct airoha_eth *eth = port->qdma->eth;
  		u8 pse_port;
  
 -		if (dsa_port >= 0)
@@ -187,3 +194,12 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
  		else
  			/* uplink relies on GDM2 loopback for GDM3 and GDM4 */
+@@ -662,7 +663,7 @@ static int airoha_ppe_flow_offload_repla
+ 	    !is_valid_ether_addr(data.eth.h_dest))
+ 		return -EINVAL;
+ 
+-	err = airoha_ppe_foe_entry_prepare(&hwe, odev, offload_type,
++	err = airoha_ppe_foe_entry_prepare(eth, &hwe, odev, offload_type,
+ 					   &data, l4proto, priority);
+ 	if (err)
+ 		return err;
