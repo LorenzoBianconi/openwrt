@@ -1,0 +1,161 @@
+From 280ca6346f4adc9ad65049e8de3ea7a71c78caa3 Mon Sep 17 00:00:00 2001
+Message-ID: <280ca6346f4adc9ad65049e8de3ea7a71c78caa3.1741875456.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 13 Mar 2025 11:42:35 +0100
+Subject: [PATCH net-next 1/3] net: airoha: Add l2_flows rhashtable
+
+Introduce l2_flows rhashtable table in airoha_ppe struct in order to
+store L2 flows committed by upper layers of the kernel. This is a
+preliminary patch in order to offload L2 traffic rules.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.h | 15 +++++-
+ drivers/net/ethernet/airoha/airoha_ppe.c | 66 ++++++++++++++++++++----
+ 2 files changed, 71 insertions(+), 10 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -423,12 +423,23 @@ struct airoha_flow_data {
+ 	} pppoe;
+ };
+ 
++enum airoha_flow_entry_type {
++	FLOW_TYPE_L4,
++	FLOW_TYPE_L2,
++	FLOW_TYPE_L2_SUBFLOW,
++};
++
+ struct airoha_flow_table_entry {
+-	struct hlist_node list;
++	union {
++		struct hlist_node list;
++		struct rhash_head l2_node;
++	};
+ 
+ 	struct airoha_foe_entry data;
+ 	u32 hash;
+ 
++	enum airoha_flow_entry_type type;
++
+ 	struct rhash_head node;
+ 	unsigned long cookie;
+ };
+@@ -481,6 +492,8 @@ struct airoha_ppe {
+ 	void *foe;
+ 	dma_addr_t foe_dma;
+ 
++	struct rhashtable l2_flows;
++
+ 	struct hlist_head *foe_flow;
+ 	u16 foe_check_time[PPE_NUM_ENTRIES];
+ 
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -24,6 +24,13 @@ static const struct rhashtable_params ai
+ 	.automatic_shrinking = true,
+ };
+ 
++static const struct rhashtable_params airoha_l2_flow_table_params = {
++	.head_offset = offsetof(struct airoha_flow_table_entry, l2_node),
++	.key_offset = offsetof(struct airoha_flow_table_entry, data.bridge),
++	.key_len = 2 * ETH_ALEN,
++	.automatic_shrinking = true,
++};
++
+ static bool airoha_ppe2_is_enabled(struct airoha_eth *eth)
+ {
+ 	return airoha_fe_rr(eth, REG_PPE_GLO_CFG(1)) & PPE_GLO_CFG_EN_MASK;
+@@ -513,11 +520,36 @@ unlock:
+ 	spin_unlock_bh(&ppe_lock);
+ }
+ 
++static int
++airoha_ppe_foe_l2_flow_commit_entry(struct airoha_ppe *ppe,
++				    struct airoha_flow_table_entry *e)
++{
++	struct airoha_flow_table_entry *prev;
++
++	e->type = FLOW_TYPE_L2;
++	prev = rhashtable_lookup_get_insert_fast(&ppe->l2_flows, &e->l2_node,
++						 airoha_l2_flow_table_params);
++	if (!prev)
++		return 0;
++
++	if (IS_ERR(prev))
++		return PTR_ERR(prev);
++
++	return rhashtable_replace_fast(&ppe->l2_flows, &prev->l2_node,
++				       &e->l2_node,
++				       airoha_l2_flow_table_params);
++}
++
+ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
+ 					    struct airoha_flow_table_entry *e)
+ {
+-	u32 hash = airoha_ppe_foe_get_entry_hash(&e->data);
++	int type = FIELD_GET(AIROHA_FOE_IB1_BIND_PACKET_TYPE, e->data.ib1);
++	u32 hash;
++
++	if (type == PPE_PKT_TYPE_BRIDGE)
++		return airoha_ppe_foe_l2_flow_commit_entry(ppe, e);
+ 
++	hash = airoha_ppe_foe_get_entry_hash(&e->data);
+ 	e->hash = 0xffff;
+ 
+ 	spin_lock_bh(&ppe_lock);
+@@ -532,13 +564,18 @@ static void airoha_ppe_foe_flow_remove_e
+ {
+ 	spin_lock_bh(&ppe_lock);
+ 
+-	hlist_del_init(&e->list);
+-	if (e->hash != 0xffff) {
+-		e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
+-		e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
+-					  AIROHA_FOE_STATE_INVALID);
+-		airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash);
+-		e->hash = 0xffff;
++	if (e->type == FLOW_TYPE_L2) {
++		rhashtable_remove_fast(&ppe->l2_flows, &e->l2_node,
++				       airoha_l2_flow_table_params);
++	} else {
++		hlist_del_init(&e->list);
++		if (e->hash != 0xffff) {
++			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
++			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
++						  AIROHA_FOE_STATE_INVALID);
++			airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash);
++			e->hash = 0xffff;
++		}
+ 	}
+ 
+ 	spin_unlock_bh(&ppe_lock);
+@@ -899,10 +936,20 @@ int airoha_ppe_init(struct airoha_eth *e
+ 	if (err)
+ 		return err;
+ 
++	err = rhashtable_init(&ppe->l2_flows, &airoha_l2_flow_table_params);
++	if (err)
++		goto error_flow_table_destroy;
++
+ 	err = airoha_ppe_debugfs_init(ppe);
+ 	if (err)
+-		rhashtable_destroy(&eth->flow_table);
++		goto error_l2_flow_table_destroy;
+ 
++	return 0;
++
++error_l2_flow_table_destroy:
++	rhashtable_destroy(&ppe->l2_flows);
++error_flow_table_destroy:
++	rhashtable_destroy(&eth->flow_table);
+ 	return err;
+ }
+ 
+@@ -918,5 +965,6 @@ void airoha_ppe_deinit(struct airoha_eth
+ 	}
+ 	rcu_read_unlock();
+ 
++	rhashtable_destroy(&eth->ppe->l2_flows);
+ 	rhashtable_destroy(&eth->flow_table);
+ }

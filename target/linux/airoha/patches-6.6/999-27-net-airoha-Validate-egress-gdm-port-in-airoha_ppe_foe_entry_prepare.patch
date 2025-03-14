@@ -14,7 +14,7 @@
  			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2601,6 +2601,22 @@ static int airoha_register_port_debugfs(
+@@ -2601,6 +2601,19 @@ static int airoha_register_port_debugfs(
  	return 0;
  }
  
@@ -24,9 +24,6 @@
 +	int i;
 +
 +	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
-+		if (!eth->ports[i])
-+			continue;
-+
 +		if (eth->ports[i] == port)
 +			return 0;
 +	}

@@ -1,0 +1,95 @@
+From f68dc73d6236f0b60e6a91454be7290ba9e81fd1 Mon Sep 17 00:00:00 2001
+Message-ID: <f68dc73d6236f0b60e6a91454be7290ba9e81fd1.1741875456.git.lorenzo@kernel.org>
+In-Reply-To: <280ca6346f4adc9ad65049e8de3ea7a71c78caa3.1741875456.git.lorenzo@kernel.org>
+References: <280ca6346f4adc9ad65049e8de3ea7a71c78caa3.1741875456.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 13 Mar 2025 14:25:22 +0100
+Subject: [PATCH net-next 2/3] net: airoha: Add
+ airoha_ppe_foe_flow_remove_entry_unlock()
+
+Introduce airoha_ppe_foe_flow_remove_entry_unlock routine in order to
+run it holding ppe_lock. This is a preliminary patch in order to offload
+L2 traffic rules.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_ppe.c | 35 ++++++++++++++----------
+ 1 file changed, 20 insertions(+), 15 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -491,6 +491,26 @@ static int airoha_ppe_foe_commit_entry(s
+ 	return 0;
+ }
+ 
++static void airoha_ppe_foe_flow_remove_entry(struct airoha_ppe *ppe,
++					     struct airoha_flow_table_entry *e)
++{
++	lockdep_assert_held(&ppe_lock);
++
++	if (e->type == FLOW_TYPE_L2) {
++		rhashtable_remove_fast(&ppe->l2_flows, &e->l2_node,
++				       airoha_l2_flow_table_params);
++	} else {
++		hlist_del_init(&e->list);
++		if (e->hash != 0xffff) {
++			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
++			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
++						  AIROHA_FOE_STATE_INVALID);
++			airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash);
++			e->hash = 0xffff;
++		}
++	}
++}
++
+ static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe, u32 hash)
+ {
+ 	struct airoha_flow_table_entry *e;
+@@ -559,25 +579,12 @@ static int airoha_ppe_foe_flow_commit_en
+ 	return 0;
+ }
+ 
+-static void airoha_ppe_foe_flow_remove_entry(struct airoha_ppe *ppe,
+-					     struct airoha_flow_table_entry *e)
++static void
++airoha_ppe_foe_flow_remove_entry_locked(struct airoha_ppe *ppe,
++					struct airoha_flow_table_entry *e)
+ {
+ 	spin_lock_bh(&ppe_lock);
+-
+-	if (e->type == FLOW_TYPE_L2) {
+-		rhashtable_remove_fast(&ppe->l2_flows, &e->l2_node,
+-				       airoha_l2_flow_table_params);
+-	} else {
+-		hlist_del_init(&e->list);
+-		if (e->hash != 0xffff) {
+-			e->data.ib1 &= ~AIROHA_FOE_IB1_BIND_STATE;
+-			e->data.ib1 |= FIELD_PREP(AIROHA_FOE_IB1_BIND_STATE,
+-						  AIROHA_FOE_STATE_INVALID);
+-			airoha_ppe_foe_commit_entry(ppe, &e->data, e->hash);
+-			e->hash = 0xffff;
+-		}
+-	}
+-
++	airoha_ppe_foe_flow_remove_entry(ppe, e);
+ 	spin_unlock_bh(&ppe_lock);
+ }
+ 
+@@ -771,7 +778,7 @@ static int airoha_ppe_flow_offload_repla
+ 	return 0;
+ 
+ remove_foe_entry:
+-	airoha_ppe_foe_flow_remove_entry(eth->ppe, e);
++	airoha_ppe_foe_flow_remove_entry_locked(eth->ppe, e);
+ free_entry:
+ 	kfree(e);
+ 
+@@ -789,7 +796,7 @@ static int airoha_ppe_flow_offload_destr
+ 	if (!e)
+ 		return -ENOENT;
+ 
+-	airoha_ppe_foe_flow_remove_entry(eth->ppe, e);
++	airoha_ppe_foe_flow_remove_entry_locked(eth->ppe, e);
+ 	rhashtable_remove_fast(&eth->flow_table, &e->node,
+ 			       airoha_flow_table_params);
+ 	kfree(e);
