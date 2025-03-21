@@ -1,0 +1,67 @@
+From 7cb4c3d5d15f19db6fa5609161d287a4e74176d6 Mon Sep 17 00:00:00 2001
+Message-ID: <7cb4c3d5d15f19db6fa5609161d287a4e74176d6.1742594538.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Fri, 21 Mar 2025 22:42:37 +0100
+Subject: [PATCH net-next] net: airoha: set default CPU port for PPE1 and PPE2
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c  | 22 +++++++++++++++++++++-
+ drivers/net/ethernet/airoha/airoha_regs.h |  1 +
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c
+index 3ab04008cb74..efed00c20591 100644
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -527,6 +527,27 @@ static int airoha_fe_init(struct airoha_eth *eth)
+ 	/* disable IFC by default */
+ 	airoha_fe_clear(eth, REG_FE_CSR_IFC_CFG, FE_IFC_EN_MASK);
+ 
++	airoha_fe_wr(eth, REG_PPE_DFT_CPORT0(0),
++		     FIELD_PREP(DFT_CPORT_MASK(7), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(6), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(5), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(4), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(4), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(3), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(2), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(1), FE_PSE_PORT_CDM1) |
++		     FIELD_PREP(DFT_CPORT_MASK(0), FE_PSE_PORT_CDM1));
++	airoha_fe_wr(eth, REG_PPE_DFT_CPORT0(1),
++		     FIELD_PREP(DFT_CPORT_MASK(7), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(6), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(5), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(4), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(4), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(3), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(2), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(1), FE_PSE_PORT_CDM2) |
++		     FIELD_PREP(DFT_CPORT_MASK(0), FE_PSE_PORT_CDM2));
++
+ 	/* enable 1:N vlan action, init vlan table */
+ 	airoha_fe_set(eth, REG_MC_VLAN_EN, MC_VLAN_EN_MASK);
+ 
+@@ -1631,7 +1652,6 @@ static void airhoha_set_gdm2_loopback(struct airoha_gdm_port *port)
+ 
+ 	if (port->id == 3) {
+ 		/* FIXME: handle XSI_PCE1_PORT */
+-		airoha_fe_wr(eth, REG_PPE_DFT_CPORT0(0),  0x5500);
+ 		airoha_fe_rmw(eth, REG_FE_WAN_PORT,
+ 			      WAN1_EN_MASK | WAN1_MASK | WAN0_MASK,
+ 			      FIELD_PREP(WAN0_MASK, HSGMII_LAN_PCIE0_SRCPORT));
+diff --git a/drivers/net/ethernet/airoha/airoha_regs.h b/drivers/net/ethernet/airoha/airoha_regs.h
+index 5bb15036a8b0..29c8f046b991 100644
+--- a/drivers/net/ethernet/airoha/airoha_regs.h
++++ b/drivers/net/ethernet/airoha/airoha_regs.h
+@@ -283,6 +283,7 @@
+ #define PPE_HASH_SEED				0x12345678
+ 
+ #define REG_PPE_DFT_CPORT0(_n)			(((_n) ? PPE2_BASE : PPE1_BASE) + 0x248)
++#define DFT_CPORT_MASK(_n)			GENMASK(3 + ((_n) << 2), ((_n) << 2))
+ 
+ #define REG_PPE_DFT_CPORT1(_n)			(((_n) ? PPE2_BASE : PPE1_BASE) + 0x24c)
+ 
+-- 
+2.49.0
+
