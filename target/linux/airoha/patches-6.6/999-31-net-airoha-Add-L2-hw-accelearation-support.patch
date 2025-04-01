@@ -45,8 +45,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	enum airoha_flow_entry_type type;
 @@ -551,7 +555,8 @@ u32 airoha_rmw(void __iomem *base, u32 o
- int airoha_is_valid_gdm_port(struct airoha_eth *eth,
- 			     struct airoha_gdm_port *port);
+ bool airoha_is_valid_gdm_port(struct airoha_eth *eth,
+ 			      struct airoha_gdm_port *port);
  
 -void airoha_ppe_check_skb(struct airoha_ppe *ppe, u16 hash);
 +void airoha_ppe_check_skb(struct airoha_ppe *ppe, struct sk_buff *skb,
