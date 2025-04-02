@@ -1,0 +1,27 @@
+From 8e489c7d0715318beac7420d9a1310b8a645d0be Mon Sep 17 00:00:00 2001
+Message-ID: <8e489c7d0715318beac7420d9a1310b8a645d0be.1743625578.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Wed, 2 Apr 2025 22:24:27 +0200
+Subject: [PATCH net-next] net: airoha: Add missing filed to ppe_mbox_data
+ struct
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_npu.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/net/ethernet/airoha/airoha_npu.c b/drivers/net/ethernet/airoha/airoha_npu.c
+index 489acdf58dd0..47f987e36627 100644
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -106,6 +106,7 @@ struct ppe_mbox_data {
+ 			u8 xpon_hal_api;
+ 			u8 wan_xsi;
+ 			u8 ct_joyme4;
++			u8 max_packet;
+ 			int ppe_type;
+ 			int wan_mode;
+ 			int wan_sel;
+-- 
+2.49.0
+

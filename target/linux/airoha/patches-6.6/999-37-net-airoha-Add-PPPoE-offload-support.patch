@@ -71,7 +71,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  
  	return 0;
-@@ -863,6 +869,11 @@ static int airoha_ppe_flow_offload_repla
+@@ -784,6 +790,11 @@ static int airoha_ppe_flow_offload_repla
  		case FLOW_ACTION_VLAN_POP:
  			break;
  		case FLOW_ACTION_PPPOE_PUSH:
