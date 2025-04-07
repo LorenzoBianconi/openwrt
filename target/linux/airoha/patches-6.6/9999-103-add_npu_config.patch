@@ -1,0 +1,16 @@
+diff -uNr old/drivers/misc/Kconfig new/drivers/misc/Kconfig
+--- old/drivers/misc/Kconfig	2025-02-21 20:57:28.000000000 +0800
++++ new/drivers/misc/Kconfig	2025-03-25 20:37:16.493146000 +0800
+@@ -561,6 +561,12 @@
+ 
+ 	  This driver can also be built as a module.  If so, the module
+ 	  will be called tps6594-pfsm.
++	  
++config NET_AIROHA_SOC_NPU
++	bool "MediaTek devices"
++	default y
++	help
++	  If you have a wireless npu belonging to this class, say Y.	  
+ 
+ source "drivers/misc/c2port/Kconfig"
+ source "drivers/misc/eeprom/Kconfig"

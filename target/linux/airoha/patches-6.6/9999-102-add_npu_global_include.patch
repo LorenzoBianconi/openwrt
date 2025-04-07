@@ -1,0 +1,2125 @@
+diff -uNr old/include/linux/soc/airoha/airoha_npu_g.h new/include/linux/soc/airoha/airoha_npu_g.h
+--- old/include/linux/soc/airoha/airoha_npu_g.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/airoha_npu_g.h	2025-03-27 14:37:05.742728000 +0800
+@@ -0,0 +1,97 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (c) 2025 AIROHA Inc
++ * Author: Lorenzo Bianconi <lorenzo@kernel.org>
++ */
++#ifndef AIROHA_NPU_H_G
++#define AIROHA_NPU_H_G	 
++
++#include <linux/soc/airoha/wifi_mail.h>
++#include <linux/soc/airoha/npuMboxAPI.h>
++#include <linux/soc/airoha/wifi_mail_type.h>
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++
++
++#define NPU_NUM_CORES		8
++//#define MAX_CORE_NUM		8
++#define NPU_INT_MAX_NUM         (6)
++
++struct airoha_npu {
++	struct device *dev;
++	struct regmap *regmap;
++	void __iomem *Regbase;
++	int irq[NPU_INT_MAX_NUM];
++    int mbox2host_irq;
++#if defined(TCSUPPORT_NPU_V2)
++    int wdog_irq[NPU_NUM_CORES];
++#endif
++	struct airoha_npu_core {
++		struct airoha_npu *npu;
++		/* protect concurrent npu memory accesses */
++		spinlock_t lock;
++		struct work_struct wdt_work;
++	} cores[NPU_NUM_CORES];
++
++	struct {
++		int (*ppe_init)(struct airoha_npu *npu);
++		int (*ppe_deinit)(struct airoha_npu *npu);
++		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
++					      dma_addr_t foe_addr,
++					      int sram_num_entries);
++		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
++					    dma_addr_t foe_addr,
++					    u32 entry_size, u32 hash,
++					    bool ppe2);
++		
++		/*mailbox api called by wifi*/
++		//int (*WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
++		int (*wifi_set_txrx_reg_addr)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
++		//int (*WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE)(unsigned int interfaceID, unsigned int PciePortType);
++		int (*wifi_set_pcie_port_type)(unsigned int interfaceID, unsigned int PciePortType);
++		//int (*WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR)(unsigned int interfaceID, unsigned int dramBaNode_pa);
++		int (*wifi_set_dram_ba_node_addr)(unsigned int interfaceID, unsigned int dramBaNode_pa);
++		//int (*WIFI_MAIL_API_SET_WAIT_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		int (*wifi_set_pcie_addr)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		//int (*WIFI_MAIL_API_SET_WAIT_DESC)(unsigned int interfaceID, unsigned int desc) ;
++		int (*wifi_set_desc)(unsigned int interfaceID, unsigned int desc) ;
++		//int (*WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		int (*wifi_set_tx_ring_pcie_addr)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		//int (*WIFI_MAIL_API_GET_WAIT_RXDESC_BASE)(unsigned int interfaceID, npu_info_t *pnpuInfo);
++		int (*wifi_get_rxdesc_base)(unsigned int interfaceID, npu_info_t *pnpuInfo);
++		//int (*WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		int (*wifi_set_tx_buf_space_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		//int (*WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		int (*wifi_set_rx_ring_for_txdone_hw_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
++		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
++		void (*hostdapt_enable_interrupt_ops)(unsigned int ringIdx);
++		void (*hostdapt_disable_interrupt_ops)(unsigned int ringIdx);
++		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
++	} ops;
++};
++extern struct airoha_npu *npu_glb;
++#endif
+diff -uNr old/include/linux/soc/airoha/npu_host_adpt.h new/include/linux/soc/airoha/npu_host_adpt.h
+--- old/include/linux/soc/airoha/npu_host_adpt.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/npu_host_adpt.h	2025-03-25 18:50:54.259590000 +0800
+@@ -0,0 +1,164 @@
++#ifndef _NPU_HOST_ADPT_H_
++#define _NPU_HOST_ADPT_H_
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++
++#define dma_addr_t  unsigned long long int	//npu v2 is 64bit address, but npu v1 is 32bit
++
++#define HOSTADPT_RX_DSCP_WORD_LENS    4
++#define HOSTADPT_RX_RING_NUM          2
++#define HOSTADPT_RX0_DSCP_NUM         512
++#define HOSTADPT_RX1_DSCP_NUM         512
++#define HOSTADPT_RX_TOTAL_DSCP_NUM    (HOSTADPT_RX0_DSCP_NUM + HOSTADPT_RX1_DSCP_NUM)
++
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++#define HOSTADPT_TX_RING_NUM          2
++#define HOSTADPT_TX0_DSCP_NUM         1024
++#define HOSTADPT_TX1_DSCP_NUM         1024
++#define HOSTADPT_TX_TOTAL_DSCP_NUM    (HOSTADPT_TX0_DSCP_NUM + HOSTADPT_TX1_DSCP_NUM)
++#endif
++
++#ifdef TCSUPPORT_WLAN_INODE
++#define INODE_RX_OFFLOAD 1
++#endif
++#define HOSTAPD_BUFFER_LEN		     3500//4096
++#define HOSTADPT_RX_RING_0            0
++#define HOSTADPT_RX_RING_1            1
++
++//#define HOSTADPT_TEST
++
++#define DBG_OFF     0
++#define DBG_ERR     1
++#define DBG_WRN     2
++#define DBG_CATTER     3
++#define DBG_LOG     4
++#define DBG_MAX     5//must be button
++
++#define DBG_LEVEL   DBG_OFF
++
++typedef struct {
++    
++    struct {
++		unsigned int done               : 1 ;
++		unsigned int cur_len            : 14;
++		unsigned int len                : 14;
++		unsigned int is_last	        : 1;
++		unsigned int resv1	        : 2;
++    } pkt_ctrl ;
++    union{
++    struct {
++#if (defined(TCSUPPORT_CPU_EN7581) || defined(TCSUPPORT_CPU_AN7552) || defined(TCSUPPORT_CPU_AN7583))
++		unsigned int foe_number		: 16;
++		unsigned int crsn		: 5 ;
++		unsigned int src_port		: 5 ;
++		unsigned int pkt_idx            : 6;
++#else
++		unsigned int foe_number		: 15;
++		unsigned int crsn		: 5 ;
++		unsigned int src_port		: 5 ;
++		unsigned int pkt_idx            : 7;
++#endif
++    } pkt_info;
++	unsigned int pktInfo;
++     };
++
++	union{
++//#ifdef TCSUPPORT_WLAN_INODE
++		struct {
++			unsigned int frametype	: 2;
++			unsigned int vap_id		: 4;
++			unsigned int radio_id	: 4;
++			unsigned int priority	: 4;
++			unsigned int fragtype	: 2;
++			unsigned int sid		: 16;
++		}pkt_info_inode;
++//#endif
++		unsigned int vend_specific;
++	};
++
++    unsigned int pkt_addr ;
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++    unsigned long long int skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
++#else
++    unsigned int skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
++    unsigned int resv4;
++#endif
++} __attribute__ ((packed)) HOSTADPT_DMA_DSCP_T;
++
++
++#ifdef TCSUPPORT_WLAN_INODE
++#define HOSTADPT_TX_VEND_SPEC_LEN 6
++#else
++#define HOSTADPT_TX_VEND_SPEC_LEN 192
++#endif
++
++typedef struct {
++	union {
++		unsigned int word1;
++		struct {
++			unsigned int done		: 1 ;
++			unsigned int vnd_len		: 17;
++			unsigned int len			: 13;
++			unsigned int reschedule	: 1 ;
++	    } pkt_ctrl ;
++	};
++	unsigned int		pkt_addr;
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++	unsigned long long int		skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
++#else
++	unsigned int		skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
++	unsigned int		resv4;
++#endif
++//#ifdef TCSUPPORT_NPU_WIFI_TX
++	unsigned char vnd_spec[HOSTADPT_TX_VEND_SPEC_LEN];
++//#endif
++} HOSTADPT_DMA_TX_DSCP_T;
++
++
++#ifdef TCSUPPORT_NPU_WIFI_TX
++struct wifi_tx_info_mt7916{
++	unsigned char rept_wds_wcid;
++	unsigned char BssInfoIdx;
++};
++
++struct wifi_tx_info_eagle{
++	unsigned short rept_wds_wcid;
++	unsigned char BssInfoIdx;
++};
++#endif
++
++#ifdef TCSUPPORT_WLAN_INODE
++struct wifi_tx_info_ione{
++	unsigned char vapid; //4bit
++	unsigned char epid; //4bit
++	unsigned char sid; //8bit
++	unsigned char mcf;//1bit
++	unsigned char tid;//4bit
++	unsigned char hw_id;//2bit
++};
++#endif
++
++#endif
+diff -uNr old/include/linux/soc/airoha/npuMboxAPI.h new/include/linux/soc/airoha/npuMboxAPI.h
+--- old/include/linux/soc/airoha/npuMboxAPI.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/npuMboxAPI.h	2025-03-11 13:58:04.531141000 +0800
+@@ -0,0 +1,76 @@
++#ifndef _NPU_MBOX_API_H_
++#define _NPU_MBOX_API_H_
++
++//#define MBOX_DBG_ON (1)
++//#define MBOX_API_TEST   (1)
++
++#define MAX_MBOX_FUNC   (8)
++#define MBOX2HOST_IDX   (8)
++
++#define MASK_CORE_ID    (0xf)
++#define MASK_RET_STATUS (0x7)
++#define MASK_FUNC_ID    (0xf)
++
++typedef union
++{
++    struct {
++        unsigned short block_mode   : 1;
++        unsigned short done_bit     : 1;
++        unsigned short ret_status   : 3;
++        unsigned short static_buff  : 1;
++        unsigned short reserved     : 5;
++        unsigned short func_id      : 4;
++    } bits;
++    unsigned short hWord;
++    
++} mboxArg_t;
++
++typedef enum npuCoreId
++{
++    CORE0=0,
++    CORE1,
++    CORE2,
++    CORE3,
++    CORE4,
++    CORE5,
++    CORE6,
++    CORE7
++    
++} npuCoreId_t;
++
++typedef enum npuMboxFuncId
++{
++    MFUNC_WIFI=0,
++    MFUNC_TUNNEL,
++    MFUNC_NOTIFY,
++    MFUNC_DBA,
++    MFUNC_TR471,
++    MFUNC_MAX_CASE
++    
++} npuMboxFuncId_t;
++
++typedef int (*h_mbox_cb_t) (unsigned long virtAddr, unsigned short info);
++
++typedef struct npuMboxFlags
++{
++    unsigned int isBlockingMode     : 1;
++    unsigned int isStaticBuffInit   : 1;
++    unsigned int isStaticBuffDel    : 1;
++    unsigned int resv               :29;
++
++} mboxFlags_t;
++
++typedef struct npuMboxInfo
++{
++    npuCoreId_t core_id;
++    npuMboxFuncId_t func_id;
++    unsigned long virtAddr;
++    unsigned int physAddr;
++    unsigned short len;
++    mboxFlags_t flags;
++    unsigned int blockTimeout;  /*unit: 100us*/
++    h_mbox_cb_t cb;
++
++} npuMboxInfo_t;
++
++#endif
+diff -uNr old/include/linux/soc/airoha/npu_test_common.h new/include/linux/soc/airoha/npu_test_common.h
+--- old/include/linux/soc/airoha/npu_test_common.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/npu_test_common.h	2025-03-20 16:17:47.534433000 +0800
+@@ -0,0 +1,267 @@
++#ifndef _NPU_TEST_COMMON_H
++#define _NPU_TEST_COMMON_H
++
++#define S_32      (0x20)
++#define S_128     (0x80)
++#define S_256     (0x100)
++#define S_512     (0x200)
++#define S_1K      (0x400)
++#define S_2K      (0x800)
++#define S_4K      (0x1000)
++#define S_8K      (0x2000)
++#define S_16K     (0x4000)
++#define S_32K     (0x8000)
++#define S_40K     (0xa000)
++#define S_48K     (0xc000)
++#define S_60K     (0xf000)
++#define S_64K     (0x10000)
++#define S_128K    (0x20000)
++#define S_256K    (0x40000)
++#define S_384K    (0x60000)
++#define S_480K    (0x78000)
++#define S_512K    (0x80000)
++#define S_1M      (0x100000)
++#define S_2M      (0x200000)
++#define S_10M     (0xa00000)
++#define S_1G      (0x40000000)
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++
++
++/* for 7581/7552 ASIC or 
++ * for bitfile with gsw,fe,spi,rbus,gdmp,uart,gpio,timer,scu,hsdma,npu,tzasc,tzpc,sec,pbus,pcie0,pcie1 modules */
++#define MULTI_MODULES_SUPPORT
++
++#define WIFI_7916
++//#define INTEL_WIFI_CARD
++
++#ifdef TCSUPPORT_NPU_V2
++#ifdef TCSUPPORT_NPU_V2_S /*7552*/
++#define MAX_CORE_NUM        (2)
++#define NPU_SRAM_T_SIZE     (S_64K)
++#define L2C_SRAM_SIZE       S_128K
++#define MAX_Q_SIZE	        (4)
++#else
++#ifdef TCSUPPORT_NPU_V2_P
++#define MAX_CORE_NUM        (6)
++#define NPU_SRAM_T_SIZE     (S_64K)
++#define L2C_SRAM_SIZE       S_128K
++#define MAX_Q_SIZE	        (4)
++#else /*7581*/
++#define MAX_CORE_NUM        (8)
++#define NPU_SRAM_T_SIZE     (S_48K)
++#define L2C_SRAM_SIZE       S_256K
++#define MAX_Q_SIZE	        (8)
++#endif
++#endif
++#define CSR_REG_NUM		    (3)
++#define CSR_PC_BASE_ADDR    (0x1ec05000)
++
++#else /*7523*/
++#define MAX_CORE_NUM        (4)
++#define NPU_SRAM_T_SIZE     (S_64K)
++#define CSR_REG_NUM		    (12)
++#define L2C_SRAM_SIZE       S_128K
++#define MAX_Q_SIZE	        (8)
++#ifdef TCSUPPORT_CPU_ARMV8
++#define CSR_PC_BASE_ADDR	(0x1ec08800)
++#else
++#define CSR_PC_BASE_ADDR	(0xbec08800)
++#endif
++#endif
++
++#ifdef TCSUPPORT_NPU_V2_P
++#define MBOX_IRQ_TEST_NUM	8
++#else
++#define MBOX_IRQ_TEST_NUM	MAX_CORE_NUM
++#endif
++#define MAX_ARRAY_SIZE    (8) 
++#define MDELAY_TEST_CNT (1000)
++#define ALL_FF  (0xffffffff)
++
++#define NPU_MIB_BASE    (0x1ec0c000)
++#define NPU_MIB0        (NPU_MIB_BASE+0x140)
++#define NPU_MIB8        (NPU_MIB_BASE+0x160)
++#define NPU_MIB9        (NPU_MIB_BASE+0x164)
++#define NPU_MIB10       (NPU_MIB_BASE+0x168)
++#define NPU_MIB11       (NPU_MIB_BASE+0x16c)
++#define NPU_MIB12       (NPU_MIB_BASE+0x170)
++#define NPU_MIB13       (NPU_MIB_BASE+0x174)
++#define NPU_MIB14       (NPU_MIB_BASE+0x178)
++#define NPU_MIB15       (NPU_MIB_BASE+0x17c)
++#define NPU_MIB16       (NPU_MIB_BASE+0x180)
++#define NPU_MIB17       (NPU_MIB_BASE+0x184)
++#define NPU_MIB18       (NPU_MIB_BASE+0x188)
++#define NPU_MIB19       (NPU_MIB_BASE+0x18c)
++#define NPU_MIB20       (NPU_MIB_BASE+0x190)
++#define NPU_MIB21       (NPU_MIB_BASE+0x194)
++#define NPU_MIB28       (NPU_MIB_BASE+0x1B0)
++#define NPU_MIB29       (NPU_MIB_BASE+0x1B4)
++#define NPU_MIB30       (NPU_MIB_BASE+0x1B8)
++#define NPU_MIB31       (NPU_MIB_BASE+0x1BC)
++
++#if defined(TCSUPPORT_CPU_AN7583) || defined(TCSUPPORT_NPU_V2_P)
++#define PCIE0_MAC_BASE      (0x1fc20000)
++#define PCIE1_MAC_BASE      (0x1fa92000)
++#define PCIE0_OFF0          (0x0180)
++#define PCIE0_OFF1          (0x8030)
++#define PCIE0_OFF2          (0x0D00)
++#define PCIE0_OFF3          (0x0D04)
++#define PCIE0_OFF4          (0x0D08)
++#define PCIE0_OFF5          (0x0D0C)
++#define PCIE0_OFF6          (0x0D10)
++#define PCIE0_OFF7          (0x0D14)
++#define PCIE0_OFF8          (0x0D18)
++#define PCIE0_OFF9          (0x0D1c)
++#define PCIE1_OFF0          (0x404)
++#define PCIE1_OFF1          (0x408)
++#define PCIE1_OFF2          (0x410)
++#define PCIE1_OFF3          (0x414)
++#define PCIE1_OFF4          (0x418)
++#define PCIE1_OFF5          (0x420)
++#define PCIE1_OFF6          (0x464)
++#define PCIE1_OFF7          (0x468)
++#define PCIE1_OFF8          (0x4e4)
++#define PCIE1_OFF9          (0x51c)
++
++#elif defined(TCSUPPORT_CPU_AN7552) || defined(TCSUPPORT_NPU_V2_S)
++#define PCIE0_MAC_BASE      (0x1fa91000)
++#define PCIE1_MAC_BASE      (0x1fa92000)
++#define PCIE_OFF0           (0x404)
++#define PCIE_OFF1           (0x414)
++#define PCIE_OFF2           (0x464)
++#define PCIE_OFF3           (0x468)
++#define PCIE_OFF4           (0x4e4)
++#define PCIE_OFF5           (0x51c)
++#define REG_PCIE0_BASE      (0x1fa91438)
++#define PCIE_BASE_OFFSET    (0x1000)
++
++#else /*7581*/
++#define PCIE0_MAC_BASE      (0x1fc00000)
++#define PCIE1_MAC_BASE      (0x1fc20000)
++#define PCIE2_MAC_BASE      (0x1fc40000)
++#define PCIE_OFF0           (0x0180)
++#define PCIE_OFF1           (0x8030)
++#define PCIE_OFF2           (0x0D00)
++#define PCIE_OFF3           (0x0D04)
++#define PCIE_OFF4           (0x0D08)
++#define PCIE_OFF5           (0x0D0C)
++#define PCIE_OFF6           (0x0D10)
++#define PCIE_OFF7           (0x0D14)
++#define PCIE_OFF8           (0x0D18)
++#define PCIE_OFF9           (0x0D1c)
++#define PCIE_OFF10          (0x8010)
++#define PCIE_OFF11          (0x8014)
++#define PCIE_OFF12          (0x8018)
++#define PCIE_OFF13          (0x801c)
++#define REG_PCIE0_BASE      (0x1fc00000)
++#define PCIE_CFG0_OFFSET    (0x0140)
++#define PCIE_CFG1_OFFSET    (0x1010)
++#define PCIE_CFG2_OFFSET    (0x1018)
++#define PCIE_CFG3_OFFSET    (0x1020)
++#define PCIE_BASE_OFFSET    (0x20000)
++#endif
++#define MIB_NO_SYNC     (13) /* sync by NPU_MIB13 reg */
++#define NO_PCIE_MAGIC   (100)
++
++#if defined(TCSUPPORT_CPU_AN7583) || defined(TCSUPPORT_NPU_V2_P)
++#define CR_PCIE0_STATUS         (0x1fc20154)
++#define PCIE0_STS_BIT           (8)
++#define CR_PCIE1_STATUS         (0x1fa92804)
++#define PCIE1_STS_BIT           (10)
++#elif defined(TCSUPPORT_CPU_EN7581)
++#define CR_PCIE0_STATUS         (0x1fc00154)
++#define PCIE_STS_OFFSET         (0x20000)
++#define PCIE_STS_BIT            (8)
++#else /* 7523, 7552 */
++#define CR_PCIE0_STATUS         (0x1fa91804)
++#define PCIE_STS_OFFSET         (0x1000)
++#define PCIE_STS_BIT            (10)
++#endif
++
++enum tCases {
++    TEST_NONE=0,
++    TEST_THREAD_Q_FULL, /*1*/
++    TEST_THREAD_Q_OVERFULL,
++    TEST_THREAD_PRIORITY, /*3*/
++    TEST_THREAD_JOIN,
++    TEST_THREAD_CORE1_MASTER, /*5*/
++    TEST_MUTEX_ONE_BLK_TYPE,
++    TEST_MUTEX_TWO_BLK_TYPE,
++    TEST_MUTEX_ONE_REG_TYPE, /*8*/
++    TEST_MUTEX_TWO_REG_TYPE,
++    TEST_MUTEX_ONE_BLK_REG_TYPE, /*10*/
++    TEST_MUTEX_64,
++    TEST_MUTEX_NOT_OWNER_UNLOCK,
++    TEST_MUTEX_TRYLOCK, /*13*/
++    TEST_MUTEX_SIGNAL,
++    TEST_IPC_THREAD_API, /*15*/
++    TEST_IPC_MUTEX_API,
++    TEST_UNC_ACCESS_RAMS,
++    TEST_CAC_ACCESS_RAMS, /*18*/
++    TEST_READ_STARVING,
++    TEST_READ_PERF, /*20*/
++    TEST_PLIC_EL_TRIG,
++    TEST_PLIC_PRIORITY,
++    TEST_PLIC_THRESHOLD, /*23*/
++    TEST_PLIC_ISR_PERF,
++    TEST_MBOX_INTR, /*25*/
++    TEST_MBOX_RW_REGS,
++    TEST_NPU_TIMER,
++    TEST_NPU_WDOG, /*28*/
++    TEST_NPU_CPUTMR,
++    TEST_NPU_RESET, /*30*/
++    TEST_PER_CORE_LOCK,
++    TEST_MULTI_CORE_LOCK,
++    TEST_CORE_ON_OFF, /*33*/
++    TEST_HANG_CORE_CSR,
++    TEST_DEAD_CORE_CSR, /*35*/
++    TEST_EXCEP_CORE_CSR,
++    TEST_PLIC_RESET,
++    TEST_HW_KERN_RESET, /*38*/
++	TEST_HW_KERN_RESET_2,
++	TEST_WT_DRAM_STARVING, /*40*/
++    TEST_HOST_L2C_SRAM,
++    TEST_NPU_AS_DMA,
++    TEST_NPU_DRAM_COHERENCE, /*43*/
++    TEST_NPU_RW_L2C_SRAM,
++	TEST_NPU_BLOCK_CNT, /*45*/
++	TEST_NPU_TZPC_MULTI_ISSUE,
++	TEST_NPU_RBUS_STRESS,
++	TEST_NPU_CPU_ACCESS, /*48*/
++	TEST_NPU_DO_DMA,
++	TEST_NPU_RD_BYPASS_CNT, /*50*/
++	TEST_NPU_RD_BYPASS_STRESS,
++	CMD_NPU_SYS_MEM_RW,
++	TEST_NPU_BUS_READ_LATENCY, /*53*/
++	TEST_NPU_WATCH_POINT,
++	TEST_NPU_VDMA, /*55*/
++	TEST_NPU_PCIE_PBUS_MAPPING,
++	TEST_PLIC_TWO_INTR,
++	TEST_NPU_DBG_CNT, /*58*/
++	TEST_PCIE_RD_WAIT_WT_RESP,
++    TEST_LAST_ITEM /* the last one */
++};
++
++#endif
++
+diff -uNr old/include/linux/soc/airoha/wifi_mail.h new/include/linux/soc/airoha/wifi_mail.h
+--- old/include/linux/soc/airoha/wifi_mail.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/wifi_mail.h	2025-03-25 16:37:37.432936000 +0800
+@@ -0,0 +1,1207 @@
++/***************************************************************
++Copyright Statement:
++
++This software/firmware and related documentation (EcoNet Software) 
++are protected under relevant copyright laws. The information contained herein 
++is confidential and proprietary to EcoNet (HK) Limited (EcoNet) and/or 
++its licensors. Without the prior written permission of EcoNet and/or its licensors, 
++any reproduction, modification, use or disclosure of EcoNet Software, and 
++information contained herein, in whole or in part, shall be strictly prohibited.
++
++EcoNet (HK) Limited  EcoNet. ALL RIGHTS RESERVED.
++
++BY OPENING OR USING THIS FILE, RECEIVER HEREBY UNEQUIVOCALLY 
++ACKNOWLEDGES AND AGREES THAT THE SOFTWARE/FIRMWARE AND ITS 
++DOCUMENTATIONS (ECONET SOFTWARE) RECEIVED FROM ECONET 
++AND/OR ITS REPRESENTATIVES ARE PROVIDED TO RECEIVER ON AN AS IS 
++BASIS ONLY. ECONET EXPRESSLY DISCLAIMS ANY AND ALL WARRANTIES, 
++WHETHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED 
++WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, 
++OR NON-INFRINGEMENT. NOR DOES ECONET PROVIDE ANY WARRANTY 
++WHATSOEVER WITH RESPECT TO THE SOFTWARE OF ANY THIRD PARTIES WHICH 
++MAY BE USED BY, INCORPORATED IN, OR SUPPLIED WITH THE ECONET SOFTWARE. 
++RECEIVER AGREES TO LOOK ONLY TO SUCH THIRD PARTIES FOR ANY AND ALL 
++WARRANTY CLAIMS RELATING THERETO. RECEIVER EXPRESSLY ACKNOWLEDGES 
++THAT IT IS RECEIVERS SOLE RESPONSIBILITY TO OBTAIN FROM ANY THIRD 
++PARTY ALL PROPER LICENSES CONTAINED IN ECONET SOFTWARE.
++
++ECONET SHALL NOT BE RESPONSIBLE FOR ANY ECONET SOFTWARE RELEASES 
++MADE TO RECEIVERS SPECIFICATION OR CONFORMING TO A PARTICULAR 
++STANDARD OR OPEN FORUM. RECEIVER'S SOLE AND EXCLUSIVE REMEDY AND 
++ECONET'S ENTIRE AND CUMULATIVE LIABILITY WITH RESPECT TO THE ECONET 
++SOFTWARE RELEASED HEREUNDER SHALL BE, AT ECONET'S SOLE OPTION, TO 
++REVISE OR REPLACE THE ECONET SOFTWARE AT ISSUE OR REFUND ANY SOFTWARE 
++LICENSE FEES OR SERVICE CHARGES PAID BY RECEIVER TO ECONET FOR SUCH 
++ECONET SOFTWARE.
++***************************************************************/
++#ifndef _WIFI_MAIL_H_
++#define _WIFI_MAIL_H_
++
++
++/************************************************************************
++*                  I N C L U D E S
++*************************************************************************
++*/	
++#include <linux/soc/airoha/wifi_mail_type.h>
++#include <linux/soc/airoha/npuMboxAPI.h>
++#include <linux/dma-mapping.h>
++//#include <ecnt_hook/ecnt_hook_qdma.h>
++#include <linux/netdevice.h>
++
++
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++#include <modules/ra_hwnat/hwnat_mail.h>
++#include <global_inc/ecnt_event_global/ecnt_event_serdes.h>
++#endif
++//extern struct device* get_gdmpSram_dev(void);
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++
++extern struct device* get_ecnt_npu_dev(void);
++extern int host_notify_npuMbox(npuMboxInfo_t *mboxInfo);
++
++/************************************************************************
++*                  D E F I N E S   &   C O N S T A N T S
++*************************************************************************
++*/
++
++//#ifdef TCSUPPORT_WLAN_INODE
++static inline int WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(unsigned int interfaceID, unsigned int dir,
++unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++	int ret = 0;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++
++	/*just only get vaild dev*/
++	if ((dev=get_ecnt_npu_dev())==NULL) {
++		printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++	}
++
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data = (WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_INODE_TXRX_REG_ADDR;
++	in_data->wifi_mail_private.txrx_addr.dir = dir & 0xffffffff;
++	in_data->wifi_mail_private.txrx_addr.inCounterAddr = inCounterAddress & 0xffffffff;
++	in_data->wifi_mail_private.txrx_addr.outStatusAddr = outStatusAddress & 0xffffffff;
++	in_data->wifi_mail_private.txrx_addr.outCounterAddr= outCounterAddress & 0xffffffff;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa & 0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 60000; /* 100ms */
++	mboxInfo.cb = NULL;
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_INODE_TXRX_REG_ADDR;
++	in_data.wifi_mail_private.txrx_addr.dir=dir;
++	in_data.wifi_mail_private.txrx_addr.inCounterAddr = inCounterAddress;
++	in_data.wifi_mail_private.txrx_addr.outStatusAddr =outStatusAddress;
++	in_data.wifi_mail_private.txrx_addr.outCounterAddr=outCounterAddress;
++
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = (unsigned long)(&in_data);
++	mboxInfo.physAddr = virt_to_phys(&in_data);
++	mboxInfo.len = sizeof(in_data);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++	phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR fail! dir:%d %x %x %x\n",
++		dir, inCounterAddress, outStatusAddress, outCounterAddress);
++	return ret;
++}
++
++static inline int WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(unsigned int interfaceID, unsigned int PciePortType)
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++	if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++		printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_PORT_TYPE;
++	in_data->wifi_mail_private.PciePortType = PciePortType;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa &0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv(((unsigned long int)(mboxInfo)), sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++	
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_PORT_TYPE;
++	in_data.wifi_mail_private.PciePortType = PciePortType;
++
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = (unsigned long)(&in_data);
++	mboxInfo.physAddr = virt_to_phys(&in_data);
++	mboxInfo.len = sizeof(in_data);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++	phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE fail! \n");
++	return ret;
++}
++
++
++
++static inline int WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(unsigned int interfaceID, unsigned int dramBaNode_pa)
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	printk("dramBaEntry_pa=%x\n", dramBaNode_pa);
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DRAM_BA_NODE_ADDR;
++	in_data->wifi_mail_private.dramBaNodeAddr = dramBaNode_pa&0xffffffff;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa & 0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++//printk("BA_NODE:in_data.interfaceID=%d,in_data.funcType =%d, in_data.funcId =%d, in_data.wifi_mail_private.dramBaNodeAddr=%lx\n",  in_data->interfaceID, in_data->funcType, in_data->funcId, in_data->wifi_mail_private.dramBaNodeAddr);
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DRAM_BA_NODE_ADDR;
++	in_data.wifi_mail_private.dramBaNodeAddr = dramBaNode_pa;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("%s fail! \n", __func__);
++	return ret;
++}
++
++
++
++/************************************************************************
++*                  D E F I N E S   &   C O N S T A N T S
++*************************************************************************
++*/
++
++static inline int WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(unsigned int interfaceID, unsigned int PCIEAddr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_ADDR;
++	in_data->wifi_mail_private.PCIEAddr = PCIEAddr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++//printk("PCIE:in_data.interfaceID=%d,in_data.funcType =%d, in_data.funcId =%d, in_data.wifi_mail_private.PCIEAddr=%lx\n",  in_data->interfaceID, in_data->funcType, in_data->funcId, in_data->wifi_mail_private.PCIEAddr);
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_ADDR;
++	in_data.wifi_mail_private.PCIEAddr = PCIEAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_PCIE_ADDR fail! \n");
++	return ret;
++}
++
++//#endif //TCSUPPORT_NPU_WIFI_TX
++
++static inline int WIFI_MAIL_API_SET_WAIT_DESC(unsigned int interfaceID, unsigned int desc) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DESC;
++	in_data->wifi_mail_private.desc = desc&0xffffffff;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DESC;
++	in_data.wifi_mail_private.desc = desc;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif	
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk(" WIFI_MAIL_API_SET_WAIT_DESC fail! \n");
++	return ret;
++}
++
++
++//phy addr of pcie of wifi tx ring. It depends on port0 <-> port0 or port1 <-> port0
++static inline int WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(unsigned int interfaceID, unsigned int PCIEAddr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_RING_PCIE_ADDR;
++	in_data->wifi_mail_private.PCIEAddr = PCIEAddr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_RING_PCIE_ADDR;
++	in_data.wifi_mail_private.PCIEAddr = PCIEAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR fail! \n");
++	return ret;
++}
++
++//endif TCSUPPORT_WLAN_INODE
++
++static inline int WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(unsigned int interfaceID, npu_info_t *pnpuInfo)
++{
++	
++	WIFI_MAIL_Data_t* in_data;
++	npuMboxInfo_t mboxInfo;
++	unsigned long pa = 0, va=0;
++	int ret = 0;
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
++	va = (unsigned long)dma_alloc_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)&pa, GFP_KERNEL);
++#else
++	struct device *dev=NULL;
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++	va =  (unsigned long)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++#endif
++	if (!va)  {
++        printk("%s dma_alloc_coherent failed\n", __func__);
++        return ret;
++	}
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = GET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_GET_WAIT_RXDESC_BASE;
++
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va;
++	mboxInfo.physAddr = pa;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++
++	pnpuInfo->info = in_data->wifi_mail_private.npuInfo.info;
++	//printk("WIFI_MAIL_API_GET_WAIT_RXDESC_BASE info=%x\n",pnpuInfo->info);
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0)
++	dma_free_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#endif
++
++	return ret;
++
++mboxAPI_fail_exit: 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) 
++	dma_free_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#endif
++
++	printk("WIFI_MAIL_API_GET_WAIT_RXDESC_BASE fail!\n");
++	return ret;
++}
++
++
++//wifi tx ring's dma buf ring which is for tmac and txp info
++static inline int WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(unsigned int interfaceID, unsigned int phy_base_addr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_SPACE_HW_BASE;
++	in_data->wifi_mail_private.phy_addr = phy_base_addr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_SPACE_HW_BASE;
++	in_data.wifi_mail_private.phy_addr = phy_base_addr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail! \n");
++	return ret;
++}
++
++static inline int WIFI_MAIL_API_SET_WAIT_FLUSHALL_TIMEOUT_OPS(unsigned int interfaceID, unsigned int flushall_timeout)
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return 0;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_FLUSHALL_TIMEOUT;
++	in_data->wifi_mail_private.flushall_timeout = flushall_timeout;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa &0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv(((unsigned long int)(mboxInfo)), sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++	
++#else
++
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_FLUSHALL_TIMEOUT,
++	in_data.wifi_mail_private.flushall_timeout = flushall_timeout;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("%s fail! \n", __func__);
++	return ret;
++}
++
++//send phy addr of wifi rx ring which is task for Tx done event
++static inline int WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(unsigned int interfaceID, unsigned int phy_base_addr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE;
++	in_data->wifi_mail_private.phy_addr = phy_base_addr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE;
++	in_data.wifi_mail_private.phy_addr = phy_base_addr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++	goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE fail! \n");
++	return ret;
++}
++
++static inline int WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(unsigned int interfaceID, unsigned int band0onCpu)
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++	if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++		printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++	}
++
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_NPU_BAND0_ONCPU;
++	in_data->wifi_mail_private.band0OnCpuFlag = band0onCpu;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa & 0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++
++	ret = host_notify_npuMbox(&mboxInfo);
++
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_NPU_BAND0_ONCPU;
++	in_data.wifi_mail_private.band0OnCpuFlag = band0onCpu;
++
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = (unsigned long)(&in_data);
++	mboxInfo.physAddr = virt_to_phys(&in_data);
++	mboxInfo.len = sizeof(in_data);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++	phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("%s fail! \n", __func__);
++	return ret;
++}
++
++static inline int WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(unsigned int interfaceID, phys_addr_t npuPktBufAddr)
++{
++	//printk("npuPktBufAddr=%x\n", npuPktBufAddr);
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PKT_BUF_ADDR;
++	in_data->wifi_mail_private.npuPktBufAddr = npuPktBufAddr & 0xffffffff;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa &0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++
++	ret = host_notify_npuMbox(&mboxInfo);
++
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_PKT_BUF_ADDR;
++	in_data.wifi_mail_private.npuPktBufAddr = npuPktBufAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("%s fail! \n", __func__);
++	return ret;
++}
++
++
++
++//#ifdef TCSUPPORT_NPU_WIFI_TX
++//for lan->wifi case, sending address of buffer pool which is for slow path and qdma rx
++static inline int WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(unsigned int interfaceID, phys_addr_t npuPktBufAddr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_PKT_BUF_ADDR;
++	in_data->wifi_mail_private.npuPktBufAddr = npuPktBufAddr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_PKT_BUF_ADDR;
++	in_data.wifi_mail_private.npuPktBufAddr = npuPktBufAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR fail! \n");
++	return ret;
++}
++
++static inline int WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(unsigned int interfaceID, unsigned int isForceToCpu)
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++#ifdef TCSUPPORT_NPU_V2
++	struct WIFI_MAIL_Data *in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	
++	printk("isForceToCpu=%x\n", isForceToCpu);
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_IS_FORCE_TO_CPU;
++	in_data->wifi_mail_private.isForceToCpu_flag = isForceToCpu;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa & 0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++
++	ret = host_notify_npuMbox(&mboxInfo);
++
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_IS_FORCE_TO_CPU;
++	in_data.wifi_mail_private.isForceToCpu_flag = isForceToCpu;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++	
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++	
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("%s fail! \n", __func__);
++	return ret;
++}
++
++
++#endif
++
+diff -uNr old/include/linux/soc/airoha/wifi_mail_type.h new/include/linux/soc/airoha/wifi_mail_type.h
+--- old/include/linux/soc/airoha/wifi_mail_type.h	1970-01-01 08:00:00.000000000 +0800
++++ new/include/linux/soc/airoha/wifi_mail_type.h	2025-03-21 17:53:23.953068000 +0800
+@@ -0,0 +1,290 @@
++/***************************************************************
++Copyright Statement:
++
++This software/firmware and related documentation (EcoNet Software) 
++are protected under relevant copyright laws. The information contained herein 
++is confidential and proprietary to EcoNet (HK) Limited (EcoNet) and/or 
++its licensors. Without the prior written permission of EcoNet and/or its licensors, 
++any reproduction, modification, use or disclosure of EcoNet Software, and 
++information contained herein, in whole or in part, shall be strictly prohibited.
++
++EcoNet (HK) Limited  EcoNet. ALL RIGHTS RESERVED.
++
++BY OPENING OR USING THIS FILE, RECEIVER HEREBY UNEQUIVOCALLY 
++ACKNOWLEDGES AND AGREES THAT THE SOFTWARE/FIRMWARE AND ITS 
++DOCUMENTATIONS (ECONET SOFTWARE) RECEIVED FROM ECONET 
++AND/OR ITS REPRESENTATIVES ARE PROVIDED TO RECEIVER ON AN AS IS 
++BASIS ONLY. ECONET EXPRESSLY DISCLAIMS ANY AND ALL WARRANTIES, 
++WHETHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED 
++WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, 
++OR NON-INFRINGEMENT. NOR DOES ECONET PROVIDE ANY WARRANTY 
++WHATSOEVER WITH RESPECT TO THE SOFTWARE OF ANY THIRD PARTIES WHICH 
++MAY BE USED BY, INCORPORATED IN, OR SUPPLIED WITH THE ECONET SOFTWARE. 
++RECEIVER AGREES TO LOOK ONLY TO SUCH THIRD PARTIES FOR ANY AND ALL 
++WARRANTY CLAIMS RELATING THERETO. RECEIVER EXPRESSLY ACKNOWLEDGES 
++THAT IT IS RECEIVERS SOLE RESPONSIBILITY TO OBTAIN FROM ANY THIRD 
++PARTY ALL PROPER LICENSES CONTAINED IN ECONET SOFTWARE.
++
++ECONET SHALL NOT BE RESPONSIBLE FOR ANY ECONET SOFTWARE RELEASES 
++MADE TO RECEIVERS SPECIFICATION OR CONFORMING TO A PARTICULAR 
++STANDARD OR OPEN FORUM. RECEIVER'S SOLE AND EXCLUSIVE REMEDY AND 
++ECONET'S ENTIRE AND CUMULATIVE LIABILITY WITH RESPECT TO THE ECONET 
++SOFTWARE RELEASED HEREUNDER SHALL BE, AT ECONET'S SOLE OPTION, TO 
++REVISE OR REPLACE THE ECONET SOFTWARE AT ISSUE OR REFUND ANY SOFTWARE 
++LICENSE FEES OR SERVICE CHARGES PAID BY RECEIVER TO ECONET FOR SUCH 
++ECONET SOFTWARE.
++***************************************************************/
++#ifndef WIFI_MAIL_TYPE_H_
++#define WIFI_MAIL_TYPE_H_
++
++#include <linux/version.h>
++
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++#include <ecnt_event_global/ecnt_event_bootargs_serdes.h>
++#endif
++/************************************************************************
++*                  D E F I N E S   &   C O N S T A N T S
++*************************************************************************
++*/
++#ifndef NULL
++	#define NULL	0
++#endif
++
++#define INTERFACE_2G 0
++#define INTERFACE_5G 1
++
++#define NPU_MAILBOX_ERROR 0
++#define NPU_MAILBOX_SUCCESS 1
++#define MAX_SSID_PER_BAND 8
++
++#define MAX_PER_ENTRY 128
++	
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++	
++typedef enum {
++	WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_ADDR = 0,
++	WIFI_MAIL_FUNCTION_SET_WAIT_DESC,
++	WIFI_MAIL_FUNCTION_SET_WAIT_NPU_INIT_DONE,
++	WIFI_MAIL_FUNCTION_SET_WAIT_TRAN_TO_CPU,
++	WIFI_MAIL_FUNCTION_SET_WAIT_BA_WIN_SIZE,
++	WIFI_MAIL_FUNCTION_SET_WAIT_DRIVER_MODEL,
++	WIFI_MAIL_FUNCTION_SET_WAIT_DEL_STA,
++	WIFI_MAIL_FUNCTION_SET_WAIT_DRAM_BA_NODE_ADDR,
++	WIFI_MAIL_FUNCTION_SET_WAIT_PKT_BUF_ADDR,
++	WIFI_MAIL_FUNCTION_SET_WAIT_IS_TEST_NOBA,
++	WIFI_MAIL_FUNCTION_SET_WAIT_FLUSHONE_TIMEOUT,
++	WIFI_MAIL_FUNCTION_SET_WAIT_FLUSHALL_TIMEOUT,	
++	WIFI_MAIL_FUNCTION_SET_WAIT_IS_FORCE_TO_CPU,
++	WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_STATE,		
++	WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_PORT_TYPE,	
++	WIFI_MAIL_FUNCTION_SET_WAIT_ERROR_RETRY_TIMES,	
++	WIFI_MAIL_FUNCTION_SET_WAIT_BAR_INFO,
++	WIFI_MAIL_FUNCTION_SET_WAIT_FAST_FLAG,
++	WIFI_MAIL_FUNCTION_SET_WAIT_NPU_BAND0_ONCPU,
++	WIFI_MAIL_FUNCTION_SET_WAIT_TX_RING_PCIE_ADDR,		//TCSUPPORT_NPU_WIFI_TX
++	WIFI_MAIL_FUNCTION_SET_WAIT_TX_DESC_HW_BASE,		//TCSUPPORT_NPU_WIFI_TX
++	WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_SPACE_HW_BASE,	//TCSUPPORT_NPU_WIFI_TX
++	WIFI_MAIL_FUNCTION_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE,	//TCSUPPORT_NPU_WIFI_TX
++	WIFI_MAIL_FUNCTION_SET_WAIT_TX_PKT_BUF_ADDR,		//TCSUPPORT_NPU_WIFI_TX
++	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_TXRX_REG_ADDR,	//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_DEBUG_FLAG,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_HW_CFG_INFO,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_STOP_ACTION,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_PCIE_SWAP,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_SET_WAIT_RATELIMIT_CTRL,
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++	WIFI_MAIL_FUNCTION_SET_WAIT_HWNAT_INIT,
++	WIFI_MAIL_FUNCTION_SET_WAIT_ARHT_CHIP_INFO,
++#endif
++	WIFI_MAIL_FUNCTION_SET_WAIT_MAX_NUM
++} WIFI_MAIL_Set_Wait_Func_t;
++
++typedef enum {
++	WIFI_MAIL_FUNCTION_SET_NO_WAIT_BASE = 0,
++
++	WIFI_MAIL_FUNCTION_SET_NO_WAIT_MAX_NUM
++} WIFI_MAIL_Set_noWait_Func_t;
++
++typedef enum {
++	WIFI_MAIL_FUNCTION_GET_WAIT_NPU_INFO=0,
++	WIFI_MAIL_FUNCTION_GET_WAIT_LAST_RATE,
++	WIFI_MAIL_FUNCTION_GET_WAIT_COUNTER,
++	WIFI_MAIL_FUNCTION_GET_WAIT_DBG_COUNTER,
++	WIFI_MAIL_FUNCTION_GET_WAIT_RXDESC_BASE,
++	WIFI_MAIL_FUNCTION_GET_WAIT_WCID_DBG_COUNTER,
++	WIFI_MAIL_FUNCTION_GET_WAIT_DMA_ADDR,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_GET_WAIT_RING_SIZE,		//TCSUPPORT_WLAN_INODE
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++	WIFI_MAIL_FUNCTION_GET_WAIT_MDC_LOCK_ADDRESS,
++#endif
++	WIFI_MAIL_FUNCTION_GET_WAIT_MAX_NUM
++} WIFI_MAIL_Get_Wait_Func_t;
++
++typedef enum {
++	WIFI_MAIL_FUNCTION_GET_NO_WAIT_BASE = 0,
++
++	WIFI_MAIL_FUNCTION_GET_NO_WAIT_MAX_NUM
++} WIFI_MAIL_Get_noWait_Func_t;
++
++typedef enum {
++	SET_WAIT = 1,
++	SET_NO_WAIT,
++	GET_WAIT,
++	GET_NO_WAIT,
++
++	OP_MAX_NUM 
++} WIFI_MAIL_FuncType_t;
++
++typedef struct npu_info {
++	unsigned int info;
++}npu_info_t;
++
++typedef struct last_rate {
++	unsigned int perSta;
++	unsigned int total;
++}last_rate_t;
++
++typedef struct counter {
++	unsigned int txCount;
++
++	unsigned long long rxCount2G[MAX_SSID_PER_BAND];
++	unsigned long long rxCount5G[MAX_SSID_PER_BAND];
++	unsigned long long rxByteCount2G[MAX_SSID_PER_BAND];
++	unsigned long long rxByteCount5G[MAX_SSID_PER_BAND];	
++	unsigned char omacIdx5G[MAX_SSID_PER_BAND];
++	unsigned char omacIdx2G[MAX_SSID_PER_BAND]; 
++	unsigned long long rxApcliCount2G;
++	unsigned long long rxApcliCount5G;
++	unsigned long long rxApcliByteCount2G;
++	unsigned long long rxApcliByteCount5G;
++    unsigned long long rx_pkts_entry[2][MAX_PER_ENTRY];	
++	unsigned long long rx_bytes_entry[2][MAX_PER_ENTRY];
++
++//	unsigned int rxCount;
++
++}counter_t;
++
++typedef struct ratelimit_ctrl {
++	unsigned int band_idx;
++	unsigned int bssid_idx;
++	unsigned int ctrl;
++}ratelimit_ctrl_t;
++
++typedef struct dbg_counter {
++	unsigned int errCount;
++}dbg_counter_t;
++
++typedef struct inode_txrx_addr{
++	unsigned int dir;
++	unsigned int inCounterAddr;
++	unsigned int outStatusAddr;
++	unsigned int outCounterAddr;
++}inode_txrx_addr_t;
++
++typedef struct inode_cfg_info{
++	unsigned char  ep_mask;
++	unsigned char  vap_mask;
++}inode_cfg_info_t;
++
++typedef enum {
++	MT7915_A = 0,
++	MT7915_D,	
++	MT7916_D,
++	D_BOTTOM_
++} _DriverModel_t;
++
++typedef enum {
++	P0 = 0,
++	P1,
++	P0_P0,
++	P0_P1
++} _PortType_t;
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++typedef struct hwnat_init_variable {
++	unsigned char tcsupport_cds_val;
++	unsigned char tcsupport_xpon_hal_api_ng_val;
++	unsigned char tcsupport_wan_xsi_val;
++	unsigned char tcsupport_ct_joyme4_val;
++	int gPpeType;
++	int g_wan_mode;
++	int ae_wan_sel;
++} hwnat_init_variable_t;
++
++typedef struct arht_chip_info{
++	int serdes_cfg[SERDES_PORT_CNT];
++	int mdc_address_base;
++	int phy_tx_gpio;
++}arht_chip_info_t;
++#endif
++
++typedef struct WIFI_MAIL_Data {
++	unsigned int interfaceID:4;
++	unsigned int funcType:4;
++	unsigned int funcId;
++	union {
++		unsigned int PCIEAddr;
++		unsigned int desc;
++		unsigned int npuInitDone;
++		unsigned int tran2cpu;
++		unsigned int BAWinSize;
++	        unsigned int BARINFO;
++		unsigned int DriverModel;
++		unsigned int dramBaNodeAddr;
++		npu_info_t npuInfo;
++		last_rate_t lastRate;
++		counter_t count;
++		ratelimit_ctrl_t rate_limit_ctrl;
++		dbg_counter_t dbgCount;		
++		unsigned int wcid;
++		unsigned int isForceToCpu_flag;
++		unsigned int band0OnCpuFlag;
++		phys_addr_t npuPktBufAddr;
++		unsigned int isforTestNoBaFlag;
++		unsigned int flushone_timeout;
++		unsigned int flushall_timeout;		
++		unsigned char fastFlag;
++		unsigned int PciePortType;
++		unsigned int retryTimes;
++//#ifdef TCSUPPORT_NPU_WIFI_TX
++		unsigned int phy_addr;
++//#endif
++//#ifdef TCSUPPORT_WLAN_INODE //i-one only but do not use compile flag
++		inode_txrx_addr_t txrx_addr;
++		inode_cfg_info_t cfg_info;
++		unsigned int dir;
++		unsigned int dma_addr;
++//#endif
++#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++		hwnat_init_variable_t hwnat_init_var;
++		arht_chip_info_t arht_chip_info;
++#endif
++	} wifi_mail_private;
++}WIFI_MAIL_Data_t;
++
++
++#endif 
++
++

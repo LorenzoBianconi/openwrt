@@ -1,0 +1,1284 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -18,6 +18,7 @@
+ #include "airoha_eth.h"
+ #include "airoha_npu.h"
+ #include "hostadpt.h"
++#include "npu_rv32.h"
+ 
+ #define NPU_EN7581_FIRMWARE_DATA		"airoha/en7581_npu_data.bin"
+ #define NPU_EN7581_FIRMWARE_RV32		"airoha/en7581_npu_rv32.bin"
+@@ -433,19 +434,6 @@ error_pdev_put:
+ }
+ EXPORT_SYMBOL_GPL(airoha_npu_get);
+ 
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-bool arht_wifi_npu_active(void)
+-{
+-	return true;
+-}
+-#else
+-bool arht_wifi_npu_active(void)
+-{
+-	return false;
+-}
+-#endif
+-EXPORT_SYMBOL_GPL(arht_wifi_npu_active);
+-
+ void airoha_npu_put(struct airoha_npu *npu)
+ {
+ 	module_put(THIS_MODULE);
+@@ -466,582 +454,9 @@ static const struct regmap_config regmap
+ 	.reg_stride		= 4,
+ 	.disable_locking	= true,
+ };
+-
+-/**** wifi support ****/
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-
+-#define NPU_384K_SRAM_BASE      (0x000000)  /*phys:0x1e800000*/
+-#define NPU_64K_SRAM_BASE       (0x000000)  /*phys:0x1e900000*/
+-#ifdef TCSUPPORT_NPU_V2
+-#define NPU_DEBUG_BASE          (0x305000)  /*phys:0x1eC05000*/
+-#define NPU_CLUSTER_BASE        (0x306000)  /*phys:0x1eC06000*/
+-#define CR_PC_BASE_ADDR	        (NPU_DEBUG_BASE)
+-#else
+-#define NPU_CLUSTER_BASE        (0x308000)  /*phys:0x1eC08000*/
+-#define CR_PC_BASE_ADDR	        (NPU_CLUSTER_BASE+0x800)
+-#endif
+-#define CR_CORE_BOOT_TRIGGER    (NPU_CLUSTER_BASE+0x000)
+-#define CR_CORE_BOOT_CONFIG     (NPU_CLUSTER_BASE+0x004)
+-#define CR_CORE_BOOT_BASE       (NPU_CLUSTER_BASE+0x020)
+-
+-#define NPU_MBOX_BASE           (0x30C000)  /*phys:0x1eC0C000*/
+-#define CR_MBOX_INTR_STATUS     (NPU_MBOX_BASE+0x0)
+-#define CR_MBOX_INT_MASK0       (NPU_MBOX_BASE+0x004)
+-#define CR_MBOX_INT_MASK8       (NPU_MBOX_BASE+0x024)
+-#define CR_MBQ0_CTRL0           (NPU_MBOX_BASE+0x030)
+-#define CR_MBQ0_CTRL1           (NPU_MBOX_BASE+0x034)
+-#define CR_MBQ0_CTRL2           (NPU_MBOX_BASE+0x038)
+-#define CR_MBQ0_CTRL3           (NPU_MBOX_BASE+0x03C)
+-#define CR_MBQ8_CTRL0           (NPU_MBOX_BASE+0x0b0)
+-#define CR_MBQ8_CTRL1           (NPU_MBOX_BASE+0x0b4)
+-#define CR_MBQ8_CTRL2           (NPU_MBOX_BASE+0x0b8)
+-#define CR_MBQ8_CTRL3           (NPU_MBOX_BASE+0x0bC)
+-#define CR_NPU_MIB0             (NPU_MBOX_BASE+0x140)
+-#define CR_NPU_MIB8             (NPU_MBOX_BASE+0x160)
+-#define CR_NPU_MIB9             (NPU_MBOX_BASE+0x164)
+-#define CR_NPU_MIB10            (NPU_MBOX_BASE+0x168)
+-#define CR_NPU_MIB11            (NPU_MBOX_BASE+0x16C)
+-#define CR_NPU_MIB12            (NPU_MBOX_BASE+0x170)
+-#define CR_NPU_MIB13            (NPU_MBOX_BASE+0x174)
+-#define CR_NPU_MIB14            (NPU_MBOX_BASE+0x178)
+-#define CR_NPU_MIB15            (NPU_MBOX_BASE+0x17C)
+-#define CR_NPU_MIB16            (NPU_MBOX_BASE+0x180)
+-#define CR_NPU_MIB19            (NPU_MBOX_BASE+0x18C)
+-#define CR_NPU_MIB20            (NPU_MBOX_BASE+0x190)
+-#define CR_NPU_MIB21            (NPU_MBOX_BASE+0x194)
+-
+-#define NPU_RBUS_BASE           (0x30E000)  /*phys:0x1eC0E000*/
+-#define CR_NPU_RBUS_DECODER     (NPU_RBUS_BASE+0x1200)
+-
+-#define NPU_UART_BASE           (0x310000)  /*phys:0x1eC10000*/
+-#define NPU_TIME0_BASE          (0x310100)  /*phys:0x1eC10100*/
+-#define NPU_TIME1_BASE          (0x310200)  /*phys:0x1eC10200*/
+-
+-#define NPU_SCU_BASE            (0x311000)  /*phys:0x1eC11000*/
+-
+-#ifdef TCSUPPORT_NPU_V2
+-#if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P) /*7552*/
+-#define TMR_EN_BITS     (0x1e0001ef) /* keep enable_bits (4 cntTimers + 4 wdogTimers) */
+-#else /*7581*/
+-#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
+-#endif
+-#define CSR_REG_NUM     (3)
+-#else /*7523*/
+-#define CSR_REG_NUM     (12)
+-#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
+-#endif
+-
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-#define NPU_HOSTADAPTER_BASE    (0x30D000)  /*phys:0x1eC0D000*/
+-u32 npu_pkt_buf_addr;
+-u32 npu_ba_node_addr;
+-// u32 npu_tdma_tx_pkt_buf_addr; //when TDMA tx is used with DRAM, need this var
+-#ifdef TCSUPPORT_NPU_WIFI_TX
+-u32 npu_tx_pkt_buf_addr;
+-#endif
+-#endif
+-
+-int wdog_intr_bit[] = {21,22,23,24,21,22};
+-int wdog_en_bit[] = {25,26,27,28,25,26};
+-u32 npu_pkt_buf_addr;
+-u32 npu_ba_node_addr;
+-u32 npu_tx_pkt_buf_addr;
+-
+-
+-typedef struct npuMboxObj
+-{
+-    unsigned long virtAddr[MAX_MBOX_FUNC];
+-    unsigned int physAddr[MAX_MBOX_FUNC];
+-    unsigned short size[MAX_MBOX_FUNC];
+-    h_mbox_cb_t mbox8_cb[MAX_MBOX_FUNC];
+-    spinlock_t npuMboxLock;
+-    spinlock_t mboxBuffLock;
+-
+-} npuMboxObj_t;
+-
+-static npuMboxObj_t mboxObj[MAX_CORE_NUM];
+-static struct tasklet_struct mbox_tasklet;
+-typedef void (*isr_cb_t)(void);
+-isr_cb_t mbox2host_cb=NULL;
+-
+-struct airoha_npu *npu_glb;
+-struct device* get_ecnt_npu_dev(void)
+-{
+-    if ((npu_glb) && (npu_glb->dev))
+-        return npu_glb->dev;
+-    else
+-        return NULL;
+-}
+-EXPORT_SYMBOL(get_ecnt_npu_dev);
+-static void host_register_mbox_cb(npuCoreId_t core_id, npuMboxFuncId_t func_id, h_mbox_cb_t cb)
+-{   
+-    if ((core_id>=MAX_CORE_NUM) || (func_id>=MAX_MBOX_FUNC)) {
+-        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", core_id, MAX_CORE_NUM, func_id, MAX_MBOX_FUNC);
+-        return;
+-    }
+-    #ifdef MBOX_DBG_ON
+-    printk("%s: core_id:%d, func_id:%d, cb:%p\n", __func__, core_id, func_id, cb);
+-    #endif
+-    mboxObj[core_id].mbox8_cb[func_id] = cb;
+-    return;
+-}
+-
+-char *wdog_name[8] = {"npu_wdog0","npu_wdog1","npu_wdog2","npu_wdog3","npu_wdog4","npu_wdog5","npu_wdog6","npu_wdog7"};
+-
+-unsigned char isNpuBand0OnCpu = 0;
+-
+-// Reserve 16M block to save packet, and the address will be got after npu bring up.
+-
+-void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr)
+-{
+-    npu_tx_pkt_buf_addr = pkt_buf_addr;
+-    printk("[%s]npu_tx_pkt_buf_addr=%x:%x\n", __func__, npu_tx_pkt_buf_addr, pkt_buf_addr);
+-    return;
+-}
+-u32 npu_wifi_offload_get_tx_pkt_buf_addr(void)
+-{
+-    printk("[%s]npu_tx_pkt_buf_addr=%x\n", __func__, npu_tx_pkt_buf_addr);
+-    return npu_tx_pkt_buf_addr;
+-}
+-
+-EXPORT_SYMBOL(npu_wifi_offload_get_tx_pkt_buf_addr);
+-
+-void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr)
+-{
+-	npu_ba_node_addr = ba_node_addr;
+-	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
+-	return;
+-	
+-}
+-u32 npu_wifi_offload_get_ba_node_addr(void)
+-{
+-	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
+-	return npu_ba_node_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_wifi_offload_get_ba_node_addr);
+-
+-// Reserve 16M block to save packet, and the address will be got after npu bring up.
+-void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr)
+-{
+-	npu_pkt_buf_addr = pkt_buf_addr;
+-	return;
+-	
+-}
+-u32 npu_wifi_offload_get_pkt_buf_addr(void)
+-{
+-	return npu_pkt_buf_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_wifi_offload_get_pkt_buf_addr);
+-
+-
+-char npu_wifi_offload_get_force_to_cpu_flag(void)
+-{
+-#if 0
+-#if defined(TCSUPPORT_RA_HWNAT) && defined(TCSUPPORT_HWNAT_V3)
+-	return forceToCpu;
+-#else
+-	return 1;
+-#endif
+-#endif
+-	return 1;
+-}
+-static u32 get_npu_reg_data(u32 reg)
+-{
+-	return readl(npu_glb->Regbase + reg);
+-}
+-u32 get_npu_dbg_csr(int core, const unsigned int csr_ofs)
+-{
+-    return get_npu_reg_data((CR_PC_BASE_ADDR+(core<<8))+csr_ofs);
+-}
+-/* don't EXPORT this function. Create API for your purpose instead. */
+-static void set_npu_reg_data(u32 reg, u32 val)
+-{
+-	writel(val, npu_glb->Regbase + reg);
+-}
+-
+-u32 get_npu_hostadpt_reg(int hadap_ofs)
+-{
+-     return get_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs);
+-}
+-EXPORT_SYMBOL(get_npu_hostadpt_reg);
+-
+-u32 set_npu_hostadpt_reg(int hadap_ofs,int val)
+-{
+-     set_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs,val);
+-     return 0;
+-}
+-EXPORT_SYMBOL(set_npu_hostadpt_reg);
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-int get_npu_irq(int index)
+-{
+-    if( index < NPU_INT_MAX_NUM )
+-        return npu_glb->irq[index];
+-    else
+-        printk("\n get_npu_irq error, index=%d\n", index);
+-    return 0;
+-}
+-EXPORT_SYMBOL(get_npu_irq);
+-
+-int host_notify_npuMbox(npuMboxInfo_t *mboxInfo)
+-{
+-    int reg_shift;
+-    mboxArg_t arg;
+-    int res=0;
+-    int timeoutCnt=300; /* default 30ms */
+-    unsigned long flag;
+-#if 1 //mail box DBG
+-#define NPU_SAVE_LOG_TIME 256
+-    unsigned int npu_pc_log[NPU_SAVE_LOG_TIME];
+-    int i;
+-#endif
+-
+-    if ((mboxInfo->core_id>=MAX_CORE_NUM) || (mboxInfo->func_id>=MAX_MBOX_FUNC)) {
+-        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", 
+-                mboxInfo->core_id, MAX_CORE_NUM, mboxInfo->func_id, MAX_MBOX_FUNC);
+-        return 0;
+-    }
+-
+-    arg.hWord=0;
+-
+-    if ((mboxInfo->flags.isStaticBuffInit)||(mboxInfo->flags.isStaticBuffDel)) {
+-        arg.bits.static_buff=1;
+-    }
+-
+-    if (mboxInfo->flags.isBlockingMode) {
+-        if (mboxInfo->blockTimeout)
+-            timeoutCnt = mboxInfo->blockTimeout;
+-        arg.bits.block_mode=1;
+-    }
+-
+-    spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-	
+-    host_register_mbox_cb(mboxInfo->core_id, mboxInfo->func_id, mboxInfo->cb);
+-
+-    arg.bits.func_id= (mboxInfo->func_id&MASK_FUNC_ID);
+-    reg_shift = (mboxInfo->core_id<<4);
+-    if (((mboxInfo->virtAddr)&&(mboxInfo->physAddr)&&(mboxInfo->len)) ||
+-        (mboxInfo->flags.isStaticBuffDel)) {
+-        mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id] = mboxInfo->virtAddr;
+-        mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id] = mboxInfo->physAddr;
+-        mboxObj[mboxInfo->core_id].size[mboxInfo->func_id] = mboxInfo->len;
+-    }
+-    else {
+-        if (mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id]==0) {
+-            printk("Error(%s): no default (virtAddr,physAddr,len), please assign them!\n", __func__);
+-            spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-			return 0;
+-        }
+-    }
+-
+-    //spin_lock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
+-    //spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-
+-    #ifdef MBOX_DBG_ON
+-    printk("%s: core_id:%d, func_id:%d, arg:0x%x, timeoutCnt:%d\n", 
+-            __func__, mboxInfo->core_id, mboxInfo->func_id, arg.hWord, timeoutCnt);
+-    #endif
+-    set_npu_reg_data(CR_MBQ0_CTRL0+reg_shift, mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id]);
+-    set_npu_reg_data(CR_MBQ0_CTRL1+reg_shift, mboxObj[mboxInfo->core_id].size[mboxInfo->func_id]);
+-    set_npu_reg_data(CR_MBQ0_CTRL3+reg_shift, arg.hWord);
+-    set_npu_reg_data(CR_MBQ0_CTRL2+reg_shift, get_npu_reg_data(CR_MBQ0_CTRL2+reg_shift)+1);
+-
+-#if 1 //mail box DBG
+-    for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
+-        npu_pc_log[i] = 0;
+-    }
+-    i = 0;
+-#endif
+-    while (1) 
+-    {
+-        arg.hWord = get_npu_reg_data(CR_MBQ0_CTRL3+reg_shift);
+-        if (arg.bits.done_bit==1) {
+-            res = (arg.bits.ret_status&MASK_RET_STATUS);
+-            break;
+-        }
+-        
+-        #if 1 //mail box DBG
+-        if((timeoutCnt & 0x3) == 0)
+-        {
+-            if(i < NPU_SAVE_LOG_TIME) {
+-                npu_pc_log[i] = get_npu_reg_data(CR_PC_BASE_ADDR);
+-                i++;
+-            }
+-
+-        }
+-        #endif
+-
+-        timeoutCnt--;
+-        if (timeoutCnt>=0){
+-            if((CORE5 == mboxInfo->core_id) && (MFUNC_DBA == mboxInfo->func_id)){
+-                udelay(40);
+-            }else{
+-                udelay(100);
+-            }
+-		}
+-        else {
+-            #if 1 //mail box DBG
+-            printk("dump NPU pc\n");
+-            for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
+-                printk("0x%x ", npu_pc_log[i]);
+-                if((i & 0x3) == 0x3)
+-                    printk("\n");
+-            }
+-            #endif
+-            printk("Error: %s timeout for core_id:%d, func_id:%d\n", __func__, mboxInfo->core_id, mboxInfo->func_id);
+-            break;
+-        }
+-    }
+-    #ifdef MBOX_DBG_ON
+-    printk("%s exit (res:%d, timeoutCnt:%d)\n", __func__, res, timeoutCnt);
+-    #endif
+-
+-    //spin_unlock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
+-    spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-    
+-    return res;
+-}
+-EXPORT_SYMBOL(host_notify_npuMbox);
+-static void mbox_tasklet_handler(unsigned long data)
+-{
+-    unsigned short core_id = get_npu_reg_data(CR_MBQ8_CTRL0)&MASK_CORE_ID;
+-    unsigned short func_id;
+-    unsigned short len = get_npu_reg_data(CR_MBQ8_CTRL1);
+-    int status=0;
+-    mboxArg_t arg;
+-    
+-    arg.hWord = get_npu_reg_data(CR_MBQ8_CTRL3);
+-    func_id = arg.bits.func_id;
+-
+-    #ifdef MBOX_DBG_ON
+-    printk("%s: core_id:%d, func_id:%d, arg:0x%x\n", __func__, core_id, func_id, arg.hWord);
+-    #endif
+-
+-    spin_lock(&mboxObj[core_id].mboxBuffLock);
+-    
+-    if(mboxObj[core_id].mbox8_cb[func_id]) {
+-        status = mboxObj[core_id].mbox8_cb[func_id] (mboxObj[core_id].virtAddr[func_id], len);
+-    }
+-    
+-    spin_unlock(&mboxObj[core_id].mboxBuffLock);
+-
+-    arg.bits.ret_status=(status&MASK_RET_STATUS);
+-    arg.bits.done_bit=1;
+-
+-    /* let NPU know that host has done */
+-    set_npu_reg_data(CR_MBQ8_CTRL3, arg.hWord);
+-    
+-    return;
+-}
+-
+-static irqreturn_t npuMbox2host_isr(int irq, void *dev_id)
+-{
+-
+-    if (mbox2host_cb) {
+-        mbox2host_cb();
+-    }
+-    else {
+-    	/* clear mbox8 interrupt */
+-        set_npu_reg_data(CR_MBOX_INTR_STATUS, 1<<MBOX2HOST_IDX);
+-
+-    	tasklet_schedule(&mbox_tasklet);
+-    }
+-	return IRQ_HANDLED;
+-}
+-
+-void host_dump_npu_csr(int core)
+-{
+-    #ifdef TCSUPPORT_NPU_V2
+-    const char * CSR_NAME[] = {"PC", "SP", "LR"};
+-	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8};
+-    #else
+-	const char * CSR_NAME[] = {"PC", "SP", "LR", "Cyc_Cnt[31:0]" ,"Cyc_Cnt[63:32]" ,"Ins_Cnt[31:0]", 
+-												"Ins_Cnt[63:32]", "MTVAL", "MCAUSE", "MEPC", "MSTATUS", "MICAUSE"};
+-	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30};
+-    #endif
+-	unsigned int tmpVal;
+-	int i;
+-
+-
+-	printk("\n[H]Dump NPU core %d CSR START\n", core);
+-	for (i = 0; i < CSR_REG_NUM; i++) {
+-        tmpVal = get_npu_dbg_csr(core, csr_ofs[i]);
+-		printk("%-15s<0x%x>\n", CSR_NAME[i], tmpVal);
+-	}
+-	printk("[H]Dump CSR END\n\n");
+-	
+-	return;
+-}
+-EXPORT_SYMBOL(host_dump_npu_csr);
+-
+-#if 0
+-static int is_npu_wdog_enabled(int wdog_no)
+-{
+-    unsigned int WDOG_CTRL_REG, shift;
+-    
+-    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
+-    WDOG_CTRL_REG = NPU_TIME0_BASE;
+-    shift = wdog_en_bit[wdog_no];
+-    #else
+-	WDOG_CTRL_REG = NPU_TIME0_BASE+(wdog_no<<8);
+-    shift = wdog_en_bit[0];
+-    #endif
+-
+-	if (wdog_no >3)
+-	{
+-    	WDOG_CTRL_REG = NPU_TIME1_BASE;
+-    	shift = wdog_en_bit[wdog_no];	
+-	}
+-    return ((get_npu_reg_data(WDOG_CTRL_REG)>>shift)&0x1);
+-}
+-static void host_clear_npu_wdog_intr(int wdog_no)
+-{
+-    unsigned int WDOG_CTRL_REG, val;
+-    
+-    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
+-    WDOG_CTRL_REG = NPU_TIME0_BASE;
+-    #else
+-	WDOG_CTRL_REG = NPU_TIME0_BASE+(wdog_no<<8);
+-    #endif
+-	if (wdog_no>3)
+-		WDOG_CTRL_REG =NPU_TIME1_BASE;
+-    val = get_npu_reg_data(WDOG_CTRL_REG);
+-    val &= TMR_EN_BITS; /* keep enable_bits */
+-    /* add wdog_intr_bit to clear wdog threshold interrupt */
+-    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
+-    val |= (1<<wdog_intr_bit[wdog_no]);
+-    #else
+-    val |= (1<<wdog_intr_bit[0]);
+-    #endif
+-    set_npu_reg_data(WDOG_CTRL_REG, val); /* clear timer source and keep timer enabled */
+-
+-    return;
+-}
+-
+-static irqreturn_t npu_wdog_isr(int irq, void *dev_id)
+-{
+-	int wdog_no;
+-    //unsigned int WDOG_CTRL_REG, val;
+-    
+-
+-    for (wdog_no=0; wdog_no<NPU_NUM_CORES; wdog_no++) {
+-        if (irq==npu_glb->wdog_irq[wdog_no])
+-            break;
+-    }
+-    
+-    if (wdog_no<NPU_NUM_CORES) {
+-
+-        #if defined(NPU_TEST_CODE)
+-        if (host_check_npu_wdog_intr_stat(wdog_no))
+-            return IRQ_HANDLED;
+-        
+-        #else
+-         /* clear npu_wdog interrupt source */
+-        host_clear_npu_wdog_intr(wdog_no);
+-        #endif
+-
+-        /* some npu timer and wdog share the same interupt, but only wdog case needs to print dbgMsg. */
+-        if (is_npu_wdog_enabled(wdog_no)) {
+-            printk("[H]Recieve irq from npu_wdog%d with irq_num:%d\n", wdog_no, irq);
+-    	    host_dump_npu_csr(wdog_no);
+-        }
+-    }
+-    else {
+-        printk("[H] Error: can't find npu_wdog_intr_num for irq_num:%d\n", irq);
+-    }
+-	return IRQ_HANDLED;
+-}
+-#endif
+-void npu_rv32_init(void)
+-{
+-	// NPU wifi offload reserve 16M block to save packet when boot, and get the address in here (after npu bring up)
+-	//npu_wifi_offload_dbg_proc_create();
+-	unsigned int isMailBoxSuccess = 0;
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(1, isNpuBand0OnCpu);
+-	
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get NPU Band0 On CPU flag Fail!!!\n");
+-
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(0,npu_wifi_offload_get_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");	
+-	/* when TDMA tx is used with DRAM, need these func
+-#ifdef TCSUPPORT_NPU_WIFI_TDMA_OFFLOAD
+-	printk("npu_wifi_offload_get_tdma_tx_pkt_buf_addr=%x\n", npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TDMA_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-#endif
+-	*/	
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
+-}
+-char npu_stat;
+-EXPORT_SYMBOL(npu_stat);
+-#define NPU_PKT_BUF_SIZE 0x1600000
+-#define NPU_TX_PKT_BUF_SIZE 0x3a00000
+-#define NPU_BA_NODE_SIZE (0x200000)
+-void arioha_arm_memblock_init_inline_hook(void)
+-{
+-	/***pkt buf addr****/
+-	phys_addr_t npu_pkt_buf_phy_addr = 0;
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
+-#else
+-	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
+-#endif	
+-	if(npu_pkt_buf_phy_addr)
+-	{
+-		memblock_reserve(npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
+-		npu_wifi_offload_set_pkt_buf_addr(npu_pkt_buf_phy_addr);
+-		printk("npu_pkt_buffer memblock_alloc:%llx,buf_size=%x\n\r", npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_pkt_buffer memblock_alloc fail \n\r");
+-	}
+-	/*** tx pkt buff addr ***/
+-	phys_addr_t npu_tx_pkt_buf_phy_addr = 0;
+-	//printk("try alloc for tx pkt buf\n");
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_tx_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_TX_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
+-#else
+-	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
+-#endif
+-
+-	if(npu_tx_pkt_buf_phy_addr)
+-	{
+-		memblock_reserve(npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
+-		npu_wifi_offload_set_tx_pkt_buf_addr(npu_tx_pkt_buf_phy_addr);
+-		printk("npu_tx_pkt_buffer 7581 memblock_alloc:%llx, buf_size=%x\n\r", npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_tx_pkt_buffer memblock_alloc fail \n\r");
+-	}	
+-	
+-	/*** ba node addr ***/
+-	phys_addr_t npu_ba_node_phy_addr = 0;
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_ba_node_phy_addr = memblock_phys_alloc_range(NPU_BA_NODE_SIZE, 64, 0x80000000, 0xbfffffff);
+-#else
+-	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
+-#endif
+-	if(npu_ba_node_phy_addr)
+-	{
+-		memblock_reserve(npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
+-		npu_wifi_offload_set_ba_node_addr(npu_ba_node_phy_addr);
+-		printk("npu_ba_node memblock_alloc:%llx,buf_size=%x\n\r", npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
+-	}
+-}
+-EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
+-#endif
+-#endif
+-/*****************/
++extern struct airoha_npu *npu_glb;
++extern npuMboxObj_t mboxObj[MAX_CORE_NUM];
++extern struct tasklet_struct mbox_tasklet;
+ static int airoha_npu_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+@@ -1081,7 +496,6 @@ static int airoha_npu_probe(struct platf
+ 	npu_glb->ops.hostdapt_enable_interrupt_ops = hostdapt_enable_interrupt;
+ 	npu_glb->ops.hostdapt_disable_interrupt_ops = hostdapt_disable_interrupt;
+ 	npu_glb->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
+-	npu_glb->ops.airoha_npu_flow_cnt_setup = airoha_npu_flow_cnt_setup;
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ 	npu_glb->Regbase = base;
+@@ -1175,6 +589,7 @@ static int airoha_npu_probe(struct platf
+ 	platform_set_drvdata(pdev, npu_glb);
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
++	arioha_arm_memblock_init_inline_hook();
+ 	npu_rv32_init();
+ 	hostadpInit();	
+ #endif
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -781,7 +781,7 @@ error:
+ 
+ void (*tasklet_schedule_WIFI2G)(void);
+ void (*tasklet_schedule_WIFI5G)(void);
+-static irqreturn_t rxdone0_isr(int irq, void *dev_id)
++irqreturn_t rxdone0_isr(int irq, void *dev_id)
+ {
+ 	unsigned long int status, tmp;
+ 	//HOSTADPT_MSG(DBG_LOG, "rxdone0 interrput......\n"); 
+@@ -804,8 +804,9 @@ static irqreturn_t rxdone0_isr(int irq,
+ 	//}	
+     return IRQ_HANDLED;
+ }
++EXPORT_SYMBOL(rxdone0_isr);
+ 
+-static irqreturn_t rxdone1_isr(int irq, void *dev_id)
++irqreturn_t rxdone1_isr(int irq, void *dev_id)
+ {
+ 	unsigned long int tmp;
+ 	//status = get_npu_hostadpt_reg(0x0030);
+@@ -827,7 +828,7 @@ static irqreturn_t rxdone1_isr(int irq,
+ 	//}	
+     return IRQ_HANDLED;
+ }
+-
++EXPORT_SYMBOL(rxdone1_isr);
+ void hostadpt_regiter_interrupt(u32 irq_num, irqreturn_t (*int_isr)(int, void*), char *irq_name)
+ {
+ 	if(irq_num > 5)
+@@ -842,6 +843,7 @@ void hostadpt_regiter_interrupt(u32 irq_
+ 	HOSTADPT_MSG(DBG_LOG, "interrupt register!\n");
+ 	return ;
+ }
++EXPORT_SYMBOL(hostadpt_regiter_interrupt);
+ 
+ void hostadpt_free_interrupt(u32 irq_num)
+ {
+@@ -1276,12 +1278,13 @@ int hostadpInit(void)
+ 		HOSTADPT_MSG(DBG_ERR, "hostadpt_rxdscp_init failed!\n");
+ 		return -ENODEV;
+ 	}
+-	
++#if 0	
+ 	hostadpt_regiter_interrupt(0, rxdone0_isr, "rxdone0");
+ 	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,0x00010000);
+ 
+ 	hostadpt_regiter_interrupt(1, rxdone1_isr, "rxdone1");
+ 	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,0x00020000);
++#endif
+ 
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ 	//hostadpt_dump_debug_create();
+--- a/drivers/net/ethernet/airoha/Makefile
++++ b/drivers/net/ethernet/airoha/Makefile
+@@ -6,4 +6,4 @@
+ obj-$(CONFIG_NET_AIROHA) += airoha-eth.o
+ airoha-eth-y := airoha_eth.o airoha_ppe.o
+ airoha-eth-$(CONFIG_DEBUG_FS) += airoha_ppe_debugfs.o
+-obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o hostadpt.o
++obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o hostadpt.o npu_rv32.o
+--- /dev/null
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -0,0 +1,452 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2025 AIROHA Inc
++ * Author: Lorenzo Bianconi <lorenzo@kernel.org>
++ */
++
++#include <linux/devcoredump.h>
++#include <linux/firmware.h>
++#include <linux/platform_device.h>
++#include <linux/of_net.h>
++#include <linux/of_platform.h>
++#include <linux/of_reserved_mem.h>
++#include <linux/regmap.h>
++#include <linux/memblock.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
++
++#include "airoha_npu.h"
++#include "hostadpt.h"
++#include "npu_rv32.h"
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++bool arht_wifi_npu_active(void)
++{
++	return true;
++}
++#else
++bool arht_wifi_npu_active(void)
++{
++	return false;
++}
++#endif
++EXPORT_SYMBOL_GPL(arht_wifi_npu_active);
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++u32 npu_pkt_buf_addr;
++u32 npu_ba_node_addr;
++u32 npu_tx_pkt_buf_addr;
++int wdog_intr_bit[] = {21,22,23,24,21,22};
++int wdog_en_bit[] = {25,26,27,28,25,26};
++u32 npu_pkt_buf_addr;
++u32 npu_ba_node_addr;
++u32 npu_tx_pkt_buf_addr;
++npuMboxObj_t mboxObj[MAX_CORE_NUM];
++struct tasklet_struct mbox_tasklet;
++typedef void (*isr_cb_t)(void);
++isr_cb_t mbox2host_cb=NULL;
++struct airoha_npu *npu_glb;
++EXPORT_SYMBOL(npu_glb);
++struct device* get_ecnt_npu_dev(void)
++{
++    if ((npu_glb) && (npu_glb->dev))
++        return npu_glb->dev;
++    else
++        return NULL;
++}
++EXPORT_SYMBOL(get_ecnt_npu_dev);
++
++struct airoha_npu *mt76_get_npu(void){
++	return npu_glb;
++}
++EXPORT_SYMBOL(mt76_get_npu);
++void host_register_mbox_cb(npuCoreId_t core_id, npuMboxFuncId_t func_id, h_mbox_cb_t cb)
++{   
++    if ((core_id>=MAX_CORE_NUM) || (func_id>=MAX_MBOX_FUNC)) {
++        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", core_id, MAX_CORE_NUM, func_id, MAX_MBOX_FUNC);
++        return;
++    }
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, cb:%p\n", __func__, core_id, func_id, cb);
++    #endif
++    mboxObj[core_id].mbox8_cb[func_id] = cb;
++    return;
++}
++char *wdog_name[8] = {"npu_wdog0","npu_wdog1","npu_wdog2","npu_wdog3","npu_wdog4","npu_wdog5","npu_wdog6","npu_wdog7"};
++
++unsigned char isNpuBand0OnCpu = 0;
++// Reserve 16M block to save packet, and the address will be got after npu bring up.
++
++void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr)
++{
++    npu_tx_pkt_buf_addr = pkt_buf_addr;
++    printk("[%s]npu_tx_pkt_buf_addr=%x:%x\n", __func__, npu_tx_pkt_buf_addr, pkt_buf_addr);
++    return;
++}
++u32 npu_wifi_offload_get_tx_pkt_buf_addr(void)
++{
++    printk("[%s]npu_tx_pkt_buf_addr=%x\n", __func__, npu_tx_pkt_buf_addr);
++    return npu_tx_pkt_buf_addr;
++}
++
++EXPORT_SYMBOL(npu_wifi_offload_get_tx_pkt_buf_addr);
++
++void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr)
++{
++	npu_ba_node_addr = ba_node_addr;
++	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
++	return;
++	
++}
++u32 npu_wifi_offload_get_ba_node_addr(void)
++{
++	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
++	return npu_ba_node_addr;
++	
++}
++EXPORT_SYMBOL(npu_wifi_offload_get_ba_node_addr);
++
++// Reserve 16M block to save packet, and the address will be got after npu bring up.
++void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr)
++{
++	npu_pkt_buf_addr = pkt_buf_addr;
++	return;
++	
++}
++u32 npu_wifi_offload_get_pkt_buf_addr(void)
++{
++	return npu_pkt_buf_addr;
++	
++}
++EXPORT_SYMBOL(npu_wifi_offload_get_pkt_buf_addr);
++
++char npu_wifi_offload_get_force_to_cpu_flag(void)
++{
++#if 0
++#if defined(TCSUPPORT_RA_HWNAT) && defined(TCSUPPORT_HWNAT_V3)
++	return forceToCpu;
++#else
++	return 1;
++#endif
++#endif
++	return 1;
++}
++u32 get_npu_reg_data(u32 reg)
++{
++	return readl(npu_glb->Regbase + reg);
++}
++u32 get_npu_dbg_csr(int core, const unsigned int csr_ofs)
++{
++    return get_npu_reg_data((CR_PC_BASE_ADDR+(core<<8))+csr_ofs);
++}
++
++/* don't EXPORT this function. Create API for your purpose instead. */
++void set_npu_reg_data(u32 reg, u32 val)
++{
++	writel(val, npu_glb->Regbase + reg);
++}
++
++u32 get_npu_hostadpt_reg(int hadap_ofs)
++{
++     return get_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs);
++}
++EXPORT_SYMBOL(get_npu_hostadpt_reg);
++
++u32 set_npu_hostadpt_reg(int hadap_ofs,int val)
++{
++     set_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs,val);
++     return 0;
++}
++EXPORT_SYMBOL(set_npu_hostadpt_reg);
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++int get_npu_irq(int index)
++{
++    if( index < NPU_INT_MAX_NUM )
++        return npu_glb->irq[index];
++    else
++        printk("\n get_npu_irq error, index=%d\n", index);
++    return 0;
++}
++EXPORT_SYMBOL(get_npu_irq);
++
++int host_notify_npuMbox(npuMboxInfo_t *mboxInfo)
++{
++    int reg_shift;
++    mboxArg_t arg;
++    int res=0;
++    int timeoutCnt=300; /* default 30ms */
++    unsigned long flag;
++#if 1 //mail box DBG
++#define NPU_SAVE_LOG_TIME 256
++    unsigned int npu_pc_log[NPU_SAVE_LOG_TIME];
++    int i;
++#endif
++
++    if ((mboxInfo->core_id>=MAX_CORE_NUM) || (mboxInfo->func_id>=MAX_MBOX_FUNC)) {
++        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", 
++                mboxInfo->core_id, MAX_CORE_NUM, mboxInfo->func_id, MAX_MBOX_FUNC);
++        return 0;
++    }
++
++    arg.hWord=0;
++
++    if ((mboxInfo->flags.isStaticBuffInit)||(mboxInfo->flags.isStaticBuffDel)) {
++        arg.bits.static_buff=1;
++    }
++
++    if (mboxInfo->flags.isBlockingMode) {
++        if (mboxInfo->blockTimeout)
++            timeoutCnt = mboxInfo->blockTimeout;
++        arg.bits.block_mode=1;
++    }
++
++    spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++	
++    host_register_mbox_cb(mboxInfo->core_id, mboxInfo->func_id, mboxInfo->cb);
++
++    arg.bits.func_id= (mboxInfo->func_id&MASK_FUNC_ID);
++    reg_shift = (mboxInfo->core_id<<4);
++    if (((mboxInfo->virtAddr)&&(mboxInfo->physAddr)&&(mboxInfo->len)) ||
++        (mboxInfo->flags.isStaticBuffDel)) {
++        mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id] = mboxInfo->virtAddr;
++        mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id] = mboxInfo->physAddr;
++        mboxObj[mboxInfo->core_id].size[mboxInfo->func_id] = mboxInfo->len;
++    }
++    else {
++        if (mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id]==0) {
++            printk("Error(%s): no default (virtAddr,physAddr,len), please assign them!\n", __func__);
++            spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++			return 0;
++        }
++    }
++
++    //spin_lock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
++    //spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, arg:0x%x, timeoutCnt:%d\n", 
++            __func__, mboxInfo->core_id, mboxInfo->func_id, arg.hWord, timeoutCnt);
++    #endif
++    set_npu_reg_data(CR_MBQ0_CTRL0+reg_shift, mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id]);
++    set_npu_reg_data(CR_MBQ0_CTRL1+reg_shift, mboxObj[mboxInfo->core_id].size[mboxInfo->func_id]);
++    set_npu_reg_data(CR_MBQ0_CTRL3+reg_shift, arg.hWord);
++    set_npu_reg_data(CR_MBQ0_CTRL2+reg_shift, get_npu_reg_data(CR_MBQ0_CTRL2+reg_shift)+1);
++
++#if 1 //mail box DBG
++    for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
++        npu_pc_log[i] = 0;
++    }
++    i = 0;
++#endif
++    while (1) 
++    {
++        arg.hWord = get_npu_reg_data(CR_MBQ0_CTRL3+reg_shift);
++        if (arg.bits.done_bit==1) {
++            res = (arg.bits.ret_status&MASK_RET_STATUS);
++            break;
++        }
++        
++        #if 1 //mail box DBG
++        if((timeoutCnt & 0x3) == 0)
++        {
++            if(i < NPU_SAVE_LOG_TIME) {
++                npu_pc_log[i] = get_npu_reg_data(CR_PC_BASE_ADDR);
++                i++;
++            }
++
++        }
++        #endif
++
++        timeoutCnt--;
++        if (timeoutCnt>=0){
++            if((CORE5 == mboxInfo->core_id) && (MFUNC_DBA == mboxInfo->func_id)){
++                udelay(40);
++            }else{
++                udelay(100);
++            }
++		}
++        else {
++            #if 1 //mail box DBG
++            printk("dump NPU pc\n");
++            for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
++                printk("0x%x ", npu_pc_log[i]);
++                if((i & 0x3) == 0x3)
++                    printk("\n");
++            }
++            #endif
++            printk("Error: %s timeout for core_id:%d, func_id:%d\n", __func__, mboxInfo->core_id, mboxInfo->func_id);
++            break;
++        }
++    }
++    #ifdef MBOX_DBG_ON
++    printk("%s exit (res:%d, timeoutCnt:%d)\n", __func__, res, timeoutCnt);
++    #endif
++
++    //spin_unlock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
++    spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++    
++    return res;
++}
++EXPORT_SYMBOL(host_notify_npuMbox);
++
++void mbox_tasklet_handler(unsigned long data)
++{
++    unsigned short core_id = get_npu_reg_data(CR_MBQ8_CTRL0)&MASK_CORE_ID;
++    unsigned short func_id;
++    unsigned short len = get_npu_reg_data(CR_MBQ8_CTRL1);
++    int status=0;
++    mboxArg_t arg;
++    
++    arg.hWord = get_npu_reg_data(CR_MBQ8_CTRL3);
++    func_id = arg.bits.func_id;
++
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, arg:0x%x\n", __func__, core_id, func_id, arg.hWord);
++    #endif
++
++    spin_lock(&mboxObj[core_id].mboxBuffLock);
++    
++    if(mboxObj[core_id].mbox8_cb[func_id]) {
++        status = mboxObj[core_id].mbox8_cb[func_id] (mboxObj[core_id].virtAddr[func_id], len);
++    }
++    
++    spin_unlock(&mboxObj[core_id].mboxBuffLock);
++
++    arg.bits.ret_status=(status&MASK_RET_STATUS);
++    arg.bits.done_bit=1;
++
++    /* let NPU know that host has done */
++    set_npu_reg_data(CR_MBQ8_CTRL3, arg.hWord);
++    
++    return;
++}
++
++irqreturn_t npuMbox2host_isr(int irq, void *dev_id)
++{
++
++    if (mbox2host_cb) {
++        mbox2host_cb();
++    }
++    else {
++    	/* clear mbox8 interrupt */
++        set_npu_reg_data(CR_MBOX_INTR_STATUS, 1<<MBOX2HOST_IDX);
++
++    	tasklet_schedule(&mbox_tasklet);
++    }
++	return IRQ_HANDLED;
++}
++
++void host_dump_npu_csr(int core)
++{
++    #ifdef TCSUPPORT_NPU_V2
++    const char * CSR_NAME[] = {"PC", "SP", "LR"};
++	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8};
++    #else
++	const char * CSR_NAME[] = {"PC", "SP", "LR", "Cyc_Cnt[31:0]" ,"Cyc_Cnt[63:32]" ,"Ins_Cnt[31:0]", 
++												"Ins_Cnt[63:32]", "MTVAL", "MCAUSE", "MEPC", "MSTATUS", "MICAUSE"};
++	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30};
++    #endif
++	unsigned int tmpVal;
++	int i;
++
++
++	printk("\n[H]Dump NPU core %d CSR START\n", core);
++	for (i = 0; i < CSR_REG_NUM; i++) {
++        tmpVal = get_npu_dbg_csr(core, csr_ofs[i]);
++		printk("%-15s<0x%x>\n", CSR_NAME[i], tmpVal);
++	}
++	printk("[H]Dump CSR END\n\n");
++	
++	return;
++}
++EXPORT_SYMBOL(host_dump_npu_csr);
++void npu_rv32_init(void)
++{
++	// NPU wifi offload reserve 16M block to save packet when boot, and get the address in here (after npu bring up)
++	//npu_wifi_offload_dbg_proc_create();
++	unsigned int isMailBoxSuccess = 0;
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(1, isNpuBand0OnCpu);
++	
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get NPU Band0 On CPU flag Fail!!!\n");
++
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(0,npu_wifi_offload_get_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");	
++	/* when TDMA tx is used with DRAM, need these func
++#ifdef TCSUPPORT_NPU_WIFI_TDMA_OFFLOAD
++	printk("npu_wifi_offload_get_tdma_tx_pkt_buf_addr=%x\n", npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TDMA_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
++#endif
++	*/	
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
++}
++char npu_stat;
++EXPORT_SYMBOL(npu_stat);
++#define NPU_PKT_BUF_SIZE (0x2c00000)
++#define NPU_TX_PKT_BUF_SIZE 0x3a00000
++#define NPU_BA_NODE_SIZE (0x200000)
++
++void arioha_arm_memblock_init_inline_hook(void)
++{
++	/***pkt buf addr****/
++	phys_addr_t npu_pkt_buf_phy_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
++#endif	
++	if(npu_pkt_buf_phy_addr)
++	{
++		memblock_reserve(npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
++		npu_wifi_offload_set_pkt_buf_addr(npu_pkt_buf_phy_addr);
++		printk("npu_pkt_buffer memblock_alloc:%llx,buf_size=%x\n\r", npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_pkt_buffer memblock_alloc fail \n\r");
++	}
++	/*** tx pkt buff addr ***/
++	phys_addr_t npu_tx_pkt_buf_phy_addr = 0;
++	//printk("try alloc for tx pkt buf\n");
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_tx_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_TX_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
++#endif
++
++	if(npu_tx_pkt_buf_phy_addr)
++	{
++		memblock_reserve(npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
++		npu_wifi_offload_set_tx_pkt_buf_addr(npu_tx_pkt_buf_phy_addr);
++		printk("npu_tx_pkt_buffer 7581 memblock_alloc:%llx, buf_size=%x\n\r", npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_tx_pkt_buffer memblock_alloc fail \n\r");
++	}	
++	
++	/*** ba node addr ***/
++	phys_addr_t npu_ba_node_phy_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_ba_node_phy_addr = memblock_phys_alloc_range(NPU_BA_NODE_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
++#endif
++	if(npu_ba_node_phy_addr)
++	{
++		memblock_reserve(npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
++		npu_wifi_offload_set_ba_node_addr(npu_ba_node_phy_addr);
++		printk("npu_ba_node memblock_alloc:%llx,buf_size=%x\n\r", npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
++	}
++}
++EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
++
++#endif
++#endif
++
+--- /dev/null
++++ b/drivers/net/ethernet/airoha/npu_rv32.h
+@@ -0,0 +1,113 @@
++#ifndef _NPU_RV32_H_
++#define _NPU_RV32_H_
++#include "airoha_npu.h"
++#include "hostadpt.h"
++/***************************************************************
++*						INCLUDE
++***************************************************************/
++/**** wifi support ****/
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++
++#define NPU_384K_SRAM_BASE      (0x000000)  /*phys:0x1e800000*/
++#define NPU_64K_SRAM_BASE       (0x000000)  /*phys:0x1e900000*/
++#ifdef TCSUPPORT_NPU_V2
++#define NPU_DEBUG_BASE          (0x305000)  /*phys:0x1eC05000*/
++#define NPU_CLUSTER_BASE        (0x306000)  /*phys:0x1eC06000*/
++#define CR_PC_BASE_ADDR	        (NPU_DEBUG_BASE)
++#else
++#define NPU_CLUSTER_BASE        (0x308000)  /*phys:0x1eC08000*/
++#define CR_PC_BASE_ADDR	        (NPU_CLUSTER_BASE+0x800)
++#endif
++#define CR_CORE_BOOT_TRIGGER    (NPU_CLUSTER_BASE+0x000)
++#define CR_CORE_BOOT_CONFIG     (NPU_CLUSTER_BASE+0x004)
++#define CR_CORE_BOOT_BASE       (NPU_CLUSTER_BASE+0x020)
++
++#define NPU_MBOX_BASE           (0x30C000)  /*phys:0x1eC0C000*/
++#define CR_MBOX_INTR_STATUS     (NPU_MBOX_BASE+0x0)
++#define CR_MBOX_INT_MASK0       (NPU_MBOX_BASE+0x004)
++#define CR_MBOX_INT_MASK8       (NPU_MBOX_BASE+0x024)
++#define CR_MBQ0_CTRL0           (NPU_MBOX_BASE+0x030)
++#define CR_MBQ0_CTRL1           (NPU_MBOX_BASE+0x034)
++#define CR_MBQ0_CTRL2           (NPU_MBOX_BASE+0x038)
++#define CR_MBQ0_CTRL3           (NPU_MBOX_BASE+0x03C)
++#define CR_MBQ8_CTRL0           (NPU_MBOX_BASE+0x0b0)
++#define CR_MBQ8_CTRL1           (NPU_MBOX_BASE+0x0b4)
++#define CR_MBQ8_CTRL2           (NPU_MBOX_BASE+0x0b8)
++#define CR_MBQ8_CTRL3           (NPU_MBOX_BASE+0x0bC)
++#define CR_NPU_MIB0             (NPU_MBOX_BASE+0x140)
++#define CR_NPU_MIB8             (NPU_MBOX_BASE+0x160)
++#define CR_NPU_MIB9             (NPU_MBOX_BASE+0x164)
++#define CR_NPU_MIB10            (NPU_MBOX_BASE+0x168)
++#define CR_NPU_MIB11            (NPU_MBOX_BASE+0x16C)
++#define CR_NPU_MIB12            (NPU_MBOX_BASE+0x170)
++#define CR_NPU_MIB13            (NPU_MBOX_BASE+0x174)
++#define CR_NPU_MIB14            (NPU_MBOX_BASE+0x178)
++#define CR_NPU_MIB15            (NPU_MBOX_BASE+0x17C)
++#define CR_NPU_MIB16            (NPU_MBOX_BASE+0x180)
++#define CR_NPU_MIB19            (NPU_MBOX_BASE+0x18C)
++#define CR_NPU_MIB20            (NPU_MBOX_BASE+0x190)
++#define CR_NPU_MIB21            (NPU_MBOX_BASE+0x194)
++
++#define NPU_RBUS_BASE           (0x30E000)  /*phys:0x1eC0E000*/
++#define CR_NPU_RBUS_DECODER     (NPU_RBUS_BASE+0x1200)
++
++#define NPU_UART_BASE           (0x310000)  /*phys:0x1eC10000*/
++#define NPU_TIME0_BASE          (0x310100)  /*phys:0x1eC10100*/
++#define NPU_TIME1_BASE          (0x310200)  /*phys:0x1eC10200*/
++
++#define NPU_SCU_BASE            (0x311000)  /*phys:0x1eC11000*/
++
++#ifdef TCSUPPORT_NPU_V2
++#if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P) /*7552*/
++#define TMR_EN_BITS     (0x1e0001ef) /* keep enable_bits (4 cntTimers + 4 wdogTimers) */
++#else /*7581*/
++#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
++#endif
++#define CSR_REG_NUM     (3)
++#else /*7523*/
++#define CSR_REG_NUM     (12)
++#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
++#endif
++
++#define NPU_HOSTADAPTER_BASE    (0x30D000)  /*phys:0x1eC0D000*/
++
++struct device* get_ecnt_npu_dev(void);
++void host_register_mbox_cb(npuCoreId_t core_id, npuMboxFuncId_t func_id, h_mbox_cb_t cb);
++void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr);
++u32 npu_wifi_offload_get_tx_pkt_buf_addr(void);
++void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr);
++u32 npu_wifi_offload_get_ba_node_addr(void);
++void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr);
++u32 npu_wifi_offload_get_pkt_buf_addr(void);
++char npu_wifi_offload_get_force_to_cpu_flag(void);
++u32 get_npu_reg_data(u32 reg);
++u32 get_npu_dbg_csr(int core, const unsigned int csr_ofs);
++void set_npu_reg_data(u32 reg, u32 val);
++u32 get_npu_hostadpt_reg(int hadap_ofs);
++u32 set_npu_hostadpt_reg(int hadap_ofs,int val);
++int get_npu_irq(int index);
++int host_notify_npuMbox(npuMboxInfo_t *mboxInfo);
++void mbox_tasklet_handler(unsigned long data);
++irqreturn_t npuMbox2host_isr(int irq, void *dev_id);
++void host_dump_npu_csr(int core);
++void npu_rv32_init(void);
++void arioha_arm_memblock_init_inline_hook(void);
++typedef struct npuMboxObj
++{
++    unsigned long virtAddr[MAX_MBOX_FUNC];
++    unsigned int physAddr[MAX_MBOX_FUNC];
++    unsigned short size[MAX_MBOX_FUNC];
++    h_mbox_cb_t mbox8_cb[MAX_MBOX_FUNC];
++    spinlock_t npuMboxLock;
++    spinlock_t mboxBuffLock;
++
++} npuMboxObj_t;
++
++
++
++
++
++
++
++#endif
++#endif
+\ No newline at end of file
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -56,6 +56,8 @@ struct airoha_npu {
+ 		struct work_struct wdt_work;
+ 	} cores[NPU_NUM_CORES];
+ 
++	struct airoha_foe_stats *stats;
++
+ 	struct {
+ 		int (*ppe_init)(struct airoha_npu *npu);
+ 		int (*ppe_deinit)(struct airoha_npu *npu);
+@@ -93,5 +95,5 @@ struct airoha_npu {
+ 		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+ 	} ops;
+ };
+-extern struct airoha_npu *npu_glb;
++extern struct airoha_npu *mt76_get_npu(void);
+ #endif

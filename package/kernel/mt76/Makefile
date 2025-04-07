@@ -336,22 +336,16 @@ define KernelPackage/mt7992-23-firmware
   DEPENDS+=+kmod-mt7996e
 endef
 
-define KernelPackage/mt7996-firmware-common
-  $(KernelPackage/mt76-default)
-  TITLE:=MediaTek MT7996 firmware (common files)
-  HIDDEN:=1
-endef
-
 define KernelPackage/mt7996-firmware
   $(KernelPackage/mt76-default)
   TITLE:=MediaTek MT7996 firmware
-  DEPENDS+=+kmod-mt7996e +kmod-mt7996-firmware-common
+  DEPENDS+=+kmod-mt7996e
 endef
 
 define KernelPackage/mt7996-233-firmware
   $(KernelPackage/mt76-default)
   TITLE:=MediaTek MT7996 firmware (2+3+3 antenna variant)
-  DEPENDS+=+kmod-mt7996e +kmod-mt7996-firmware-common
+  DEPENDS+=+kmod-mt7996e
 endef
 
 define KernelPackage/mt7925-firmware
@@ -405,6 +399,10 @@ NOSTDINC_FLAGS := \
 
 ifdef CONFIG_PACKAGE_MAC80211_MESH
   NOSTDINC_FLAGS += -DCONFIG_MAC80211_MESH
+endif
+
+ifdef CONFIG_NET_AIROHA_SOC_NPU
+  NOSTDINC_FLAGS += -DCONFIG_NET_AIROHA_SOC_NPU
 endif
 
 ifdef CONFIG_PACKAGE_CFG80211_TESTMODE
@@ -680,21 +678,10 @@ define KernelPackage/mt7992-23-firmware/install
 		$(1)/lib/firmware/mediatek/mt7996
 endef
 
-define KernelPackage/mt7996-firmware-common/install
-	$(INSTALL_DIR) $(1)/lib/firmware/mediatek/mt7996
-	cp \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_dsp.bin \
-		$(1)/lib/firmware/mediatek/mt7996
-endef
-
 define KernelPackage/mt7996-firmware/install
 	$(INSTALL_DIR) $(1)/lib/firmware/mediatek/mt7996
 	cp \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_eeprom.bin \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_eeprom_2i5i6i.bin \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_rom_patch.bin \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_wa.bin \
-		$(PKG_BUILD_DIR)/firmware/mt7996/mt7996_wm.bin \
+		./files/* \
 		$(1)/lib/firmware/mediatek/mt7996
 endef
 
@@ -761,7 +748,6 @@ $(eval $(call KernelPackage,mt7925e))
 $(eval $(call KernelPackage,mt7996e))
 $(eval $(call KernelPackage,mt7992-firmware))
 $(eval $(call KernelPackage,mt7992-23-firmware))
-$(eval $(call KernelPackage,mt7996-firmware-common))
 $(eval $(call KernelPackage,mt7996-firmware))
 $(eval $(call KernelPackage,mt7996-233-firmware))
 $(eval $(call KernelPackage,mt76))

@@ -1,0 +1,2338 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -11,9 +11,13 @@
+ #include <linux/of_platform.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/regmap.h>
++#include <linux/memblock.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
+ 
+ #include "airoha_eth.h"
+ #include "airoha_npu.h"
++#include "hostadpt.h"
+ 
+ #define NPU_EN7581_FIRMWARE_DATA		"airoha/en7581_npu_data.bin"
+ #define NPU_EN7581_FIRMWARE_RV32		"airoha/en7581_npu_rv32.bin"
+@@ -214,6 +218,7 @@ out:
+ 	return ret;
+ }
+ 
++#if 0
+ static irqreturn_t airoha_npu_mbox_handler(int irq, void *npu_instance)
+ {
+ 	struct airoha_npu *npu = npu_instance;
+@@ -228,7 +233,7 @@ static irqreturn_t airoha_npu_mbox_handl
+ 
+ 	return IRQ_HANDLED;
+ }
+-
++#endif
+ static void airoha_npu_wdt_work(struct work_struct *work)
+ {
+ 	struct airoha_npu_core *core;
+@@ -428,6 +433,19 @@ error_pdev_put:
+ }
+ EXPORT_SYMBOL_GPL(airoha_npu_get);
+ 
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++bool arht_wifi_npu_active(void)
++{
++	return true;
++}
++#else
++bool arht_wifi_npu_active(void)
++{
++	return false;
++}
++#endif
++EXPORT_SYMBOL_GPL(arht_wifi_npu_active);
++
+ void airoha_npu_put(struct airoha_npu *npu)
+ {
+ 	module_put(THIS_MODULE);
+@@ -449,32 +467,628 @@ static const struct regmap_config regmap
+ 	.disable_locking	= true,
+ };
+ 
++/**** wifi support ****/
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++
++#define NPU_384K_SRAM_BASE      (0x000000)  /*phys:0x1e800000*/
++#define NPU_64K_SRAM_BASE       (0x000000)  /*phys:0x1e900000*/
++#ifdef TCSUPPORT_NPU_V2
++#define NPU_DEBUG_BASE          (0x305000)  /*phys:0x1eC05000*/
++#define NPU_CLUSTER_BASE        (0x306000)  /*phys:0x1eC06000*/
++#define CR_PC_BASE_ADDR	        (NPU_DEBUG_BASE)
++#else
++#define NPU_CLUSTER_BASE        (0x308000)  /*phys:0x1eC08000*/
++#define CR_PC_BASE_ADDR	        (NPU_CLUSTER_BASE+0x800)
++#endif
++#define CR_CORE_BOOT_TRIGGER    (NPU_CLUSTER_BASE+0x000)
++#define CR_CORE_BOOT_CONFIG     (NPU_CLUSTER_BASE+0x004)
++#define CR_CORE_BOOT_BASE       (NPU_CLUSTER_BASE+0x020)
++
++#define NPU_MBOX_BASE           (0x30C000)  /*phys:0x1eC0C000*/
++#define CR_MBOX_INTR_STATUS     (NPU_MBOX_BASE+0x0)
++#define CR_MBOX_INT_MASK0       (NPU_MBOX_BASE+0x004)
++#define CR_MBOX_INT_MASK8       (NPU_MBOX_BASE+0x024)
++#define CR_MBQ0_CTRL0           (NPU_MBOX_BASE+0x030)
++#define CR_MBQ0_CTRL1           (NPU_MBOX_BASE+0x034)
++#define CR_MBQ0_CTRL2           (NPU_MBOX_BASE+0x038)
++#define CR_MBQ0_CTRL3           (NPU_MBOX_BASE+0x03C)
++#define CR_MBQ8_CTRL0           (NPU_MBOX_BASE+0x0b0)
++#define CR_MBQ8_CTRL1           (NPU_MBOX_BASE+0x0b4)
++#define CR_MBQ8_CTRL2           (NPU_MBOX_BASE+0x0b8)
++#define CR_MBQ8_CTRL3           (NPU_MBOX_BASE+0x0bC)
++#define CR_NPU_MIB0             (NPU_MBOX_BASE+0x140)
++#define CR_NPU_MIB8             (NPU_MBOX_BASE+0x160)
++#define CR_NPU_MIB9             (NPU_MBOX_BASE+0x164)
++#define CR_NPU_MIB10            (NPU_MBOX_BASE+0x168)
++#define CR_NPU_MIB11            (NPU_MBOX_BASE+0x16C)
++#define CR_NPU_MIB12            (NPU_MBOX_BASE+0x170)
++#define CR_NPU_MIB13            (NPU_MBOX_BASE+0x174)
++#define CR_NPU_MIB14            (NPU_MBOX_BASE+0x178)
++#define CR_NPU_MIB15            (NPU_MBOX_BASE+0x17C)
++#define CR_NPU_MIB16            (NPU_MBOX_BASE+0x180)
++#define CR_NPU_MIB19            (NPU_MBOX_BASE+0x18C)
++#define CR_NPU_MIB20            (NPU_MBOX_BASE+0x190)
++#define CR_NPU_MIB21            (NPU_MBOX_BASE+0x194)
++
++#define NPU_RBUS_BASE           (0x30E000)  /*phys:0x1eC0E000*/
++#define CR_NPU_RBUS_DECODER     (NPU_RBUS_BASE+0x1200)
++
++#define NPU_UART_BASE           (0x310000)  /*phys:0x1eC10000*/
++#define NPU_TIME0_BASE          (0x310100)  /*phys:0x1eC10100*/
++#define NPU_TIME1_BASE          (0x310200)  /*phys:0x1eC10200*/
++
++#define NPU_SCU_BASE            (0x311000)  /*phys:0x1eC11000*/
++
++#ifdef TCSUPPORT_NPU_V2
++#if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P) /*7552*/
++#define TMR_EN_BITS     (0x1e0001ef) /* keep enable_bits (4 cntTimers + 4 wdogTimers) */
++#else /*7581*/
++#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
++#endif
++#define CSR_REG_NUM     (3)
++#else /*7523*/
++#define CSR_REG_NUM     (12)
++#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
++#endif
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#define NPU_HOSTADAPTER_BASE    (0x30D000)  /*phys:0x1eC0D000*/
++u32 npu_pkt_buf_addr;
++u32 npu_ba_node_addr;
++// u32 npu_tdma_tx_pkt_buf_addr; //when TDMA tx is used with DRAM, need this var
++#ifdef TCSUPPORT_NPU_WIFI_TX
++u32 npu_tx_pkt_buf_addr;
++#endif
++#endif
++
++int wdog_intr_bit[] = {21,22,23,24,21,22};
++int wdog_en_bit[] = {25,26,27,28,25,26};
++u32 npu_pkt_buf_addr;
++u32 npu_ba_node_addr;
++u32 npu_tx_pkt_buf_addr;
++
++
++typedef struct npuMboxObj
++{
++    unsigned long virtAddr[MAX_MBOX_FUNC];
++    unsigned int physAddr[MAX_MBOX_FUNC];
++    unsigned short size[MAX_MBOX_FUNC];
++    h_mbox_cb_t mbox8_cb[MAX_MBOX_FUNC];
++    spinlock_t npuMboxLock;
++    spinlock_t mboxBuffLock;
++
++} npuMboxObj_t;
++
++static npuMboxObj_t mboxObj[MAX_CORE_NUM];
++static struct tasklet_struct mbox_tasklet;
++typedef void (*isr_cb_t)(void);
++isr_cb_t mbox2host_cb=NULL;
++
++struct airoha_npu *npu_glb;
++struct device* get_ecnt_npu_dev(void)
++{
++    if ((npu_glb) && (npu_glb->dev))
++        return npu_glb->dev;
++    else
++        return NULL;
++}
++EXPORT_SYMBOL(get_ecnt_npu_dev);
++static void host_register_mbox_cb(npuCoreId_t core_id, npuMboxFuncId_t func_id, h_mbox_cb_t cb)
++{   
++    if ((core_id>=MAX_CORE_NUM) || (func_id>=MAX_MBOX_FUNC)) {
++        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", core_id, MAX_CORE_NUM, func_id, MAX_MBOX_FUNC);
++        return;
++    }
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, cb:%p\n", __func__, core_id, func_id, cb);
++    #endif
++    mboxObj[core_id].mbox8_cb[func_id] = cb;
++    return;
++}
++
++char *wdog_name[8] = {"npu_wdog0","npu_wdog1","npu_wdog2","npu_wdog3","npu_wdog4","npu_wdog5","npu_wdog6","npu_wdog7"};
++
++unsigned char isNpuBand0OnCpu = 0;
++
++// Reserve 16M block to save packet, and the address will be got after npu bring up.
++
++void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr)
++{
++    npu_tx_pkt_buf_addr = pkt_buf_addr;
++    printk("[%s]npu_tx_pkt_buf_addr=%x:%x\n", __func__, npu_tx_pkt_buf_addr, pkt_buf_addr);
++    return;
++}
++u32 npu_wifi_offload_get_tx_pkt_buf_addr(void)
++{
++    printk("[%s]npu_tx_pkt_buf_addr=%x\n", __func__, npu_tx_pkt_buf_addr);
++    return npu_tx_pkt_buf_addr;
++}
++
++EXPORT_SYMBOL(npu_wifi_offload_get_tx_pkt_buf_addr);
++
++void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr)
++{
++	npu_ba_node_addr = ba_node_addr;
++	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
++	return;
++	
++}
++u32 npu_wifi_offload_get_ba_node_addr(void)
++{
++	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
++	return npu_ba_node_addr;
++	
++}
++EXPORT_SYMBOL(npu_wifi_offload_get_ba_node_addr);
++
++// Reserve 16M block to save packet, and the address will be got after npu bring up.
++void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr)
++{
++	npu_pkt_buf_addr = pkt_buf_addr;
++	return;
++	
++}
++u32 npu_wifi_offload_get_pkt_buf_addr(void)
++{
++	return npu_pkt_buf_addr;
++	
++}
++EXPORT_SYMBOL(npu_wifi_offload_get_pkt_buf_addr);
++
++
++char npu_wifi_offload_get_force_to_cpu_flag(void)
++{
++#if 0
++#if defined(TCSUPPORT_RA_HWNAT) && defined(TCSUPPORT_HWNAT_V3)
++	return forceToCpu;
++#else
++	return 1;
++#endif
++#endif
++	return 1;
++}
++static u32 get_npu_reg_data(u32 reg)
++{
++	return readl(npu_glb->Regbase + reg);
++}
++u32 get_npu_dbg_csr(int core, const unsigned int csr_ofs)
++{
++    return get_npu_reg_data((CR_PC_BASE_ADDR+(core<<8))+csr_ofs);
++}
++/* don't EXPORT this function. Create API for your purpose instead. */
++static void set_npu_reg_data(u32 reg, u32 val)
++{
++	writel(val, npu_glb->Regbase + reg);
++}
++
++u32 get_npu_hostadpt_reg(int hadap_ofs)
++{
++     return get_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs);
++}
++EXPORT_SYMBOL(get_npu_hostadpt_reg);
++
++u32 set_npu_hostadpt_reg(int hadap_ofs,int val)
++{
++     set_npu_reg_data(NPU_HOSTADAPTER_BASE+hadap_ofs,val);
++     return 0;
++}
++EXPORT_SYMBOL(set_npu_hostadpt_reg);
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++int get_npu_irq(int index)
++{
++    if( index < NPU_INT_MAX_NUM )
++        return npu_glb->irq[index];
++    else
++        printk("\n get_npu_irq error, index=%d\n", index);
++    return 0;
++}
++EXPORT_SYMBOL(get_npu_irq);
++
++int host_notify_npuMbox(npuMboxInfo_t *mboxInfo)
++{
++    int reg_shift;
++    mboxArg_t arg;
++    int res=0;
++    int timeoutCnt=300; /* default 30ms */
++    unsigned long flag;
++#if 1 //mail box DBG
++#define NPU_SAVE_LOG_TIME 256
++    unsigned int npu_pc_log[NPU_SAVE_LOG_TIME];
++    int i;
++#endif
++
++    if ((mboxInfo->core_id>=MAX_CORE_NUM) || (mboxInfo->func_id>=MAX_MBOX_FUNC)) {
++        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", 
++                mboxInfo->core_id, MAX_CORE_NUM, mboxInfo->func_id, MAX_MBOX_FUNC);
++        return 0;
++    }
++
++    arg.hWord=0;
++
++    if ((mboxInfo->flags.isStaticBuffInit)||(mboxInfo->flags.isStaticBuffDel)) {
++        arg.bits.static_buff=1;
++    }
++
++    if (mboxInfo->flags.isBlockingMode) {
++        if (mboxInfo->blockTimeout)
++            timeoutCnt = mboxInfo->blockTimeout;
++        arg.bits.block_mode=1;
++    }
++
++    spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++	
++    host_register_mbox_cb(mboxInfo->core_id, mboxInfo->func_id, mboxInfo->cb);
++
++    arg.bits.func_id= (mboxInfo->func_id&MASK_FUNC_ID);
++    reg_shift = (mboxInfo->core_id<<4);
++    if (((mboxInfo->virtAddr)&&(mboxInfo->physAddr)&&(mboxInfo->len)) ||
++        (mboxInfo->flags.isStaticBuffDel)) {
++        mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id] = mboxInfo->virtAddr;
++        mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id] = mboxInfo->physAddr;
++        mboxObj[mboxInfo->core_id].size[mboxInfo->func_id] = mboxInfo->len;
++    }
++    else {
++        if (mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id]==0) {
++            printk("Error(%s): no default (virtAddr,physAddr,len), please assign them!\n", __func__);
++            spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++			return 0;
++        }
++    }
++
++    //spin_lock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
++    //spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, arg:0x%x, timeoutCnt:%d\n", 
++            __func__, mboxInfo->core_id, mboxInfo->func_id, arg.hWord, timeoutCnt);
++    #endif
++    set_npu_reg_data(CR_MBQ0_CTRL0+reg_shift, mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id]);
++    set_npu_reg_data(CR_MBQ0_CTRL1+reg_shift, mboxObj[mboxInfo->core_id].size[mboxInfo->func_id]);
++    set_npu_reg_data(CR_MBQ0_CTRL3+reg_shift, arg.hWord);
++    set_npu_reg_data(CR_MBQ0_CTRL2+reg_shift, get_npu_reg_data(CR_MBQ0_CTRL2+reg_shift)+1);
++
++#if 1 //mail box DBG
++    for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
++        npu_pc_log[i] = 0;
++    }
++    i = 0;
++#endif
++    while (1) 
++    {
++        arg.hWord = get_npu_reg_data(CR_MBQ0_CTRL3+reg_shift);
++        if (arg.bits.done_bit==1) {
++            res = (arg.bits.ret_status&MASK_RET_STATUS);
++            break;
++        }
++        
++        #if 1 //mail box DBG
++        if((timeoutCnt & 0x3) == 0)
++        {
++            if(i < NPU_SAVE_LOG_TIME) {
++                npu_pc_log[i] = get_npu_reg_data(CR_PC_BASE_ADDR);
++                i++;
++            }
++
++        }
++        #endif
++
++        timeoutCnt--;
++        if (timeoutCnt>=0){
++            if((CORE5 == mboxInfo->core_id) && (MFUNC_DBA == mboxInfo->func_id)){
++                udelay(40);
++            }else{
++                udelay(100);
++            }
++		}
++        else {
++            #if 1 //mail box DBG
++            printk("dump NPU pc\n");
++            for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
++                printk("0x%x ", npu_pc_log[i]);
++                if((i & 0x3) == 0x3)
++                    printk("\n");
++            }
++            #endif
++            printk("Error: %s timeout for core_id:%d, func_id:%d\n", __func__, mboxInfo->core_id, mboxInfo->func_id);
++            break;
++        }
++    }
++    #ifdef MBOX_DBG_ON
++    printk("%s exit (res:%d, timeoutCnt:%d)\n", __func__, res, timeoutCnt);
++    #endif
++
++    //spin_unlock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
++    spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
++    
++    return res;
++}
++EXPORT_SYMBOL(host_notify_npuMbox);
++static void mbox_tasklet_handler(unsigned long data)
++{
++    unsigned short core_id = get_npu_reg_data(CR_MBQ8_CTRL0)&MASK_CORE_ID;
++    unsigned short func_id;
++    unsigned short len = get_npu_reg_data(CR_MBQ8_CTRL1);
++    int status=0;
++    mboxArg_t arg;
++    
++    arg.hWord = get_npu_reg_data(CR_MBQ8_CTRL3);
++    func_id = arg.bits.func_id;
++
++    #ifdef MBOX_DBG_ON
++    printk("%s: core_id:%d, func_id:%d, arg:0x%x\n", __func__, core_id, func_id, arg.hWord);
++    #endif
++
++    spin_lock(&mboxObj[core_id].mboxBuffLock);
++    
++    if(mboxObj[core_id].mbox8_cb[func_id]) {
++        status = mboxObj[core_id].mbox8_cb[func_id] (mboxObj[core_id].virtAddr[func_id], len);
++    }
++    
++    spin_unlock(&mboxObj[core_id].mboxBuffLock);
++
++    arg.bits.ret_status=(status&MASK_RET_STATUS);
++    arg.bits.done_bit=1;
++
++    /* let NPU know that host has done */
++    set_npu_reg_data(CR_MBQ8_CTRL3, arg.hWord);
++    
++    return;
++}
++
++static irqreturn_t npuMbox2host_isr(int irq, void *dev_id)
++{
++
++    if (mbox2host_cb) {
++        mbox2host_cb();
++    }
++    else {
++    	/* clear mbox8 interrupt */
++        set_npu_reg_data(CR_MBOX_INTR_STATUS, 1<<MBOX2HOST_IDX);
++
++    	tasklet_schedule(&mbox_tasklet);
++    }
++	return IRQ_HANDLED;
++}
++
++void host_dump_npu_csr(int core)
++{
++    #ifdef TCSUPPORT_NPU_V2
++    const char * CSR_NAME[] = {"PC", "SP", "LR"};
++	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8};
++    #else
++	const char * CSR_NAME[] = {"PC", "SP", "LR", "Cyc_Cnt[31:0]" ,"Cyc_Cnt[63:32]" ,"Ins_Cnt[31:0]", 
++												"Ins_Cnt[63:32]", "MTVAL", "MCAUSE", "MEPC", "MSTATUS", "MICAUSE"};
++	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30};
++    #endif
++	unsigned int tmpVal;
++	int i;
++
++
++	printk("\n[H]Dump NPU core %d CSR START\n", core);
++	for (i = 0; i < CSR_REG_NUM; i++) {
++        tmpVal = get_npu_dbg_csr(core, csr_ofs[i]);
++		printk("%-15s<0x%x>\n", CSR_NAME[i], tmpVal);
++	}
++	printk("[H]Dump CSR END\n\n");
++	
++	return;
++}
++EXPORT_SYMBOL(host_dump_npu_csr);
++
++#if 0
++static int is_npu_wdog_enabled(int wdog_no)
++{
++    unsigned int WDOG_CTRL_REG, shift;
++    
++    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
++    WDOG_CTRL_REG = NPU_TIME0_BASE;
++    shift = wdog_en_bit[wdog_no];
++    #else
++	WDOG_CTRL_REG = NPU_TIME0_BASE+(wdog_no<<8);
++    shift = wdog_en_bit[0];
++    #endif
++
++	if (wdog_no >3)
++	{
++    	WDOG_CTRL_REG = NPU_TIME1_BASE;
++    	shift = wdog_en_bit[wdog_no];	
++	}
++    return ((get_npu_reg_data(WDOG_CTRL_REG)>>shift)&0x1);
++}
++static void host_clear_npu_wdog_intr(int wdog_no)
++{
++    unsigned int WDOG_CTRL_REG, val;
++    
++    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
++    WDOG_CTRL_REG = NPU_TIME0_BASE;
++    #else
++	WDOG_CTRL_REG = NPU_TIME0_BASE+(wdog_no<<8);
++    #endif
++	if (wdog_no>3)
++		WDOG_CTRL_REG =NPU_TIME1_BASE;
++    val = get_npu_reg_data(WDOG_CTRL_REG);
++    val &= TMR_EN_BITS; /* keep enable_bits */
++    /* add wdog_intr_bit to clear wdog threshold interrupt */
++    #if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P)
++    val |= (1<<wdog_intr_bit[wdog_no]);
++    #else
++    val |= (1<<wdog_intr_bit[0]);
++    #endif
++    set_npu_reg_data(WDOG_CTRL_REG, val); /* clear timer source and keep timer enabled */
++
++    return;
++}
++
++static irqreturn_t npu_wdog_isr(int irq, void *dev_id)
++{
++	int wdog_no;
++    //unsigned int WDOG_CTRL_REG, val;
++    
++
++    for (wdog_no=0; wdog_no<NPU_NUM_CORES; wdog_no++) {
++        if (irq==npu_glb->wdog_irq[wdog_no])
++            break;
++    }
++    
++    if (wdog_no<NPU_NUM_CORES) {
++
++        #if defined(NPU_TEST_CODE)
++        if (host_check_npu_wdog_intr_stat(wdog_no))
++            return IRQ_HANDLED;
++        
++        #else
++         /* clear npu_wdog interrupt source */
++        host_clear_npu_wdog_intr(wdog_no);
++        #endif
++
++        /* some npu timer and wdog share the same interupt, but only wdog case needs to print dbgMsg. */
++        if (is_npu_wdog_enabled(wdog_no)) {
++            printk("[H]Recieve irq from npu_wdog%d with irq_num:%d\n", wdog_no, irq);
++    	    host_dump_npu_csr(wdog_no);
++        }
++    }
++    else {
++        printk("[H] Error: can't find npu_wdog_intr_num for irq_num:%d\n", irq);
++    }
++	return IRQ_HANDLED;
++}
++#endif
++void npu_rv32_init(void)
++{
++	// NPU wifi offload reserve 16M block to save packet when boot, and get the address in here (after npu bring up)
++	//npu_wifi_offload_dbg_proc_create();
++	unsigned int isMailBoxSuccess = 0;
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(1, isNpuBand0OnCpu);
++	
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get NPU Band0 On CPU flag Fail!!!\n");
++
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(0,npu_wifi_offload_get_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");	
++	/* when TDMA tx is used with DRAM, need these func
++#ifdef TCSUPPORT_NPU_WIFI_TDMA_OFFLOAD
++	printk("npu_wifi_offload_get_tdma_tx_pkt_buf_addr=%x\n", npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TDMA_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
++#endif
++	*/	
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
++}
++char npu_stat;
++EXPORT_SYMBOL(npu_stat);
++#define NPU_PKT_BUF_SIZE 0x1600000
++#define NPU_TX_PKT_BUF_SIZE 0x3a00000
++#define NPU_BA_NODE_SIZE (0x200000)
++void arioha_arm_memblock_init_inline_hook(void)
++{
++	/***pkt buf addr****/
++	phys_addr_t npu_pkt_buf_phy_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
++#endif	
++	if(npu_pkt_buf_phy_addr)
++	{
++		memblock_reserve(npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
++		npu_wifi_offload_set_pkt_buf_addr(npu_pkt_buf_phy_addr);
++		printk("npu_pkt_buffer memblock_alloc:%llx,buf_size=%x\n\r", npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_pkt_buffer memblock_alloc fail \n\r");
++	}
++	/*** tx pkt buff addr ***/
++	phys_addr_t npu_tx_pkt_buf_phy_addr = 0;
++	//printk("try alloc for tx pkt buf\n");
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_tx_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_TX_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
++#endif
++
++	if(npu_tx_pkt_buf_phy_addr)
++	{
++		memblock_reserve(npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
++		npu_wifi_offload_set_tx_pkt_buf_addr(npu_tx_pkt_buf_phy_addr);
++		printk("npu_tx_pkt_buffer 7581 memblock_alloc:%llx, buf_size=%x\n\r", npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_tx_pkt_buffer memblock_alloc fail \n\r");
++	}	
++	
++	/*** ba node addr ***/
++	phys_addr_t npu_ba_node_phy_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	npu_ba_node_phy_addr = memblock_phys_alloc_range(NPU_BA_NODE_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
++#endif
++	if(npu_ba_node_phy_addr)
++	{
++		memblock_reserve(npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
++		npu_wifi_offload_set_ba_node_addr(npu_ba_node_phy_addr);
++		printk("npu_ba_node memblock_alloc:%llx,buf_size=%x\n\r", npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
++	}
++}
++EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
++#endif
++#endif
++/*****************/
+ static int airoha_npu_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+ 	struct reserved_mem *rmem;
+-	struct airoha_npu *npu;
+ 	struct device_node *np;
+ 	void __iomem *base;
+ 	int i, irq, err;
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
++	//unsigned int isMailBoxSuccess = 0;
++	npuCoreId_t core_id;
++	int irq_idx,ret;
++#endif
+ 	base = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(base))
+ 		return PTR_ERR(base);
+ 
+-	npu = devm_kzalloc(dev, sizeof(*npu), GFP_KERNEL);
+-	if (!npu)
++	npu_glb= devm_kzalloc(dev, sizeof(*npu_glb), GFP_KERNEL);
++	if (!npu_glb)
+ 		return -ENOMEM;
+ 
+-	npu->dev = dev;
+-	npu->ops.ppe_init = airoha_npu_ppe_init;
+-	npu->ops.ppe_deinit = airoha_npu_ppe_deinit;
+-	npu->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
+-	npu->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
+-
+-	npu->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
+-	if (IS_ERR(npu->regmap))
+-		return PTR_ERR(npu->regmap);
++	npu_glb->dev = dev;
++	npu_glb->ops.ppe_init = airoha_npu_ppe_init;
++	npu_glb->ops.ppe_deinit = airoha_npu_ppe_deinit;
++	npu_glb->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
++	npu_glb->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
++	npu_glb->ops.wifi_set_txrx_reg_addr = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR;
++	npu_glb->ops.wifi_set_pcie_port_type = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE;
++	npu_glb->ops.wifi_set_dram_ba_node_addr = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR;
++	npu_glb->ops.wifi_set_pcie_addr = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR;
++	npu_glb->ops.wifi_set_desc = WIFI_MAIL_API_SET_WAIT_DESC;
++	npu_glb->ops.wifi_set_tx_ring_pcie_addr = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR;
++	npu_glb->ops.wifi_get_rxdesc_base = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE;
++	npu_glb->ops.wifi_set_tx_buf_space_base = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE;
++	npu_glb->ops.wifi_set_rx_ring_for_txdone_hw_base = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE;
++	npu_glb->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
++	npu_glb->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
++	npu_glb->ops.hostdapt_enable_interrupt_ops = hostdapt_enable_interrupt;
++	npu_glb->ops.hostdapt_disable_interrupt_ops = hostdapt_disable_interrupt;
++	npu_glb->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
++	npu_glb->ops.airoha_npu_flow_cnt_setup = airoha_npu_flow_cnt_setup;
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	npu_glb->Regbase = base;
++#endif
++	npu_glb->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
++	if (IS_ERR(npu_glb->regmap))
++		return PTR_ERR(npu_glb->regmap);
+ 
+ 	np = of_parse_phandle(dev->of_node, "memory-region", 0);
+ 	if (!np)
+@@ -486,25 +1100,15 @@ static int airoha_npu_probe(struct platf
+ 	if (!rmem)
+ 		return -ENODEV;
+ 
+-	irq = platform_get_irq(pdev, 0);
+-	if (irq < 0)
+-		return irq;
+-
+-	err = devm_request_irq(dev, irq, airoha_npu_mbox_handler,
+-			       IRQF_SHARED, "airoha-npu-mbox", npu);
+-	if (err)
+-		return err;
+-
+-	for (i = 0; i < ARRAY_SIZE(npu->cores); i++) {
+-		struct airoha_npu_core *core = &npu->cores[i];
++	for (i = 0; i < ARRAY_SIZE(npu_glb->cores); i++) {
++		struct airoha_npu_core *core = &npu_glb->cores[i];
+ 
+ 		spin_lock_init(&core->lock);
+-		core->npu = npu;
++		core->npu = npu_glb;
+ 
+ 		irq = platform_get_irq(pdev, i + 1);
+ 		if (irq < 0)
+ 			return irq;
+-
+ 		err = devm_request_irq(dev, irq, airoha_npu_wdt_handler,
+ 				       IRQF_SHARED, "airoha-npu-wdt", core);
+ 		if (err)
+@@ -513,6 +1117,15 @@ static int airoha_npu_probe(struct platf
+ 		INIT_WORK(&core->wdt_work, airoha_npu_wdt_work);
+ 	}
+ 
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	for( irq_idx = 0; irq_idx < NPU_INT_MAX_NUM; irq_idx++ ){
++		irq = platform_get_irq(pdev, irq_idx + NPU_NUM_CORES + 1);
++		if (irq <= 0)
++			return irq;
++		npu_glb->irq[irq_idx] = irq;
++	}	
++#endif
++
+ 	err = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+ 	if (err)
+ 		return err;
+@@ -521,26 +1134,50 @@ static int airoha_npu_probe(struct platf
+ 	if (err)
+ 		return dev_err_probe(dev, err, "failed to run npu firmware\n");
+ 
+-	regmap_write(npu->regmap, REG_CR_NPU_MIB(10),
++	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(10),
+ 		     rmem->base + NPU_EN7581_FIRMWARE_RV32_MAX_SIZE);
+-	regmap_write(npu->regmap, REG_CR_NPU_MIB(11), 0x40000); /* SRAM 256K */
+-	regmap_write(npu->regmap, REG_CR_NPU_MIB(12), 0);
+-	regmap_write(npu->regmap, REG_CR_NPU_MIB(21), 1);
++	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(11), 0x40000); /* SRAM 256K */
++	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(12), 0);
++	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(21), 0);
+ 	msleep(100);
+ 
+ 	/* setting booting address */
+ 	for (i = 0; i < NPU_NUM_CORES; i++)
+-		regmap_write(npu->regmap, REG_CR_BOOT_BASE(i), rmem->base);
++		regmap_write(npu_glb->regmap, REG_CR_BOOT_BASE(i), rmem->base);
+ 	usleep_range(1000, 2000);
+ 
+ 	/* enable NPU cores */
+ 	/* do not start core3 since it is used for WiFi offloading */
+-	regmap_write(npu->regmap, REG_CR_BOOT_CONFIG, 0xf7);
+-	regmap_write(npu->regmap, REG_CR_BOOT_TRIGGER, 0x1);
+-	msleep(100);
+ 
+-	platform_set_drvdata(pdev, npu);
++	//regmap_write(npu->regmap, REG_CR_BOOT_CONFIG, 0xf7);
++	/* enable all NPU cores */
++	regmap_write(npu_glb->regmap, REG_CR_BOOT_CONFIG, 0xff);
++	regmap_write(npu_glb->regmap, REG_CR_BOOT_TRIGGER, 0x1);
++
++	//npu_glb->mbox2host_irq = platform_get_irq(pdev, NPU_INT_MAX_NUM);
++	npu_glb->mbox2host_irq = platform_get_irq(pdev, 0);
++	if(npu_glb->mbox2host_irq <= 0) {
++		return npu_glb->mbox2host_irq;
++	}	
++	ret = request_irq(npu_glb->mbox2host_irq, npuMbox2host_isr, 0, "npuMbox2host", npu_glb->dev);
++	if(ret) {
++		return (ret);
++	}	
++    tasklet_init(&mbox_tasklet, mbox_tasklet_handler, 0);
++    for (core_id=0; core_id<NPU_NUM_CORES; core_id++) 
++    {
++        memset(&mboxObj[core_id], 0, sizeof(npuMboxObj_t));
++        spin_lock_init(&mboxObj[core_id].npuMboxLock);
++        spin_lock_init(&mboxObj[core_id].mboxBuffLock);
++    }	
++
++	msleep(100);
++	platform_set_drvdata(pdev, npu_glb);
+ 
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	npu_rv32_init();
++	hostadpInit();	
++#endif
+ 	return 0;
+ }
+ 
+@@ -550,7 +1187,14 @@ static void airoha_npu_remove(struct pla
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(npu->cores); i++)
+-		cancel_work_sync(&npu->cores[i].wdt_work);
++		cancel_work_sync(&npu->cores[i].wdt_work);	
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	tasklet_kill(&mbox_tasklet);
++    /*not add debug count now, add later*/
++    //npu_wifi_offload_dbg_proc_remove();
++	hostadpExit();
++#endif	
++	//hostadpExit();
+ }
+ 
+ static struct platform_driver airoha_npu_driver = {
+--- a/drivers/net/ethernet/airoha/airoha_npu.h
++++ b/drivers/net/ethernet/airoha/airoha_npu.h
+@@ -3,35 +3,11 @@
+  * Copyright (c) 2025 AIROHA Inc
+  * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+  */
+-
+-#define NPU_NUM_CORES		8
+-
+-struct airoha_npu {
+-	struct device *dev;
+-	struct regmap *regmap;
+-
+-	struct airoha_npu_core {
+-		struct airoha_npu *npu;
+-		/* protect concurrent npu memory accesses */
+-		spinlock_t lock;
+-		struct work_struct wdt_work;
+-	} cores[NPU_NUM_CORES];
+-
+-	struct airoha_foe_stats *stats;
+-
+-	struct {
+-		int (*ppe_init)(struct airoha_npu *npu);
+-		int (*ppe_deinit)(struct airoha_npu *npu);
+-		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
+-					      dma_addr_t foe_addr,
+-					      int sram_num_entries);
+-		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
+-					    dma_addr_t foe_addr,
+-					    u32 entry_size, u32 hash,
+-					    bool ppe2);
+-	} ops;
+-};
++#ifndef AIROHA_NPU_H
++#define AIROHA_NPU_H	 
++#include <linux/soc/airoha/airoha_npu_g.h>
+ 
+ struct airoha_npu *airoha_npu_get(struct device *dev,
+ 				  dma_addr_t foe_stats_addr);
+ void airoha_npu_put(struct airoha_npu *npu);
++#endif
+--- /dev/null
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -0,0 +1,1315 @@
++#include <linux/proc_fs.h>
++#include "hostadpt.h"
++
++//extern struct device* get_gdmpSram_dev(void);
++extern struct device* get_ecnt_npu_dev(void);
++volatile unsigned short int reTryTimes;
++unsigned int hostaptDebug = DBG_OFF;
++
++HOSTADPT_DMA_DSCP_T *pHostadptRX_BASE[HOSTADPT_RX_RING_NUM] = {NULL};
++u32 hostadpt_rx_dscp_max_num[HOSTADPT_RX_RING_NUM] = {HOSTADPT_RX0_DSCP_NUM, HOSTADPT_RX1_DSCP_NUM};
++u32 hostadpt_rx_dma_idx[HOSTADPT_RX_RING_NUM] = {0};
++u32 hostadpt_rx_cpu_idx[HOSTADPT_RX_RING_NUM] = {0};
++unsigned long int *HOSTADPT_CNT_Base, *HOSTADPT_CNT_2GBase;
++#ifdef TCSUPPORT_NPU_V2
++#define HOSTADPT_COUNTER(addr,i)		(*((unsigned long int *)((unsigned long int)addr + (i << 3))))
++#else 
++#define HOSTADPT_COUNTER(addr,i)		(*((unsigned long int *)((unsigned long int)addr + (i << 2))))
++#endif
++
++extern int get_npu_irq(int index);
++
++#if defined(TCSUPPORT_WLAN_INODE) || defined(TCSUPPORT_NPU_WIFI_TX)
++u32 hostadpt_tx_dma_idx[2] = {0};
++u32 hostadpt_tx_cpu_idx[2] = {0};
++u32 hostadpt_tx_skbin_cnt[2] = {0};
++u32 hostadpt_tx_skbfree_cnt[2] = {0};
++int host_apd_debug[2] = {0};
++static DEFINE_SPINLOCK(hostadpt_lock_2G);
++#endif
++
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++static DEFINE_SPINLOCK(hostadpt_lock_test);
++#endif
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t hostadpt_dbg_counter(struct file *file, char __user *buf, size_t count, loff_t *data)
++#else
++static int hostadpt_dbg_counter(char *buf, char **start, off_t offset, int count, int *eof, void *data)
++#endif
++{
++
++	//printk("------NPU Hostadpt Counter (5G)----------\n");
++	printk("------NPU Hostadpt Counter (6G)----------\n");
++	printk("GET_NORMAL_SIZE_PKT:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,GET_NORMAL_PKT));
++	printk("GET_BIGGER_PKT:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,GET_BIGGER_PKT));
++	printk("BIGPKT_CHECK_PKT_LOSE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE));
++	printk("BIGPKT_CHECK_PKT_LOSE1:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE1));
++	printk("BIGPKT_CHECK_PKT_LOSE2:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE2));
++	printk("BIGPKT_CHECK_PKT_LOSE3:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE3));
++	printk("BIGPKT_CHECK_PKT_OVER_RETRY:\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_OVER_RETRY));
++	printk("BIGPKT_COMBINE_PKT_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_COMBINE_PKT_FAIL));
++	printk("BIGPKT_COMBINE_PKT_DONE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_COMBINE_PKT_DONE));
++	printk("ALLOC_NEW_SKB_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,ALLOC_NEW_SKB_FAIL));
++	printk("SEND_PKT_TO_DRIVER:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,SEND_PKT_TO_DRIVER));
++	printk("TX_GET_PKT_FROM_TXRING:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,TX_GET_PKT_FROM_TXRING));
++	printk("TX_Q_IS_FULL:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,TX_Q_IS_FULL));
++
++	//printk("------NPU Hostadpt Counter (2.4G)----------\n");
++	printk("------NPU Hostadpt Counter (2.4G/5G)----------\n");
++	printk("GET_NORMAL_SIZE_PKT:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,GET_NORMAL_PKT));
++	printk("GET_BIGGER_PKT:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,GET_BIGGER_PKT));
++	printk("BIGPKT_CHECK_PKT_LOSE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE));
++	printk("BIGPKT_CHECK_PKT_LOSE1:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE1));
++	printk("BIGPKT_CHECK_PKT_LOSE2:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE2));
++	printk("BIGPKT_CHECK_PKT_LOSE3:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE3));
++	printk("BIGPKT_CHECK_PKT_OVER_RETRY:\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_OVER_RETRY));
++	printk("BIGPKT_COMBINE_PKT_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_COMBINE_PKT_FAIL));
++	printk("BIGPKT_COMBINE_PKT_DONE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_COMBINE_PKT_DONE));
++	printk("ALLOC_NEW_SKB_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,ALLOC_NEW_SKB_FAIL));
++	printk("SEND_PKT_TO_DRIVER:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,SEND_PKT_TO_DRIVER));
++	printk("TX_GET_PKT_FROM_TXRING:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,TX_GET_PKT_FROM_TXRING));
++	printk("TX_Q_IS_FULL:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,TX_Q_IS_FULL));
++	return 0;
++}
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t retry_times_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
++{
++	char user_buf[32] = {0};
++	size_t len = count, buf_length = 0;
++	loff_t pos = *ppos;
++	unsigned long ret = 0;
++	ssize_t retval = 0;
++	
++	/* use memory size for data stream or use length of string buffer */
++	buf_length = snprintf(user_buf, sizeof(user_buf), "%d\n", reTryTimes);
++	
++	/* valid check */
++	if ( pos >= buf_length )
++		return 0;
++	if ( len >= buf_length )
++		len = buf_length;
++	if ( pos + len > buf_length )
++		len = buf_length - pos;
++	
++	/* ret contains the amount of chars wasn't successfully written to buf */
++	ret = copy_to_user(buf, user_buf + pos, len);
++	
++	*ppos += len;
++	retval = len - ret;
++
++	return retval;
++}
++#else
++static int retry_times_proc_read(char *buf, char **start, off_t offset, int count, int *eof, void *data)
++{
++	int len = 0;
++
++	len += sprintf(buf +len, "%d\n", reTryTimes);
++	if(len > PAGE_SIZE)
++	{
++		return -ENOBUFS;
++	}
++	return len;
++}
++#endif
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t retry_times_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *data)
++#else
++static int retry_times_proc_write(struct file *file, const char *buffer, unsigned long count, void *data)
++#endif
++{
++	char buf[16];
++	unsigned long int len = count;
++	unsigned short int n;
++
++	//printk();
++	if(len >= sizeof(buf))
++	{
++		len = sizeof(buf) - 1;
++	}
++	
++	if(copy_from_user(buf, buffer, len))
++	{
++		return -EFAULT;
++	}
++	buf[len] = '\n';
++
++	n = simple_strtol(buf, NULL, 10);
++	if(n > 0)
++	{
++		reTryTimes = n;
++		printk("[HOSTADPT]retry times is %d\n", reTryTimes);
++	}
++	else
++		printk("retry times should be greater than 0\n");
++	
++	return len;
++}
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t hostapt_dbg_flag_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
++{
++	char user_buf[32] = {0};
++	size_t len = count, buf_length = 0;
++	loff_t pos = *ppos;
++	unsigned long ret = 0;
++	ssize_t retval = 0;
++	
++	/* use memory size for data stream or use length of string buffer */
++	buf_length = snprintf(user_buf, sizeof(user_buf), "%d\n", hostaptDebug);
++	
++	/* valid check */
++	if ( pos >= buf_length )
++		return 0;
++	if ( len >= buf_length )
++		len = buf_length;
++	if ( pos + len > buf_length )
++		len = buf_length - pos;
++	
++	/* ret contains the amount of chars wasn't successfully written to buf */
++	ret = copy_to_user(buf, user_buf + pos, len);
++	
++	*ppos += len;
++	retval = len - ret;
++
++	return retval;
++}
++#else
++static int hostapt_dbg_flag_proc_read(char *buf, char **start, off_t offset, int count, int *eof, void *data)
++{
++	int len = 0;
++
++	len += sprintf(buf +len, "%d\n", hostaptDebug);
++	if(len > PAGE_SIZE)
++	{
++		return -ENOBUFS;
++	}
++	return len;
++}
++#endif
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t hostapt_dbg_flag_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *data)
++#else
++static int hostapt_dbg_flag_proc_write(struct file *file, const char *buffer, unsigned long count, void *data)
++#endif
++{
++	char buf[16];
++	unsigned long int len = count;
++	unsigned short int n;
++
++	//printk();
++	if(len >= sizeof(buf))
++	{
++		len = sizeof(buf) - 1;
++	}
++	
++	if(copy_from_user(buf, buffer, len))
++	{
++		return -EFAULT;
++	}
++	buf[len] = '\n';
++
++	n = simple_strtol(buf, NULL, 10);
++	if(n > 0)
++	{
++		if(n >= DBG_MAX)
++			n = DBG_MAX - 1;
++		
++		hostaptDebug = n;	
++		printk("[HOSTADPT]hostaptDebug is %d\n", hostaptDebug);
++	}
++	else
++		printk("hostaptDebug should be greater than 0\n");
++	
++	return len;
++}
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static const struct proc_ops hostadpt_dbg_counter_proc_ops =
++{
++	.proc_read	= hostadpt_dbg_counter,
++};
++
++static const struct proc_ops retry_times_proc_ops =
++{
++	.proc_read	= retry_times_proc_read,
++	.proc_write	= retry_times_proc_write,		
++};
++
++static const struct proc_ops hostapt_dbg_flag_proc_ops =
++{
++	.proc_read	= hostapt_dbg_flag_proc_read,
++	.proc_write	= hostapt_dbg_flag_proc_write,		
++};
++
++#endif
++
++void HOST_PKT_COUNTER(unsigned long int offset, unsigned char ring_idx)
++{
++	unsigned long int *COUNTER_ADDR = NULL;
++	if(offset >= HADPT_CNT_BOTTOM)
++	{
++		return;
++	}
++	if(ring_idx)
++	{
++#ifdef TCSUPPORT_NPU_V2
++		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_Base + (offset << 3));
++#else 
++		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_Base + (offset << 2));
++#endif
++	}
++	else
++	{
++#ifdef TCSUPPORT_NPU_V2
++		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_2GBase + (offset << 3));
++#else 
++		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_2GBase + (offset << 2));
++#endif
++	}
++	//if(*COUNTER_ADDR == 0xffffffff) (*COUNTER_ADDR) = 0;
++	//else
++	(*COUNTER_ADDR) += 1;
++	return;
++
++}
++
++static int hostadpt_rxdscp_init(void)
++{
++	dma_addr_t dscpDmaAddr=0;
++	int i;
++	//u32 dmaIdx = 0;
++	struct device *dev = NULL ;
++	unsigned long dscpBaseAddr=0 ;
++	HOSTADPT_DMA_DSCP_T *dscp = NULL;
++	struct sk_buff *skb = NULL;
++	//struct proc_dir_entry *entry, *dbg_entry;
++	//struct proc_dir_entry *entry_debug;
++	unsigned long int hostadpt_cnt_pa, hostadpt_cnt_pa2;
++
++	/******************************************
++	* Allocate descriptor DMA memory		  *
++	*******************************************/
++	if( (dev=(struct device *)get_ecnt_npu_dev()) == NULL ) {
++		HOSTADPT_MSG(DBG_ERR, "Get device failed.\n") ; 
++		return -ENOMEM ;
++	}
++	//alloc for dbg counter
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++	HOSTADPT_CNT_Base = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (long long unsigned int *)&hostadpt_cnt_pa, GFP_KERNEL);
++	memset(HOSTADPT_CNT_Base, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
++	HOSTADPT_CNT_2GBase = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (long long unsigned int *)&hostadpt_cnt_pa2, GFP_KERNEL);
++	memset(HOSTADPT_CNT_2GBase, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
++#else
++	HOSTADPT_CNT_Base = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (unsigned int *)&hostadpt_cnt_pa, GFP_KERNEL);
++	memset(HOSTADPT_CNT_Base, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
++	HOSTADPT_CNT_2GBase = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (unsigned int *)&hostadpt_cnt_pa2, GFP_KERNEL);
++	memset(HOSTADPT_CNT_2GBase, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
++#endif
++	//printk("%d alloc size:%d*%d ", __LINE__, sizeof(HOSTADPT_DMA_DSCP_T), HOSTADPT_RX_TOTAL_DSCP_NUM);
++
++#ifdef TCSUPPORT_NPU_V2
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, (GFP_KERNEL|__GFP_NOWARN|__GFP_DMA)) ;
++#else
++	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (unsigned int *)&dscpDmaAddr, (GFP_KERNEL|__GFP_NOWARN|__GFP_DMA)) ;
++#endif
++#else
++	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, GFP_KERNEL) ;
++#endif
++	if(!dscpBaseAddr) {
++		HOSTADPT_MSG(DBG_ERR, "Allocate memory for TX/RX DSCP failed.\n") ; 
++		return -ENOMEM ;
++	}
++
++	pHostadptRX_BASE[0] = (HOSTADPT_DMA_DSCP_T *)dscpBaseAddr ;
++	pHostadptRX_BASE[1] = pHostadptRX_BASE[0] + HOSTADPT_RX0_DSCP_NUM;
++
++	HOSTADPT_MSG(DBG_LOG, "dscpDmaAddr =%llx\n",dscpDmaAddr) ; 
++
++	/***************************************************
++	* Initialization first DSCP for Rx DMA			  *
++	****************************************************/
++	dscp = pHostadptRX_BASE[0];
++	for(i=0; i<HOSTADPT_RX_TOTAL_DSCP_NUM; i++) {		
++		skb = alloc_skb(HOSTAPD_BUFFER_LEN, GFP_KERNEL); 
++		if(skb == NULL)
++		{
++			HOSTADPT_MSG(DBG_ERR, "alloc skb faild!");
++			return -ENOMEM ;
++		}
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++		dscp->skb_p = (u64)skb;
++#else
++		dscp->skb_p = (u32)skb;
++#endif
++		dscp->pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb->data), HOSTAPD_BUFFER_LEN, DMA_TO_DEVICE);
++		dscp->pkt_info.pkt_idx = 0;
++		dscp->pkt_ctrl.is_last = 0;
++		dscp->pkt_ctrl.done = 0;
++		//dma_unmap_single(dev, dscp->pkt_addr, HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
++		dscp++;	
++	}
++	
++	
++	//write rx0/rx1 num to reg
++	set_npu_hostadpt_reg(HOSTADPT_RX0_MAX_CNT, HOSTADPT_RX0_DSCP_NUM);
++	set_npu_hostadpt_reg(HOSTADPT_RX1_MAX_CNT, HOSTADPT_RX1_DSCP_NUM);
++	
++	//set rx0/rx1 hostadpt_rx_cpu_idx/hostadpt_rx_dma_idx 
++	set_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX, 0);
++	set_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX, 0);
++	
++	set_npu_hostadpt_reg(HOSTADPT_RX0_DMA_IDX, 0);
++	set_npu_hostadpt_reg(HOSTADPT_RX1_DMA_IDX, 0);
++	
++	//write rx0/rx1 base to reg
++	//Please add other code before this line which is about initialization. 
++	set_npu_hostadpt_reg(HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
++	set_npu_hostadpt_reg(HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
++
++#if 0
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++	// create a proc for show debug counter
++	dbg_entry = proc_create("tc3162/hostadpt_dbg_counter", 0666, NULL, &hostadpt_dbg_counter_proc_ops);
++
++	// create a proc for setting retry times
++	entry = proc_create("tc3162/hostadpt_set_retry_times", 0666, NULL, &retry_times_proc_ops);
++	reTryTimes = 3;
++
++	// create a proc for setting retry times
++	entry_debug = proc_create("tc3162/hostadpt_set_dbg_flag", 0666, NULL, &hostapt_dbg_flag_proc_ops);
++#else
++	// create a proc for show debug counter
++	dbg_entry = create_proc_entry("tc3162/hostadpt_dbg_counter", 0666, NULL);
++	if(dbg_entry == NULL)
++	{
++		printk(KERN_WARNING"proc: unable to create proc(hostadpt_dbg_counter) entry\n");
++
++	}
++	else
++	{
++		dbg_entry->read_proc = hostadpt_dbg_counter;
++	}
++
++	// create a proc for setting retry times
++	entry = create_proc_entry("tc3162/hostadpt_set_retry_times", 0666, NULL);
++	if(entry == NULL)
++	{
++		printk(KERN_WARNING"proc: unable to create proc entry\n");
++	}
++	else
++	{
++		entry->read_proc = retry_times_proc_read;
++		entry->write_proc = retry_times_proc_write;
++		reTryTimes = 3;
++	}
++
++	// create a proc for setting retry times
++	entry_debug = create_proc_entry("tc3162/hostadpt_set_dbg_flag", 0666, NULL);
++	if(entry_debug == NULL)
++	{
++		printk(KERN_WARNING"proc: unable to create proc entry\n");
++	}
++	else
++	{
++		entry_debug->read_proc = hostapt_dbg_flag_proc_read;
++		entry_debug->write_proc = hostapt_dbg_flag_proc_write;
++	}
++#endif
++#endif
++	return 0;
++
++}
++
++
++int rxdone_cb(struct sk_buff *skb)
++{
++	u32 j = 0, len = skb->len;
++	u32 *data = (u32 *)skb->data;
++	printk("host adaptor received data:\n");
++	for(j = 0; j < len; j++, data++)
++	{
++		if(j % 20 == 0) printk("\n");
++		printk("%d\t", *data);			
++	}
++	printk("\n");
++	//free 
++	kfree_skb(skb);
++	return 0;
++}
++extern int wifiqueue_start_idx;
++extern int (*getWifiQueueIndex_hook)(struct net_device *dev,unsigned char direction);
++extern int (*soft_ratelimit_check_queue_hook)(unsigned int queue_idx);
++#define WIFI_RATELIMIT_RX 0
++
++struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec)
++{	
++	HOSTADPT_DMA_DSCP_T *pHostadptRX = NULL, *pHostadptRX_tmp= NULL;  //*pHostadptRX_tmp2=NULL;
++	struct sk_buff *skb = NULL;
++	struct sk_buff *skb_tmp = NULL;
++	struct sk_buff *skb_all = NULL;
++	struct sk_buff *skb_new = NULL;
++	struct device *dev = NULL ;
++	unsigned char pkt_idx=0, pkt_cnt=0, allPkt_done=0, scatter_cnt = 0;//, last_cnt = 0;
++	unsigned char pkt_cnt_dbg = 0;
++	u32 cpu_idx_tmp = 0, try_times=0;// ,pkt_len;
++	static unsigned short cur_pktSize = 0,total_pktSize = 0;
++	
++        unsigned char checkfail = 0;
++	unsigned int realcopylen = 0;
++	u32 	pkt_addr = 0;
++	u32 	scatter_pkt_len = 0;
++	u32 cur_len,single_total_len,all_total_len;
++	u8 is_last,ddonebit;
++	HOSTADPT_MSG(DBG_LOG, "RX%d enter hostadpt_rx_handler...\n", ring_idx);
++ 
++	if(ring_idx >= HOSTADPT_RX_RING_NUM)
++	{
++		HOSTADPT_MSG(DBG_ERR, "ring idx error!\n");
++		return NULL;
++	}
++	
++	pHostadptRX =pHostadptRX_BASE[ring_idx] + hostadpt_rx_cpu_idx[ring_idx];
++	
++	if(pHostadptRX->pkt_ctrl.done == 0) 
++	{
++		HOSTADPT_MSG(DBG_LOG, "no data to receive!\n");
++		return NULL;
++	}
++	HOSTADPT_MSG(DBG_LOG, "old addr: %x\n",pHostadptRX->pkt_addr);
++	HOSTADPT_MSG(DBG_LOG, "pkt len: %d\n",pHostadptRX->pkt_ctrl.len);
++	HOSTADPT_MSG(DBG_LOG, "recv done: %d\n",pHostadptRX->pkt_ctrl.done);
++	HOSTADPT_MSG(DBG_LOG, "foe_number: %d\n",pHostadptRX->pkt_info.foe_number);
++	HOSTADPT_MSG(DBG_LOG, "crsn: %d\n",pHostadptRX->pkt_info.crsn);
++
++	*vnd_spec = pHostadptRX->vend_specific;
++	if(1)
++	{
++		if(pHostadptRX->pkt_ctrl.len != pHostadptRX->pkt_ctrl.cur_len)
++		{
++			HOST_PKT_COUNTER(GET_BIGGER_PKT, ring_idx);
++			
++			cpu_idx_tmp = hostadpt_rx_cpu_idx[ring_idx];
++			pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
++			scatter_pkt_len = pHostadptRX->pkt_ctrl.len;
++			//scatter_cnt = 0;	
++			all_total_len = 0;
++			HOSTADPT_MSG(DBG_CATTER, "scatter handle\n");
++			HOSTADPT_MSG(DBG_CATTER, "scatter_pkt_len: %d,pkt_cnt=%d\n",scatter_pkt_len,pkt_cnt);
++			while(1)
++			{
++				pHostadptRX_tmp =pHostadptRX_BASE[ring_idx] + cpu_idx_tmp;
++				ddonebit = pHostadptRX_tmp->pkt_ctrl.done;
++				rmb();
++				pkt_idx = pHostadptRX_tmp->pkt_info.pkt_idx & 0x7;
++				cur_len = pHostadptRX_tmp->pkt_ctrl.cur_len;
++				single_total_len = pHostadptRX_tmp->pkt_ctrl.len;
++				is_last = pHostadptRX_tmp->pkt_ctrl.is_last;
++				pkt_cnt_dbg = (pHostadptRX_tmp->pkt_info.pkt_idx >> 3);
++				HOSTADPT_MSG(DBG_CATTER, "pkt_idx: %d,cur_len: %d,len:%d,is_last: %d,ddonebit: %d\n",pkt_idx,cur_len,single_total_len,is_last,ddonebit);
++				if(ddonebit == 0)
++				{
++					try_times++;
++					udelay(1000);
++				}
++				else
++				{
++					try_times = 0;
++					scatter_cnt = scatter_cnt+1;	
++					all_total_len += cur_len;
++					if(cur_len == single_total_len)
++					{
++						/*normal packet within scatter packet*/
++						scatter_cnt = scatter_cnt - 1;
++						if(scatter_cnt != pkt_cnt)
++						{
++							//printk("desc_pkt_cnt:%d cur_len:%d single_total_len:%d desc_cur_len:%d desc_single_total_len:%d\n",
++							//	(pHostadptRX->pkt_info.pkt_idx >> 3), cur_len, single_total_len,
++							//	pHostadptRX_tmp->pkt_ctrl.cur_len, pHostadptRX_tmp->pkt_ctrl.len);
++							//printk("cur CIDX:%d ori CIDX:%d cur pkt_cnt:%d is_last:%d\n",
++							//	cpu_idx_tmp, hostadpt_rx_cpu_idx[ring_idx], pkt_cnt_dbg, is_last);
++							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d cur_len:%d scatter_pkt_len:%d\n\n",
++							//	scatter_cnt, pkt_cnt, pkt_idx, cur_len, scatter_pkt_len);
++							checkfail = 1;
++							HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE1, ring_idx);
++							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE1\n");
++							goto error;
++						}
++					}
++					else
++					{
++						/*scatter packet handle*/
++						if(scatter_cnt != pkt_idx || scatter_pkt_len !=single_total_len)
++						{
++							checkfail = 1;
++							//printk("desc_pkt_idx:%d desc_scatter_pkt_len:%d desc_single_total_len:%d \n",
++							//	(pHostadptRX_tmp->pkt_info.pkt_idx & 0x7), pHostadptRX->pkt_ctrl.len,
++							//	pHostadptRX_tmp->pkt_ctrl.len);
++							//printk("cur CIDX:%d ori CIDX:%d cur pkt_cnt:%d is_last:%d\n",
++							//	cpu_idx_tmp, hostadpt_rx_cpu_idx[ring_idx], pkt_cnt_dbg, is_last);
++							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d scatter_pkt_len:%d single_total_len:%d\n\n",
++							//	scatter_cnt, pkt_cnt, pkt_idx, scatter_pkt_len, single_total_len);
++							HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE2, ring_idx);
++							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE2\n");
++							goto error;
++						}
++
++						if(is_last == 0x1)
++						{
++							allPkt_done = 1;
++							if(scatter_cnt != pkt_cnt || scatter_pkt_len !=single_total_len || scatter_pkt_len !=all_total_len)
++							{
++									checkfail = 1;
++									if(all_total_len != scatter_pkt_len)
++									{
++											HOSTADPT_MSG(DBG_CATTER, "hostapterror check:temptotallen=%d,scatter_pkt_len=%d,pkt_cnt=%d,scatter_cnt=%d,len=%d,cur_len=%d!\n",all_total_len,scatter_pkt_len,pkt_cnt,scatter_cnt,scatter_pkt_len,single_total_len);
++									}
++									HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE3\n");
++									HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE3, ring_idx);
++									goto error;
++							}
++							break;
++						}						
++					}
++											
++					cpu_idx_tmp++;
++					if(cpu_idx_tmp >=  hostadpt_rx_dscp_max_num[ring_idx])
++						cpu_idx_tmp = 0;
++						
++
++				}
++error:				
++				if((try_times > reTryTimes) || checkfail/*|| (scatter_cnt > pkt_cnt)*/)
++				{
++					//printk("[Hostadpt] get all scatter packets fail.\n");
++					HOSTADPT_MSG(DBG_CATTER, " get all scatter packets fail,checkfail=%d,current try_times=%d\n",checkfail,try_times);
++					allPkt_done = 0;
++					try_times = 0;
++					if(checkfail)
++						HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE, ring_idx);
++					else
++						HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_OVER_RETRY, ring_idx);
++					//scatter_cnt = 0;
++					break;
++				}
++				
++			}
++
++			while(scatter_cnt > 0)
++			{
++				HOSTADPT_MSG(DBG_CATTER, "allPkt_done =% d,scatter_cnt=%d\n",allPkt_done,scatter_cnt);
++				realcopylen = 0;
++				pHostadptRX =pHostadptRX_BASE[ring_idx] + hostadpt_rx_cpu_idx[ring_idx];
++				if(allPkt_done)
++				{
++					HOSTADPT_MSG(DBG_CATTER, "[Hostadpt]scatter handle begin\n");
++					pkt_idx = (pHostadptRX->pkt_info.pkt_idx & 0x7);
++					pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
++					skb_tmp = (struct sk_buff*)pHostadptRX->skb_p;
++					cur_len = pHostadptRX->pkt_ctrl.cur_len;
++					single_total_len = pHostadptRX->pkt_ctrl.len;
++					is_last = pHostadptRX->pkt_ctrl.is_last;
++					HOSTADPT_MSG(DBG_CATTER, "pkt_idx: %d,pkt_cnt: %d,cur_len; %d,len:%d,is_last: %d\n",pkt_idx,pkt_cnt,cur_len,single_total_len,pHostadptRX->pkt_ctrl.is_last);
++					if(is_last == 0x0)
++					{
++						if(pkt_idx == 1)
++						{
++							//skb_all = dev_alloc_skb(pHostadptRX->pkt_ctrl.len);
++							skb_all = alloc_skb(single_total_len+1, GFP_KERNEL); 
++							total_pktSize = single_total_len;
++							cur_pktSize = 0;
++							*vnd_spec = pHostadptRX->vend_specific;
++						}
++						if(skb_all)
++						{
++							if(cur_pktSize+cur_len <= total_pktSize)
++								realcopylen = cur_len;
++							else
++								realcopylen = total_pktSize - cur_pktSize;
++
++							if(realcopylen)
++							{
++								memcpy(skb_all->data+cur_pktSize, skb_tmp->data, realcopylen);
++								skb_put(skb_all, realcopylen);
++							}
++						}
++						else
++						{
++							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_FAIL, ring_idx);
++							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL\n",pkt_idx, pkt_cnt,scatter_cnt);
++						}
++						//isLastPkt = 0;
++						cur_pktSize = cur_pktSize+realcopylen;		
++					}
++					else if(is_last == 0x1)
++					{
++						if(skb_all)
++						{
++							if(cur_pktSize+cur_len <= total_pktSize)
++								realcopylen = cur_len;
++							else{
++								realcopylen = total_pktSize - cur_pktSize;
++							}
++							
++							if(realcopylen)
++							{
++								memcpy(skb_all->data+cur_pktSize, skb_tmp->data, realcopylen);
++								skb_put(skb_all,realcopylen);
++							}
++							
++							skb = skb_all;
++							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_DONE, ring_idx);
++							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt]scatter handle end\n");
++						}
++						else
++						{
++							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_FAIL, ring_idx);
++							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL,is_last=%d\n",pkt_idx, pkt_cnt,scatter_cnt,pHostadptRX->pkt_ctrl.is_last);
++							skb = NULL;
++						}
++						cur_pktSize = 0;	
++						//isLastPkt = 1;
++					}
++				}
++
++				scatter_cnt--;
++				pHostadptRX->pkt_ctrl.is_last = 0;
++				pHostadptRX->pkt_info.pkt_idx = 0;
++				pHostadptRX->pkt_ctrl.done = 0;
++				hostadpt_rx_cpu_idx[ring_idx]++;
++				if(hostadpt_rx_cpu_idx[ring_idx] >= hostadpt_rx_dscp_max_num[ring_idx])
++					hostadpt_rx_cpu_idx[ring_idx] = 0;			
++			}
++		}
++		else
++		{
++			HOST_PKT_COUNTER(GET_NORMAL_PKT, ring_idx);
++			skb = (struct sk_buff *)pHostadptRX->skb_p;
++	                skb_put(skb,pHostadptRX->pkt_ctrl.len);
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++			skb_new = alloc_skb(HOSTAPD_BUFFER_LEN, GFP_KERNEL); //  
++#else
++			skb_new = skbmgr_dev_alloc_skb4k();	
++#endif
++			if(skb_new == NULL)
++			{
++					HOST_PKT_COUNTER(ALLOC_NEW_SKB_FAIL, ring_idx);
++				HOSTADPT_MSG(DBG_ERR, "alloc new skb failed!\n");
++				skb_new = skb;
++				skb = NULL;
++					pHostadptRX->pkt_ctrl.done = 0;
++					pHostadptRX->pkt_info.pkt_idx = 0;
++					pHostadptRX->pkt_ctrl.is_last = 0;
++			}
++			else
++			{
++				if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) 
++				{
++					HOSTADPT_MSG(DBG_ERR, "\nget dev failed\n");
++							dev_kfree_skb_any(skb_new);
++							return NULL;
++				}
++				pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb_new->data), HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
++					if(dma_mapping_error(dev, pkt_addr)){
++						HOSTADPT_MSG(DBG_ERR, "!!!! Hostadpt dma_mapping_error!!!!\n");
++						dev_kfree_skb_any(skb_new);
++						return NULL;
++				}else{
++
++					// unmap old skb->data
++					dma_unmap_single(dev, pHostadptRX->pkt_addr, HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
++					pHostadptRX->pkt_addr = pkt_addr; 
++								HOSTADPT_MSG(DBG_LOG, "new addr: %x\n",pHostadptRX->pkt_addr);
++					pHostadptRX->pkt_info.pkt_idx = 0;
++					pHostadptRX->pkt_ctrl.is_last = 0;
++					pHostadptRX->pkt_ctrl.done = 0;	
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++					pHostadptRX->skb_p = (u64)skb_new;
++#else
++					pHostadptRX->skb_p = (u32)skb_new;
++#endif
++			 	}
++			}
++			
++			wmb();
++
++			hostadpt_rx_cpu_idx[ring_idx]++;
++			if(hostadpt_rx_cpu_idx[ring_idx] >= hostadpt_rx_dscp_max_num[ring_idx])
++				hostadpt_rx_cpu_idx[ring_idx] = 0;
++		}	
++	}
++	if(ring_idx == 0)
++		set_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
++	else if(ring_idx == 1)
++		set_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
++		
++#if 0
++	if(skb != NULL){
++		//skb_put(skb, pHostadptRX->pkt_ctrl.len);
++		//*preschedule = pHostadptRX->pkt_ctrl.reschedule;
++		if (likely(ra_sw_nat_hook_rxinfo))
++		{
++#ifdef TCSUPPORT_SOFT_RATELIMIT		
++			if(pHostadptRX->vend_specific==1){//for softratelimit of mt7916
++				return skb;
++			}
++			else
++			{
++#endif			
++			pHostadptRX->pkt_info.src_port = 1;
++#if (defined(TCSUPPORT_CPU_EN7581) || defined(TCSUPPORT_CPU_EN7551)) && (defined(TCSUPPORT_WLAN_MT7990) || defined(TCSUPPORT_WLAN_MT7992) || defined(TCSUPPORT_WLAN_MT7993))
++            //#define SKB_FROM_WIFI_BIT (1<<15), defined in skb
++            skb->mark2 |= SKB_FROM_WIFI_BIT; // Bit will be checked in hw_nat, if this bit was set, packet from wlan to lan/wan will send to QDMA fast path.
++#endif
++			ra_sw_nat_hook_rxinfo(skb, FOE_MAGIC_GE, (char*)&pHostadptRX->pkt_info, 4);
++#ifdef TCSUPPORT_SOFT_RATELIMIT			
++			}
++#endif			
++		}			
++		HOST_PKT_COUNTER(SEND_PKT_TO_DRIVER, ring_idx);
++	}else{
++		*preschedule = 0;
++	}
++#endif	
++	return skb;
++}
++
++
++void (*tasklet_schedule_WIFI2G)(void);
++void (*tasklet_schedule_WIFI5G)(void);
++static irqreturn_t rxdone0_isr(int irq, void *dev_id)
++{
++	unsigned long int status, tmp;
++	//HOSTADPT_MSG(DBG_LOG, "rxdone0 interrput......\n"); 
++	status = get_npu_hostadpt_reg(0x0030);
++	//printk("host apd 0 interrput status: %x\n",status);
++	set_npu_hostadpt_reg(0x0030,0x00010000);
++	//status = get_npu_hostadpt_reg(0x0030);
++	//printk("host apd 0 interrput status: %x\n",status);
++	if(tasklet_schedule_WIFI2G){
++		//printk("host apd 0 tasklet_schedule_WIFI2G: %x\n",tasklet_schedule_WIFI2G);
++		tasklet_schedule_WIFI2G();
++	
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
++		tmp &= ~(0x00010000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
++	}	
++	//if(temp_rx_data_done){
++	//	printk("Hostadp : temp_rx_data_done %x \n", temp_rx_data_done);
++	//	tasklet_hi_schedule(temp_rx_data_done);
++	//}	
++    return IRQ_HANDLED;
++}
++
++static irqreturn_t rxdone1_isr(int irq, void *dev_id)
++{
++	unsigned long int tmp;
++	//status = get_npu_hostadpt_reg(0x0030);
++	//printk("Hostadp : rxdone1_isr interrput status: %x\n",status);
++	set_npu_hostadpt_reg(0x0030,0x00020000);
++	//status = get_npu_hostadpt_reg(0x0030);
++	//printk("host apd 1 interrput status: %x\n",status);
++	if(tasklet_schedule_WIFI5G){
++		//printk("Hostadp : rxdone1_isr tasklet_schedule_WIFI5G: %x\n",tasklet_schedule_WIFI5G);
++		tasklet_schedule_WIFI5G();
++
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
++		tmp &= ~(0x00020000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
++	}	
++	//if(temp_rx_data_done5G){
++	//	printk("Hostadp : temp_rx_data_done5G %x\n", temp_rx_data_done5G);
++	//	tasklet_hi_schedule(temp_rx_data_done5G);
++	//}	
++    return IRQ_HANDLED;
++}
++
++void hostadpt_regiter_interrupt(u32 irq_num, irqreturn_t (*int_isr)(int, void*), char *irq_name)
++{
++	if(irq_num > 5)
++	{
++		HOSTADPT_MSG(DBG_ERR, "irq num error, valid irq num : 0 - 5 \n");
++		return ;
++	}
++	if(request_irq(get_npu_irq(irq_num), int_isr, 0, irq_name, NULL)!=0)
++	{
++		printk("request_irq failed.\n");
++	}
++	HOSTADPT_MSG(DBG_LOG, "interrupt register!\n");
++	return ;
++}
++
++void hostadpt_free_interrupt(u32 irq_num)
++{
++	if(irq_num > 5)
++	{
++		HOSTADPT_MSG(DBG_ERR, "irq num error, valid irq num : 0 - 5 \n");
++		return ;
++	}
++	free_irq(get_npu_irq(irq_num), NULL);
++	return ;
++}
++void hostdapt_enable_interrupt(unsigned int ringIdx)
++{
++	unsigned long int tmp;
++
++	//printk("hostdapt_enable_interrupt %d\n", ringIdx);
++	if(ringIdx == 0){
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
++		tmp |= (0x00010000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
++	}else{
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
++		tmp |= (0x00020000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
++	}
++}
++void hostdapt_disable_interrupt(unsigned int ringIdx)
++{
++	unsigned long int tmp;
++
++	
++	//printk("hostdapt_diable_interrupt %d\n", ringIdx);
++	if(ringIdx == 0){
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
++		tmp &= ~(0x00010000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
++	}else{
++		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
++		tmp &= ~(0x00020000);
++		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
++	}
++}
++
++void hostdapt_registe_wifitask(unsigned int ringIdx, void *func)
++{
++	printk("hostdapt_registe_wifitask %d\n", ringIdx);
++	if(ringIdx == 0){
++		tasklet_schedule_WIFI2G = func;
++	}else{
++		tasklet_schedule_WIFI5G = func;
++	}
++}
++
++
++/********* wifi tx part  *************/
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++void enque_to_hostapdt_tx(struct device *dev, HOSTADPT_DMA_TX_DSCP_T *pHostadptTX,
++	struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len)
++{
++	/*just only get vaild dev*/
++	if (dev == NULL) {
++		printk("\n%s() device failed\n", __func__);
++		return ;
++	}
++
++	if(vnd_len > HOSTADPT_TX_VEND_SPEC_LEN){
++		printk("[hostadpt][ERROR] vender len is too long %d!\n", vnd_len);
++		vnd_len = HOSTADPT_TX_VEND_SPEC_LEN;
++	}
++	memcpy(pHostadptTX->vnd_spec, vnd, vnd_len);
++	pHostadptTX->pkt_ctrl.vnd_len = vnd_len;
++
++	pHostadptTX->pkt_ctrl.len = skb->len;
++#if defined(TCSUPPORT_CPU_ARMV8_64)
++	pHostadptTX->skb_p = (u64)skb;
++#else
++	pHostadptTX->skb_p = (u32)skb;
++#endif
++
++	if(skb->len != 0)
++		pHostadptTX->pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb->data), skb->len, DMA_TO_DEVICE);
++	else
++		pHostadptTX->pkt_addr = 0;
++
++	pHostadptTX->pkt_ctrl.done = 1;
++}
++
++HOSTADPT_DMA_TX_DSCP_T *pHostadptTX_BASE[HOSTADPT_TX_RING_NUM] = {NULL};
++
++#define SHOW_18BYTES " %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x "
++#define PRINT_18BYTES(a) a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17]
++
++static unsigned char hostadpt_is_ring_available(u32 dma_idx, u32 cpu_idx, u32 ring_size)
++{
++	unsigned short res;
++
++	if (dma_idx >= cpu_idx)
++		res = ring_size - dma_idx + cpu_idx;
++	else
++		res = cpu_idx - dma_idx;
++
++	if(res > 5)
++		return 1;
++	else
++		return 0;
++
++}
++
++int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len)
++{
++	u32 dmaIdx0 = 0, dmaIdx1 = 0;
++	int ret = 0;
++	u32 cpuIdx0 = 0, cpuIdx1 = 0;
++	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX0 = NULL;
++	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX1 = NULL;
++	unsigned long int flags=0;
++	struct device *dev = NULL;
++	HOSTADPT_MSG(DBG_LOG, "+++++++++++++enter hostadpt_send API++++++++++++\n");
++
++	if((skb == NULL) || (vnd == NULL)) {
++		printk("[hostadpt][%d] invalid put !\n", __LINE__);
++		return 0;
++	}
++
++	/*just only get vaild dev*/
++	if ((dev = get_ecnt_npu_dev()) == NULL) {
++		printk("\nget_ecnt_npu_dev failed\n");
++		return 0;
++	}
++	if(band == 0)
++	{
++		//disable isr
++		spin_lock_irqsave(&hostadpt_lock_2G, flags);
++		HOSTADPT_MSG(DBG_LOG, "Send data to RX0 ... \n");
++		cpuIdx0 = get_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX);//this will update by isr in npu
++		HOSTADPT_MSG(DBG_LOG, "HOSTADPT_TX2_CPU_IDX = %d\n", dmaIdx0);
++		pHostadptTX0 = pHostadptTX_BASE[0] + hostadpt_tx_dma_idx[0];
++		if(pHostadptTX0->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[0],
++			cpuIdx0, HOSTADPT_TX0_DSCP_NUM))
++		{
++			HOST_PKT_COUNTER(TX_GET_PKT_FROM_TXRING, 0);
++			enque_to_hostapdt_tx(dev,pHostadptTX0, skb, vnd, vnd_len);
++			hostadpt_tx_skbin_cnt[0]++;
++
++			hostadpt_tx_dma_idx[0] = (hostadpt_tx_dma_idx[0] + 1);
++			if(hostadpt_tx_dma_idx[0] >= HOSTADPT_TX0_DSCP_NUM)
++				hostadpt_tx_dma_idx[0] = 0;
++			set_npu_hostadpt_reg(HOSTADPT_TX2_DMA_IDX, hostadpt_tx_dma_idx[0]);
++		}
++		else
++		{
++			HOST_PKT_COUNTER(TX_Q_IS_FULL, 0);
++			//printk("%s L%d dmaIdx0=%d,cpuIdx0=%d \n",__func__, __LINE__, hostadpt_tx_dma_idx[0], cpuIdx0);
++			dev_kfree_skb_any(skb);
++			ret = -1;
++		}
++
++		while(hostadpt_tx_cpu_idx[0] != cpuIdx0){
++			pHostadptTX0 = pHostadptTX_BASE[0] + hostadpt_tx_cpu_idx[0];
++			if(pHostadptTX0->skb_p){
++				if(pHostadptTX0->pkt_addr) {
++					dma_unmap_single(dev, pHostadptTX0->pkt_addr, pHostadptTX0->pkt_ctrl.len, DMA_TO_DEVICE);
++				}
++				dev_kfree_skb_any((struct sk_buff *)pHostadptTX0->skb_p);
++				hostadpt_tx_skbfree_cnt[0]++;
++				pHostadptTX0->skb_p = 0;//NULL;
++			}
++			pHostadptTX0->pkt_ctrl.done = 0;
++			hostadpt_tx_cpu_idx[0]++;
++			if(hostadpt_tx_cpu_idx[0] >= HOSTADPT_TX0_DSCP_NUM)
++				hostadpt_tx_cpu_idx[0] = 0;
++			if(hostadpt_tx_cpu_idx[0] == cpuIdx0)
++				break;
++		}
++		//enable isr
++		spin_unlock_irqrestore(&hostadpt_lock_2G, flags);
++	}
++	else if(band == 1)
++	{
++		spin_lock_irqsave(&hostadpt_lock_test, flags);
++		HOSTADPT_MSG(DBG_LOG, "Send data to RX0 ... \n");
++		cpuIdx1 = get_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX);
++		HOSTADPT_MSG(DBG_LOG, "HOSTADPT_TX3_DMA_IDX = %d\n", dmaIdx1);
++		pHostadptTX1 = pHostadptTX_BASE[1] + hostadpt_tx_dma_idx[1];
++		if(pHostadptTX1->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[1],
++			cpuIdx1, HOSTADPT_TX1_DSCP_NUM))
++		{
++			HOST_PKT_COUNTER(TX_GET_PKT_FROM_TXRING, 1);
++			enque_to_hostapdt_tx(dev,pHostadptTX1, skb, vnd, vnd_len);
++			hostadpt_tx_skbin_cnt[1]++;
++
++			hostadpt_tx_dma_idx[1] = (hostadpt_tx_dma_idx[1] + 1);
++			if(hostadpt_tx_dma_idx[1] >= HOSTADPT_TX1_DSCP_NUM)
++				hostadpt_tx_dma_idx[1] = 0;
++			set_npu_hostadpt_reg(HOSTADPT_TX3_DMA_IDX, hostadpt_tx_dma_idx[1]);
++		}
++		else 
++		{
++			HOST_PKT_COUNTER(TX_Q_IS_FULL, 1);
++			//printk("%s L%d dmaIdx1=%d,cpuIdx1=%d \n",__func__,__LINE__,hostadpt_tx_dma_idx[1],cpuIdx1);
++			dev_kfree_skb_any(skb);
++			ret = -1;
++		}
++
++		while(hostadpt_tx_cpu_idx[1] != cpuIdx1){
++			
++			pHostadptTX1 = pHostadptTX_BASE[1] + hostadpt_tx_cpu_idx[1];
++			if(pHostadptTX1->skb_p){
++				if(pHostadptTX1->pkt_addr) {
++					dma_unmap_single(dev, pHostadptTX1->pkt_addr, pHostadptTX1->pkt_ctrl.len, DMA_TO_DEVICE);
++				}
++				dev_kfree_skb_any((struct sk_buff *)pHostadptTX1->skb_p);
++				hostadpt_tx_skbfree_cnt[1]++;
++				pHostadptTX1->skb_p = 0;//NULL;
++			}
++			pHostadptTX1->pkt_ctrl.done = 0;
++
++			hostadpt_tx_cpu_idx[1]++;
++			if(hostadpt_tx_cpu_idx[1] >= HOSTADPT_TX1_DSCP_NUM)
++				hostadpt_tx_cpu_idx[1] = 0;
++			if(hostadpt_tx_cpu_idx[1] == cpuIdx1)
++				break;
++		}
++		spin_unlock_irqrestore(&hostadpt_lock_test, flags);
++	}
++	else
++	{
++		HOSTADPT_MSG(DBG_LOG, "band Index error!\n");
++		dev_kfree_skb_any(skb);
++		ret = -1;
++	}
++	
++	return ret;
++}
++#endif
++
++#if defined(TCSUPPORT_WLAN_INODE) || defined(TCSUPPORT_NPU_WIFI_TX)
++static int hostadpt_txdscp_init(void)
++{
++	dma_addr_t dscpDmaAddr=0;
++	int i;
++	//u32 dmaIdx = 0;
++	struct device *dev = NULL ;
++	unsigned long dscpBaseAddr=0 ;
++	HOSTADPT_DMA_TX_DSCP_T *dscp = NULL;
++
++	//struct sk_buff *skb = NULL;
++	//printk("host adaptor init:L%d", __LINE__);
++	/******************************************
++	* Allocate descriptor DMA memory		  *
++	*******************************************/
++	if( (dev=(struct device *)get_ecnt_npu_dev()) == NULL ) {
++		HOSTADPT_MSG(DBG_ERR, "Get device failed.\n");
++		return -ENOMEM ;
++	}
++
++	//printk("test alloc size:%d*%d \n", sizeof(HOSTADPT_DMA_TX_DSCP_T), HOSTADPT_TX_TOTAL_DSCP_NUM);
++	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev,
++		sizeof(HOSTADPT_DMA_TX_DSCP_T)*HOSTADPT_TX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, GFP_KERNEL);
++
++	if(!dscpBaseAddr) {
++		HOSTADPT_MSG(DBG_ERR, "Allocate memory for TX/RX DSCP failed.\n") ; 
++		return -ENOMEM ;
++	}
++
++	pHostadptTX_BASE[0] = (HOSTADPT_DMA_TX_DSCP_T *)dscpBaseAddr;
++	pHostadptTX_BASE[1] = pHostadptTX_BASE[0] + HOSTADPT_TX0_DSCP_NUM;
++
++	HOSTADPT_MSG(DBG_LOG, "dscpDmaAddr = %llx [0]%lx [1]%lx\n",dscpDmaAddr, (unsigned long int)pHostadptTX_BASE[0], (unsigned long int)pHostadptTX_BASE[1]) ; 
++	printk("dscpDmaAddr =%llx pHostadptTX_BASE[0]%lx pHostadptTX_BASE[1]%lx %ld\n",
++		dscpDmaAddr, (unsigned long int)pHostadptTX_BASE[0],(unsigned long int)pHostadptTX_BASE[1], sizeof(HOSTADPT_DMA_TX_DSCP_T));
++
++	/***************************************************
++	* Initialization first DSCP for Rx DMA			  *
++	****************************************************/
++	dscp = pHostadptTX_BASE[0];
++	for(i = 0; i < HOSTADPT_TX_TOTAL_DSCP_NUM; i++) {
++	//init at npu
++		dscp->pkt_ctrl.done = 0;
++		dscp++;	
++	}
++	//write rx0/rx1 num to reg
++	set_npu_hostadpt_reg(HOSTADPT_TX2_MAX_CNT, HOSTADPT_TX0_DSCP_NUM);
++	set_npu_hostadpt_reg(HOSTADPT_TX3_MAX_CNT, HOSTADPT_TX1_DSCP_NUM);
++	
++	//set rx0/rx1 hostadpt_rx_cpu_idx/hostadpt_rx_dma_idx 
++	set_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX, 0);
++	set_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX, 0);
++	
++	set_npu_hostadpt_reg(HOSTADPT_TX2_DMA_IDX, 0);
++	set_npu_hostadpt_reg(HOSTADPT_TX3_DMA_IDX, 0);
++
++	//write rx0/rx1 base to reg
++	set_npu_hostadpt_reg(HOSTADPT_TX2_BASE_PTR, dscpDmaAddr);
++	set_npu_hostadpt_reg(HOSTADPT_TX3_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_TX_DSCP_T)*HOSTADPT_TX0_DSCP_NUM);
++	
++	return 0;
++}
++#if 0
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t hostadpt_debug_read_proc(struct file *file, char __user *buf, size_t count, loff_t *ppos)
++{
++	char user_buf[512] = {0};
++	size_t len = count, buf_length = 0;
++	loff_t pos = *ppos;
++	unsigned long ret = 0;
++	ssize_t retval = 0;
++	
++	/* use memory size for data stream or use length of string buffer */
++	buf_length += sprintf(user_buf+buf_length, "band 0 tx skb cnt=%d, free cnt=%d\r\n", hostadpt_tx_skbin_cnt[0],hostadpt_tx_skbfree_cnt[0]);
++	buf_length += sprintf(user_buf+buf_length, "band 1 tx skb cnt=%d, free cnt=%d\r\n",hostadpt_tx_skbin_cnt[1],hostadpt_tx_skbfree_cnt[1]);
++	buf_length += sprintf(user_buf+buf_length, "band 0 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[0],hostadpt_tx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX));
++	buf_length += sprintf(user_buf+buf_length, "band 1 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[1],hostadpt_tx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX));
++
++	buf_length += sprintf(user_buf+buf_length, "band 0 rx dmaIdx=%d cpuidx=%d,%d\r\n",
++		hostadpt_rx_dma_idx[0],hostadpt_rx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX));
++	buf_length += sprintf(user_buf+buf_length, "band 1 rx dmaIdx=%d cpuidx=%d,%d\r\n",
++		hostadpt_rx_dma_idx[1],hostadpt_rx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX));
++
++	/* valid check */
++	if ( pos >= buf_length )
++		return 0;
++	if ( len >= buf_length )
++		len = buf_length;
++	if ( pos + len > buf_length )
++		len = buf_length - pos;
++	
++	/* ret contains the amount of chars wasn't successfully written to buf */
++	ret = copy_to_user(buf, user_buf + pos, len);
++	
++	*ppos += len;
++	retval = len - ret;
++
++	return retval;
++}
++#else
++static int hostadpt_debug_read_proc(char *page, char **start, off_t off, 
++	int count, int *eof, void *data)
++{
++	int len=0;
++	len += sprintf(page+len, "band 0 tx skb cnt=%d, free cnt=%d\r\n", hostadpt_tx_skbin_cnt[0],hostadpt_tx_skbfree_cnt[0]);
++	len += sprintf(page+len, "band 1 tx skb cnt=%d, free cnt=%d\r\n",hostadpt_tx_skbin_cnt[1],hostadpt_tx_skbfree_cnt[1]);
++	len += sprintf(page+len, "band 0 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[0],hostadpt_tx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX));
++	len += sprintf(page+len, "band 1 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[1],hostadpt_tx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX));
++
++	len += sprintf(page+len, "band 0 rx dmaIdx=%d cpuidx=%d,%d\r\n",
++		hostadpt_rx_dma_idx[0],hostadpt_rx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX));
++	len += sprintf(page+len, "band 1 rx dmaIdx=%d cpuidx=%d,%d\r\n",
++		hostadpt_rx_dma_idx[1],hostadpt_rx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX));
++	return len;
++}
++#endif
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static ssize_t hostadpt_debug_write_proc(struct file *file, const char __user *buffer, size_t count, loff_t *data)
++#else
++static int hostadpt_debug_write_proc(struct file *file, const char *buffer,
++		unsigned long count, void *data)
++#endif
++{
++	int i=0 ;
++	char get_buf[120];
++	int band=0;
++	int flag=0;
++
++	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX = NULL;
++	if (count > (sizeof(get_buf) - 1))
++		return -EINVAL ;
++	
++	memset(get_buf, 0, sizeof(get_buf));
++	
++	if(copy_from_user(get_buf, buffer, count))
++		return -EFAULT;
++
++	get_buf[count] = '\0';
++	if(sscanf(get_buf, "%d %d ", &band, &flag)==2){
++			if(band==0 || band==1){
++			host_apd_debug[band]=flag;
++		}
++	}
++	else if(sscanf(get_buf, "%d ", &band)==1){// dump done bit=1 's txD index
++		if(band < 0 || band > 1){
++			printk("error: band must be 0/1\n");
++			return count;
++			}
++			printk("hostadpt_tx_dma_idx[0]=%d [1]=%d\n", hostadpt_tx_dma_idx[0], hostadpt_tx_dma_idx[1]);
++		for(i=0;i<1024;i++){
++			pHostadptTX = pHostadptTX_BASE[band] + i;
++			if(pHostadptTX->pkt_ctrl.done==1){
++				printk("%d: done=1 \n",i);
++			}
++		}
++	}
++	return count;
++
++}
++
++
++#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
++static const struct proc_ops hostadpt_debug_proc_ops =
++{
++	.proc_read	= hostadpt_debug_read_proc,
++	.proc_write	= hostadpt_debug_write_proc,		
++};
++
++static void hostadpt_dump_debug_create(void) 
++{
++	struct proc_dir_entry *npu_proc=NULL;
++
++	npu_proc = proc_create("hostadpt_debug", 0, NULL, &hostadpt_debug_proc_ops);
++
++	return;
++}
++#else
++static void hostadpt_dump_debug_create(void) 
++{
++	struct proc_dir_entry *npu_proc = NULL;
++
++	npu_proc = create_proc_entry("hostadpt_debug", 0, NULL);
++	npu_proc->read_proc = hostadpt_debug_read_proc;
++	npu_proc->write_proc = hostadpt_debug_write_proc;
++
++	return;
++}
++#endif
++#endif
++#endif
++int hostadpInit(void)
++{
++	if(hostadpt_rxdscp_init())
++	{
++		HOSTADPT_MSG(DBG_ERR, "hostadpt_rxdscp_init failed!\n");
++		return -ENODEV;
++	}
++	
++	hostadpt_regiter_interrupt(0, rxdone0_isr, "rxdone0");
++	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,0x00010000);
++
++	hostadpt_regiter_interrupt(1, rxdone1_isr, "rxdone1");
++	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,0x00020000);
++
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++	//hostadpt_dump_debug_create();
++
++	if(hostadpt_txdscp_init())
++	{
++		return -ENODEV;
++	}
++#endif
++	return 0;
++}
++EXPORT_SYMBOL(hostadpInit);
++void __exit hostadpExit(void)
++{
++	hostadpt_free_interrupt(0);
++	hostadpt_free_interrupt(1);
++	
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++	//remove_proc_entry("hostadpt_debug",  NULL);
++	//rcu_assign_pointer(toHostadptPktHandle_hook, NULL);
++#endif
++
++	HOSTADPT_MSG(DBG_LOG, "host adaptor exit .\n");
++}
++EXPORT_SYMBOL(hostadpExit);
++//late_initcall(hostadpInit);
++//module_exit(hostadpExit);
++
++//MODULE_DESCRIPTION("EcoNet Host Adaptor Driver");
++//MODULE_LICENSE("Proprietary");
++
+--- /dev/null
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -0,0 +1,150 @@
++#ifndef _HOSTADPT_H_
++#define _HOSTADPT_H_
++
++/***************************************************************
++*						INCLUDE
++***************************************************************/
++#include <linux/version.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/interrupt.h>
++#include <linux/types.h>
++#include <linux/netdevice.h>
++#include <linux/dma-mapping.h>
++#include <linux/sched.h>
++#include <linux/delay.h>
++#include <linux/spinlock.h>
++#include <linux/soc/airoha/npu_host_adpt.h>
++#include <linux/soc/airoha/npu_test_common.h>
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++/***************************************************************
++*						DEFINES & CONSTANTS
++***************************************************************/
++
++/* reg addr */
++
++#define HOSTADPT_RX0_BASE_PTR   (0x180)     /*RX Ring 0 Base pointer*/
++#define HOSTADPT_RX0_MAX_CNT    (0x184)
++#define HOSTADPT_RX0_DMA_IDX    (0x188)
++#define HOSTADPT_RX0_CPU_IDX    (0x18C)
++
++#define HOSTADPT_RX1_BASE_PTR   (0x190)     /*RX Ring 1 Base pointer*/
++#define HOSTADPT_RX1_MAX_CNT    (0x194)
++#define HOSTADPT_RX1_DMA_IDX    (0x198)
++#define HOSTADPT_RX1_CPU_IDX    (0x19C)
++
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++#define HOSTADPT_TX2_BASE_PTR	(0xA0)     /*RX Ring 2 Base pointer*/
++#define HOSTADPT_TX2_MAX_CNT	(0xA4)
++#define HOSTADPT_TX2_DMA_IDX	(0xA8)
++#define HOSTADPT_TX2_CPU_IDX	(0xAC)
++
++#define HOSTADPT_TX3_BASE_PTR	(0xB0)     /*RX Ring 3 Base pointer*/
++#define HOSTADPT_TX3_MAX_CNT	(0xB4)
++#define HOSTADPT_TX3_DMA_IDX	(0xB8)
++#define HOSTADPT_TX3_CPU_IDX	(0xBC)
++
++#define HOST_TX_EVT_INT_MASK2	(0x4C) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++#define HOST_TX_EVT_INT_MASK3	(0x50) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++//extern int (*toHostadptPktHandle_hook)(unsigned char band,
++	//struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
++#endif
++
++/* interrupt */
++#define HOSTADPT_TXRXDONE0_INT_MASK       (0x34) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++#define HOSTADPT_TXRXDONE1_INT_MASK       (0x38) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++
++#define HOSTADPT_TX0_INT  (1<<0)
++#define HOSTADPT_TX1_INT  (1<<1)
++#define HOSTADPT_TX2_INT  (1<<2)
++#define HOSTADPT_TX3_INT  (1<<3)
++#define HOSTADPT_TX4_INT  (1<<4)
++#define HOSTADPT_TX5_INT  (1<<5)
++#define HOSTADPT_TX6_INT  (1<<6)
++#define HOSTADPT_TX7_INT  (1<<7)
++#define HOSTADPT_TX8_INT  (1<<8)
++#define HOSTADPT_TX9_INT  (1<<9)
++#define HOSTADPT_TX10_INT (1<<10)
++#define HOSTADPT_TX11_INT (1<<11)
++#define HOSTADPT_TX12_INT (1<<12)
++#define HOSTADPT_TX13_INT (1<<13)
++#define HOSTADPT_TX14_INT (1<<14)
++#define HOSTADPT_TX16_INT (1<<15)
++
++#define HOSTADPT_RX0_INT  (1<<0)
++#define HOSTADPT_RX1_INT  (1<<1)
++#define HOSTADPT_RX2_INT  (1<<2)
++#define HOSTADPT_RX3_INT  (1<<3)
++#define HOSTADPT_RX4_INT  (1<<4)
++#define HOSTADPT_RX5_INT  (1<<5)
++#define HOSTADPT_RX6_INT  (1<<6)
++#define HOSTADPT_RX7_INT  (1<<7)
++#define HOSTADPT_RX8_INT  (1<<8)
++#define HOSTADPT_RX9_INT  (1<<9)
++#define HOSTADPT_RX10_INT (1<<10)
++#define HOSTADPT_RX11_INT (1<<11)
++#define HOSTADPT_RX12_INT (1<<12)
++#define HOSTADPT_RX13_INT (1<<13)
++#define HOSTADPT_RX14_INT (1<<14)
++#define HOSTADPT_RX15_INT (1<<15)
++
++extern unsigned int hostaptDebug;
++#define HOSTADPT_MSG(level, F, B...)	{ \
++											if(hostaptDebug >= level)	\
++												printk("%s: %s [%d]: " F, "host adaptor", strrchr(__FILE__, '/')+1, __LINE__, ##B) ; \
++										}
++// for debug counter
++enum HOSTADPT_COUNTER_OFFSET
++{
++	GET_NORMAL_PKT = 0,
++	GET_BIGGER_PKT,
++	BIGPKT_CHECK_PKT_LOSE,
++	BIGPKT_CHECK_PKT_LOSE1,
++	BIGPKT_CHECK_PKT_LOSE2,
++	BIGPKT_CHECK_PKT_LOSE3,
++	BIGPKT_CHECK_PKT_OVER_RETRY,
++	BIGPKT_COMBINE_PKT_FAIL,
++	BIGPKT_COMBINE_PKT_DONE,
++	ALLOC_NEW_SKB_FAIL,	
++	SEND_PKT_TO_DRIVER,
++	TX_GET_PKT_FROM_TXRING,
++	TX_Q_IS_FULL,
++	HADPT_CNT_BOTTOM			//
++};
++
++int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
++struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
++void hostdapt_enable_interrupt(unsigned int ringIdx);
++void hostdapt_disable_interrupt(unsigned int ringIdx);
++void hostdapt_registe_wifitask(unsigned int ringIdx, void *func);
++extern u32 get_npu_hostadpt_reg(int hadap_ofs);
++extern u32 set_npu_hostadpt_reg(int hadap_ofs,int val);
++int hostadpInit(void);
++void __exit hostadpExit(void);
++
++#endif
+\ No newline at end of file
+--- a/drivers/net/ethernet/airoha/Makefile
++++ b/drivers/net/ethernet/airoha/Makefile
+@@ -6,4 +6,4 @@
+ obj-$(CONFIG_NET_AIROHA) += airoha-eth.o
+ airoha-eth-y := airoha_eth.o airoha_ppe.o
+ airoha-eth-$(CONFIG_DEBUG_FS) += airoha_ppe_debugfs.o
+-obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o
++obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o hostadpt.o
