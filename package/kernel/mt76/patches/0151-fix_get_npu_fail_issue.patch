@@ -1,0 +1,317 @@
+diff -uNr old/mt7996/dma.c new/mt7996/dma.c
+--- old/mt7996/dma.c	2025-03-25 14:30:28.938446000 +0800
++++ new/mt7996/dma.c	2025-03-24 11:24:48.771191000 +0800
+@@ -7,7 +7,7 @@
+ #include "../dma.h"
+ #include "mac.h"
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-#include "../airoha_npu.h"
++#include "../npu.h"
+ #endif
+ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx, int n_desc,
+ 			  int ring_base, struct mtk_wed_device *wed)
+diff -uNr old/mt7996/init.c new/mt7996/init.c
+--- old/mt7996/init.c	2025-03-25 14:30:28.949438000 +0800
++++ new/mt7996/init.c	2025-03-24 10:59:29.640277000 +0800
+@@ -1066,7 +1066,8 @@
+ 	int i;
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ 	int isMailBoxSuccess=0;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
+ #endif
+ 	if (!dev->has_rro)
+ 		return 0;
+@@ -1102,7 +1103,7 @@
+ 			addr++;
+ 		}
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-		if(arht_wifi_npu_active())
++		if(arht_wifi_npu_active() && !(IS_ERR(npu)))
+ 			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
+ 				i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
+@@ -1139,7 +1140,7 @@
+ 		addr++;
+ 	}
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU	
+-	if(arht_wifi_npu_active())
++	if(arht_wifi_npu_active() && !(IS_ERR(npu)))
+ 		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
+ 			0, dev->wed_rro.session.phy_addr, 0, 0);
+ 		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
+diff -uNr old/mt7996/mmio.c new/mt7996/mmio.c
+--- old/mt7996/mmio.c	2025-03-25 14:30:28.971477000 +0800
++++ new/mt7996/mmio.c	2025-03-24 11:25:08.575180000 +0800
+@@ -16,7 +16,7 @@
+ #include "../npu.h"
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-#include "../airoha_npu.h"
++#include "../npu.h"
+ struct mt7996_dev *MT7996;
+ #endif
+ 
+diff -uNr old/npu.c new/npu.c
+--- old/npu.c	2025-03-25 14:30:28.988444000 +0800
++++ new/npu.c	2025-03-24 14:45:10.196356000 +0800
+@@ -1,4 +1,7 @@
+-#include "airoha_npu.h"
++#include "npu.h"
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++
+ unsigned long int  *dramReorderNodeBase;
+ int setonce=0;
+ u32 slot_id = 0;
+@@ -58,8 +61,9 @@
+ 	phy=&dev->phy;
+ 	int npuOffloadEn=1;
+ 	u32 hif1_ofs = 0;
+-	struct airoha_npu *npu = airoha_npu_get(mdev->dev);
+-	if(npuOffloadEn){
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
++	if(npuOffloadEn && !(IS_ERR(npu))){
+ 		printk("npuOffload on mt76 init \n");	
+ 		if (pdev->bus){
+ 			slot_id = pci_domain_nr(pdev->bus);
+@@ -85,11 +89,13 @@
+ 			printk("!!!! do phy and virtual address mapping\n");
+ 
+ 			/**************ba node******************/
++			#if 1
+ 			reorder_node_pa = npu_wifi_offload_get_ba_node_addr();
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
+ 			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
+ 			if(isMailBoxSuccess != 1)
+ 				printk("Error: NPU_WIFI_OFFLOAD set BA Node in Dram base fail\n");
++			#endif
+ 			setonce = 2;
+ 		}
+ 		
+@@ -156,9 +162,11 @@
+ 	int isMailBoxSuccess=0;
+ 	unsigned char band_idx = 0;	
+ 	dma_addr_t npu_alloc_pa;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
+ 	band_idx = slot_id;
+-	
++	if(IS_ERR(npu))
++		return;
+ 
+ 	/* npu rx rro ring*/
+ 	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
+@@ -197,8 +205,10 @@
+ void npu_mt76_init_done(struct mt7996_dev *dev,struct pci_dev *pdev)
+ {
+ 	int isMailBoxSuccess=0;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
+-	
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
++	if(IS_ERR(npu))
++		return;
+ 	/* rro set done */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
+ 	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
+@@ -216,7 +226,10 @@
+ void npu_rro_reset_sessions(struct mt7996_dev *dev, u16 seid)
+ {
+ 	int isMailBoxSuccess=0;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
++	if(IS_ERR(npu))
++		return;
+ 
+ 	/* init_rro_addr_elem_by_seid */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
+@@ -233,8 +246,9 @@
+ 	int isMailBoxSuccess=0;
+ 	unsigned char band_idx = 0;
+ 	struct mt76_dev *mdev = &dev->mt76;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+ 	void *npu_alloc_va = NULL;
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
+ 	dma_addr_t npu_alloc_pa;
+ 	
+ 	void *txbuf_alloc_va_sp = NULL;
+@@ -243,6 +257,9 @@
+ 	dma_addr_t txbuf_alloc_pa_fp;
+ 	void *txbuf_alloc_va_swq = NULL;
+ 	dma_addr_t txbuf_alloc_pa_swq;
++
++	if((IS_ERR(npu)))
++		return;
+ 	
+ 	for(band_idx = 0; band_idx < 2; band_idx++){
+ 		if(band_idx == 0){
+@@ -425,7 +442,10 @@
+ 	unsigned long int pcie_pa = 0;
+ 	int isMailBoxSuccess = 0;
+ 	unsigned char band_idx = 0;
+-	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
++	printk("%s:%d !!!!!\n",__func__,__LINE__);
++	if(IS_ERR(npu))
++		return;
+ 	
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma); // npu  : tx_done_ring0_addr_uncache
+ 	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma);
+@@ -453,4 +473,5 @@
+ EXPORT_SYMBOL_GPL(npu_enable);
+ EXPORT_SYMBOL_GPL(set_npu_enable);
+ 
++#endif
+ 
+diff -uNr old/npu.h new/npu.h
+--- old/npu.h	2025-03-25 14:30:28.992449000 +0800
++++ new/npu.h	2025-03-24 11:19:15.769183000 +0800
+@@ -1,6 +1,8 @@
+ #ifndef NPU_OFFLOAD_H
+ #define NPU_OFFLOAD_H	
+ 
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++
+ #include "mt7996/mt7996.h"
+ #include "dma.h"
+ #include "mt7996/mac.h"
+@@ -9,6 +11,8 @@
+ #include <linux/kernel.h>
+ #include <linux/module.h>
+ #include <linux/pci.h>
++#include <linux/platform_device.h>
++#include <linux/reset.h>
+ 
+ 
+ #define BAND5G_IDX			1
+@@ -84,6 +88,118 @@
+ extern void (*hostdapt_registe_wifitask_hook)(unsigned int ringIdx, void *func);
+ extern bool arht_wifi_npu_active(void);
+ 
++#define AIROHA_MAX_NUM_RSTS		3
++#define AIROHA_MAX_NUM_XSI_RSTS		4
++#define AIROHA_MAX_NUM_QDMA		2
++#define AIROHA_MAX_NUM_GDM_PORTS	4
++#define AIROHA_NUM_TX_IRQ		2
++#define AIROHA_NUM_TX_RING		32
++#define AIROHA_NUM_RX_RING		32
++struct airoha_queue_entry {
++	union {
++		void *buf;
++		struct sk_buff *skb;
++	};
++	dma_addr_t dma_addr;
++	u16 dma_len;
++};
++struct airoha_qdma_desc {
++	__le32 rsv;
++	__le32 ctrl;
++	__le32 addr;
++	__le32 data;
++	__le32 msg0;
++	__le32 msg1;
++	__le32 msg2;
++	__le32 msg3;
++};
++
++enum {
++	QDMA_INT_REG_IDX0,
++	QDMA_INT_REG_IDX1,
++	QDMA_INT_REG_IDX2,
++	QDMA_INT_REG_IDX3,
++	QDMA_INT_REG_IDX4,
++	QDMA_INT_REG_MAX
++};
++struct airoha_queue {
++	struct airoha_qdma *qdma;
++
++	/* protect concurrent queue accesses */
++	spinlock_t lock;
++	struct airoha_queue_entry *entry;
++	struct airoha_qdma_desc *desc;
++	u16 head;
++	u16 tail;
++
++	int queued;
++	int ndesc;
++	int free_thr;
++	int buf_size;
++
++	struct napi_struct napi;
++	struct page_pool *page_pool;
++	struct sk_buff *skb;
++};
++
++struct airoha_tx_irq_queue {
++	struct airoha_qdma *qdma;
++
++	struct napi_struct napi;
++
++	int size;
++	u32 *q;
++};
++
++struct airoha_qdma {
++	struct airoha_eth *eth;
++	void __iomem *regs;
++
++	/* protect concurrent irqmask accesses */
++	spinlock_t irq_lock;
++	u32 irqmask[QDMA_INT_REG_MAX];
++	int irq;
++
++	atomic_t users;
++
++	struct airoha_tx_irq_queue q_tx_irq[AIROHA_NUM_TX_IRQ];
++
++	struct airoha_queue q_tx[AIROHA_NUM_TX_RING];
++	struct airoha_queue q_rx[AIROHA_NUM_RX_RING];
++
++	/* descriptor and packet buffers for qdma hw forward */
++	struct {
++		void *desc;
++		void *q;
++	} hfwd;
++};
++
++
++struct airoha_eth {
++	struct device *dev;
++
++	unsigned long state;
++	void __iomem *fe_regs;
++
++	struct airoha_npu __rcu *npu;
++
++	struct airoha_ppe *ppe;
++	struct rhashtable flow_table;
++
++	struct reset_control_bulk_data rsts[AIROHA_MAX_NUM_RSTS];
++	struct reset_control_bulk_data xsi_rsts[AIROHA_MAX_NUM_XSI_RSTS];
++
++	struct net_device *napi_dev;
++
++	struct airoha_qdma qdma[AIROHA_MAX_NUM_QDMA];
++	struct airoha_gdm_port *ports[AIROHA_MAX_NUM_GDM_PORTS];
++
++	struct dentry *debugfs_dir;
++};
++
++extern struct airoha_eth *glb_eth;
++
++
+ #define NPU_NUM_CORES		8
+ //#define MAX_CORE_NUM		8
+ #define NPU_INT_MAX_NUM         (6)
+@@ -136,3 +252,5 @@
+ //extern bool arht_wifi_npu_tx_active(void);
+ #endif
+ 
++#endif
++

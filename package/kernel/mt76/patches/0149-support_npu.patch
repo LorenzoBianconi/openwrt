@@ -1,166 +1,27 @@
---- a/agg-rx.c
-+++ b/agg-rx.c
-@@ -172,7 +172,11 @@ void mt76_rx_aggr_reorder(struct sk_buff
+diff -uNr old/agg-rx.c new/agg-rx.c
+--- old/agg-rx.c	2025-03-18 23:55:25.442982000 +0800
++++ new/agg-rx.c	2025-03-18 18:28:30.279367000 +0800
+@@ -175,7 +175,10 @@
  	ackp = status->qos_ctl & IEEE80211_QOS_CTL_ACK_POLICY_MASK;
  	if (ackp == IEEE80211_QOS_CTL_ACK_POLICY_NOACK)
  		return;
 -
-+	
-+	#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+		return; 
-+	#endif 
-+	
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	if(arht_wifi_npu_active())
++		return;
++#endif
  	tid = rcu_dereference(wcid->aggr[tidno]);
  	if (!tid)
  		return;
---- a/dma.c
-+++ b/dma.c
-@@ -6,6 +6,9 @@
- #include <linux/dma-mapping.h>
- #include "mt76.h"
- #include "dma.h"
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
-+#endif
- 
- #if IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED)
- 
-@@ -386,8 +389,15 @@ mt76_dma_tx_cleanup_idx(struct mt76_dev
- static void
- mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
- {
--	wmb();
--	Q_WRITE(q, cpu_idx, q->head);
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#ifdef TCSUPPORT_NPU_WIFI_TX	
-+	if(!(dev->phy.q_tx[0] == q ||(dev->phys[1] && dev->phys[1]->q_tx[0] == q)))
-+#endif
-+#endif
-+	{
-+		wmb();
-+		Q_WRITE(q, cpu_idx, q->head);
-+	}
- }
- 
- static void
-@@ -626,8 +636,13 @@ mt76_dma_tx_queue_skb(struct mt76_phy *p
- 	if (ret < 0)
- 		goto unmap;
- 
-+#ifdef TCSUPPORT_NPU_WIFI_TX
-+	npu_mt76_dma_tx_queue_skb(phy, dev, t, skb, txwi, wcid, sta);
-+	return -1;
-+#else	
- 	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
- 				tx_info.info, tx_info.skb, t);
-+#endif
- 
- unmap:
- 	for (n--; n > 0; n--)
-@@ -962,17 +977,55 @@ int mt76_dma_rx_poll(struct napi_struct
- {
- 	struct mt76_dev *dev;
- 	int qid, done = 0, cur;
--
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD	
-+	void * pkt=NULL;
-+	unsigned char bReschedule=0;
-+	struct sk_buff *skb;
-+	int npu_done=0;
-+	unsigned int vend_spec = 0;
-+//	union _2_hostapdt_vend_specific *vnd_spe;
-+#endif
- 	dev = container_of(napi->dev, struct mt76_dev, napi_dev);
- 	qid = napi - dev->napi;
- 
- 	rcu_read_lock();
--
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+	if(qid != MT_RXQ_RRO_IND)
-+	{
-+		do {
-+			cur = mt76_dma_rx_process(dev, &dev->q_rx[qid], budget - done);
-+			mt76_rx_poll_complete(dev, qid, napi);
-+			done += cur;
-+		} while (cur && done < budget);
-+	}
-+	else{
-+		while (npu_done < budget)
-+		{		
-+			if(fromHostadptPktHandle_hook)
-+				pkt = fromHostadptPktHandle_hook(0, &bReschedule, &vend_spec);
-+		
-+			if(pkt)
-+			{	npu_done++;
-+				skb=(struct sk_buff *)pkt;
-+				dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
-+			}
-+			else
-+				break;
-+		
-+			mt76_rx_poll_complete(dev, qid, napi);	
-+		}	
-+		rcu_read_unlock();
-+		if(npu_done < budget && napi_complete(napi))
-+			dev->drv->rx_poll_complete(dev, qid);
-+		return npu_done;
-+	}
-+#else
- 	do {
- 		cur = mt76_dma_rx_process(dev, &dev->q_rx[qid], budget - done);
- 		mt76_rx_poll_complete(dev, qid, napi);
- 		done += cur;
--	} while (cur && done < budget);
-+	} while (cur && done < budget);	
-+#endif
- 
- 	rcu_read_unlock();
- 
---- a/Makefile
-+++ b/Makefile
-@@ -11,7 +11,7 @@ obj-$(CONFIG_MT792x_USB) += mt792x-usb.o
- 
- mt76-y := \
- 	mmio.o util.o trace.o dma.o mac80211.o debugfs.o eeprom.o \
--	tx.o agg-rx.o mcu.o wed.o scan.o channel.o
-+	tx.o agg-rx.o mcu.o wed.o scan.o channel.o mt76_npu_offload.o
- 
- mt76-$(CONFIG_PCI) += pci.o
- mt76-$(CONFIG_NL80211_TESTMODE) += testmode.o
---- a/mt76.h
-+++ b/mt76.h
-@@ -557,6 +557,11 @@ struct mt76_driver_ops {
- 				struct ieee80211_vif *vif,
- 				struct ieee80211_bss_conf *link_conf,
- 				struct mt76_vif_link *mlink);
-+#ifdef TCSUPPORT_NPU_WIFI_TX
-+	void (*npu_txwi_free)(struct mt76_dev *dev, struct mt76_txwi_cache *t,
-+			 struct ieee80211_sta *sta, struct mt76_wcid *wcid,
-+			 struct list_head *free_list);
-+#endif
- };
- 
- struct mt76_channel_state {
-@@ -984,6 +989,10 @@ struct mt76_dev {
- 		struct mt76_usb usb;
- 		struct mt76_sdio sdio;
- 	};
-+
-+#if defined(TCSUPPORT_NPU_WIFI_OFFLOAD)
-+	u32 slot_id;
-+#endif		
- };
- 
- /* per-phy stats.  */
---- /dev/null
-+++ b/mt76_npu_offload.c
-@@ -0,0 +1,426 @@
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
-+
+diff -uNr old/airoha_npu.c new/airoha_npu.c
+--- old/airoha_npu.c	1970-01-01 08:00:00.000000000 +0800
++++ new/airoha_npu.c	2025-03-19 10:12:06.312427000 +0800
+@@ -0,0 +1,458 @@
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "airoha_npu.h"
 +unsigned long int  *dramReorderNodeBase;
 +int setonce=0;
-+
++u32 slot_id = 0;
 +
 +int npu_enable_chk = 1;
 +void npu_init_rxD(struct mt7996_dev *dev,struct pci_dev *pdev)
@@ -217,18 +78,20 @@
 +	phy=&dev->phy;
 +	int npuOffloadEn=1;
 +	u32 hif1_ofs = 0;
-+
++	struct airoha_npu *npu = airoha_npu_get(mdev->dev);
 +	if(npuOffloadEn){
 +		printk("npuOffload on mt76 init \n");	
 +		if (pdev->bus){
-+			mdev->slot_id = pci_domain_nr(pdev->bus);
-+			printk("the value of the slot_id is %d\n", mdev->slot_id);
++			slot_id = pci_domain_nr(pdev->bus);
++			printk("the value of the slot_id is %d\n", slot_id);
 +		}
 +		
-+		if(mdev->slot_id)
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P1);
++		if(slot_id)
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P1);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P1);
 +		else
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P0);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P0);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P0);
 +
 +		if(isMailBoxSuccess != 1) 
 +			printk("Error: KITE NPU_WIFI_OFFLOAD Set PCIE PORT Fail\n");	
@@ -243,7 +106,8 @@
 +
 +			/**************ba node******************/
 +			reorder_node_pa = npu_wifi_offload_get_ba_node_addr();
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
 +			if(isMailBoxSuccess != 1)
 +				printk("Error: NPU_WIFI_OFFLOAD set BA Node in Dram base fail\n");
 +			setonce = 2;
@@ -259,38 +123,49 @@
 +			/* npu rx rro ring*/
 +			for(band_idx = 0; band_idx < 2; band_idx++){
 +				if(band_idx){
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
-+					
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
++					isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
++					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
 +				}
 +				else{
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
++					isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
++					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
 +				}
 +			}
 +			
 +			band_idx = 0;
 +
 +			/* MSDU PG*/
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 5, MT7996_RX_RING_SIZE);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 5, MT7996_RX_RING_SIZE);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 5, MT7996_RX_RING_SIZE);
 +
 +			/* ind_cmd ring*/
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));			
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 8, MT7996_RX_RING_SIZE);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));			
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));	
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 8, MT7996_RX_RING_SIZE);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 8, MT7996_RX_RING_SIZE);
++
 +			
-+			isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
 +#endif			
 +			/* npu tx */
-+#ifdef TCSUPPORT_NPU_WIFI_TX
-+			for(band_idx = 0; band_idx < 2; band_idx++){
-+				if(band_idx)
++            if(arht_wifi_npu_active()){
++				for(band_idx = 0; band_idx < 2; band_idx++){
++					if(band_idx)
 +					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x130 + hif1_ofs));
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
++						//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
++						isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
 +				else
-+					isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
++					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
++					isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
 +			}
-+#endif			
++                        }			
 +		}
 +	}
 +}
@@ -301,31 +176,36 @@
 +	int isMailBoxSuccess=0;
 +	unsigned char band_idx = 0;	
 +	dma_addr_t npu_alloc_pa;
-+	struct mt76_dev *mdev = &dev->mt76;
-+	band_idx = mdev->slot_id;
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++	band_idx = slot_id;
++	
 +
 +	/* npu rx rro ring*/
-+	isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
++	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
 +	if(isMailBoxSuccess != 1) 
 +		printk("Error: NPU_WIFI_OFFLOAD get ring0 base fail\n");
 +	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
 +	writel(npu_alloc_pa,&dev->mt76.q_rx[MT_RXQ_RRO_BAND0].regs->desc_base);
 +	
-+	isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(1, &get_RingBase);
++	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(1, &get_RingBase);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(1, &get_RingBase);
 +	if(isMailBoxSuccess != 1) 
 +		printk("Error: NPU_WIFI_OFFLOAD get ring1 base fail\n");
 +	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
 +	writel(npu_alloc_pa,&dev->mt76.q_rx[MT_RXQ_RRO_BAND1].regs->desc_base);		
 +
 +	/* MSDU PG ring */
-+	isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(10, &get_RingBase);
++	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(10, &get_RingBase);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(10, &get_RingBase);
 +	if(isMailBoxSuccess != 1) 
 +		printk("Error: NPU_WIFI_OFFLOAD get MSDU PG base fail\n");
 +	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
 +	writel(npu_alloc_pa,&dev->mt76.q_rx[MT_RXQ_MSDU_PAGE_BAND0].regs->desc_base);		
 +	
 +	/* ind_cmd ring */
-+	isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(8, &get_RingBase);
++	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(8, &get_RingBase);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(8, &get_RingBase);
 +	if(isMailBoxSuccess != 1) 
 +		printk("Error: NPU_WIFI_OFFLOAD get ind_cmd ring base fail\n");
 +	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
@@ -337,13 +217,16 @@
 +void npu_mt76_init_done(struct mt7996_dev *dev,struct pci_dev *pdev)
 +{
 +	int isMailBoxSuccess=0;
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
 +	
 +	/* rro set done */
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
 +	if (isMailBoxSuccess != 1)
 +		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 2 fail\n");
 +	
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(7, 0, 0, 0, 0);
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(7, 0, 0, 0, 0);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(7, 0, 0, 0, 0);
 +	if (isMailBoxSuccess != 1)
 +		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 7 fail\n");
 +
@@ -353,9 +236,11 @@
 +void npu_rro_reset_sessions(struct mt7996_dev *dev, u16 seid)
 +{
 +	int isMailBoxSuccess=0;
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
 +
 +	/* init_rro_addr_elem_by_seid */
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
 +	if(isMailBoxSuccess != 1){
 +		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 3 fail\n");
 +	}
@@ -368,7 +253,7 @@
 +	int isMailBoxSuccess=0;
 +	unsigned char band_idx = 0;
 +	struct mt76_dev *mdev = &dev->mt76;
-+	
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
 +	void *npu_alloc_va = NULL;
 +	dma_addr_t npu_alloc_pa;
 +	
@@ -381,13 +266,15 @@
 +	
 +	for(band_idx = 0; band_idx < 2; band_idx++){
 +		if(band_idx == 0){
-+			isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
 +			npu_alloc_pa = (dma_addr_t)get_RingBase.info;
 +			npu_alloc_va = ioremap((phys_addr_t)get_RingBase.info,4);					
 +			writel(npu_alloc_pa, &dev->mt76.phy.q_tx[0]->regs->desc_base);
 +		}
 +		else{
-+			isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
 +			npu_alloc_pa = (dma_addr_t)get_RingBase.info;
 +			npu_alloc_va = ioremap((phys_addr_t)get_RingBase.info,4);					
 +			writel(npu_alloc_pa, &dev->mt76.phys[1]->q_tx[0]->regs->desc_base);
@@ -412,17 +299,20 @@
 +			printk("%s can't alloc memory !\n", __func__);
 +		}
 +		
-+		isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(band_idx, txbuf_alloc_pa_sp);
++		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(band_idx, txbuf_alloc_pa_sp);
++		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(band_idx, txbuf_alloc_pa_sp);
 +		if(isMailBoxSuccess != 1){
 +			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
 +		}
 +		
-+		isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+5), txbuf_alloc_pa_fp);
++		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+5), txbuf_alloc_pa_fp);
++		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+5), txbuf_alloc_pa_fp);
 +		if(isMailBoxSuccess != 1){
 +			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
 +		}
 +		
-+		isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+10), txbuf_alloc_pa_swq);
++		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+10), txbuf_alloc_pa_swq);
++		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+10), txbuf_alloc_pa_swq);
 +		if(isMailBoxSuccess != 1){
 +			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
 +		}
@@ -470,10 +360,8 @@
 +	struct sk_buff *n_skb = NULL;
 +	unsigned short vnd_len;
 +	__le32 *_txd;
-+	struct port_info wifi_info;
-+	unsigned char hostadpt_ring_num = 0, band_idx, bss_idx, is_tcp, qos_tid;
-+	unsigned int wcidx, token;
-+	npu_hif_v2_info npu_txp_info;
++	unsigned char hostadpt_ring_num = 0, band_idx;
++	unsigned int token;
 +	int ret = 0;//0 means to free skb
 +	unsigned char txp_temp[MT_TXD_SIZE+HIF_TXP_SIZE];
 +	_txd = (__le32 *)txwi_ptr;
@@ -492,7 +380,7 @@
 +	
 +	hostadpt_ring_num = band_idx;
 +	token = (_txd[8] >> 16) & 0xffff;
-+
++#if 0
 +	if (ra_sw_nat_hook_tx != NULL)
 +	{
 +		memset(&wifi_info, 0 , sizeof(struct port_info));
@@ -530,7 +418,7 @@
 +			return;
 +		}
 +	}
-+
++#endif
 +	vnd_len = MT_TXD_SIZE + HIF_TXP_SIZE;
 +	
 +	memcpy(txp_temp,txwi_ptr,vnd_len);
@@ -540,6 +428,9 @@
 +	}
 +	
 +	//handle token/txwi free
++	if(ret == -2)  //tx hook
++		dev_kfree_skb(n_skb);
++	
 +	if(npu_mt76_token_release(dev, token, wcid, sta)){
 +		printk("npu_mt76_token_release fail\n");
 +	}
@@ -554,17 +445,19 @@
 +	unsigned long int pcie_pa = 0;
 +	int isMailBoxSuccess = 0;
 +	unsigned char band_idx = 0;
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
 +	
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma); // npu  : tx_done_ring0_addr_uncache
-+	
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC((band_idx + 10), MT7996_RX_MCU_RING_SIZE); //npu : g_tx_done_ring0_size
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma); // npu  : tx_done_ring0_addr_uncache
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma);
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC((band_idx + 10), MT7996_RX_MCU_RING_SIZE); //npu : g_tx_done_ring0_size
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_DESC((band_idx + 10), MT7996_RX_MCU_RING_SIZE);
 +	if(isMailBoxSuccess != 1){
 +		printk( "%s() Error: WIFI_MAIL_API_SET_WAIT_DESC fail\n", __func__);
 +	}
 +	
 +	pcie_pa = pci_resource_start(pdev, 0); //get pcie phy addr
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));//npu : TxDone_ring0_pcie_base
-+	
++	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));//npu : TxDone_ring0_pcie_base
++	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));
 +	return;
 +}
 +EXPORT_SYMBOL_GPL(npu_set_rx_event);
@@ -581,14 +474,14 @@
 +EXPORT_SYMBOL_GPL(set_npu_enable);
 +
 +#endif
---- /dev/null
-+++ b/mt76_npu_offload.h
-@@ -0,0 +1,88 @@
-+#ifndef NPU_OFFLOAD_H
-+#define NPU_OFFLOAD_H
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD	
 +
-+#include "modules/npu/wifi_mail.h"
+diff -uNr old/airoha_npu.h new/airoha_npu.h
+--- old/airoha_npu.h	1970-01-01 08:00:00.000000000 +0800
++++ new/airoha_npu.h	2025-03-19 10:06:06.123457000 +0800
+@@ -0,0 +1,129 @@
++#ifndef NPU_OFFLOAD_H
++#define NPU_OFFLOAD_H	
++
 +#include "mt7996/mt7996.h"
 +#include "dma.h"
 +#include "mt7996/mac.h"
@@ -670,37 +563,228 @@
 +extern void (*hostdapt_enable_int_hook)(unsigned int ringIdx);
 +extern void (*hostdapt_disable_int_hook)(unsigned int ringIdx);
 +extern void (*hostdapt_registe_wifitask_hook)(unsigned int ringIdx, void *func);
++extern bool arht_wifi_npu_active(void);
++
++#define NPU_NUM_CORES		8
++
++typedef struct npu_info {
++	unsigned int info;
++}npu_info_t;
++struct airoha_npu {
++	struct device *dev;
++	struct regmap *regmap;
++
++	struct airoha_npu_core {
++		struct airoha_npu *npu;
++		/* protect concurrent npu memory accesses */
++		spinlock_t lock;
++		struct work_struct wdt_work;
++	} cores[NPU_NUM_CORES];
++
++	struct {
++		int (*ppe_init)(struct airoha_npu *npu);
++		int (*ppe_deinit)(struct airoha_npu *npu);
++		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
++					      dma_addr_t foe_addr,
++					      int sram_num_entries);
++		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
++					    dma_addr_t foe_addr,
++					    u32 entry_size, u32 hash,
++					    bool ppe2);
++		
++		/*mailbox api called by wifi*/
++		int (*WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
++		int (*WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE)(unsigned int interfaceID, unsigned int PciePortType);
++		int (*WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR)(unsigned int interfaceID, unsigned int dramBaNode_pa);
++		int (*WIFI_MAIL_API_SET_WAIT_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		int (*WIFI_MAIL_API_SET_WAIT_DESC)(unsigned int interfaceID, unsigned int desc) ;
++		int (*WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
++		int (*WIFI_MAIL_API_GET_WAIT_RXDESC_BASE)(unsigned int interfaceID, npu_info_t *pnpuInfo);
++		int (*WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		int (*WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++	} ops;
++};
++extern struct airoha_npu *airoha_npu_get(struct device *dev);
++//extern bool arht_wifi_npu_tx_active(void);
 +#endif
-+#endif
---- a/mt7996/dma.c
-+++ b/mt7996/dma.c
++
+diff -uNr old/dma.c new/dma.c
+--- old/dma.c	2025-03-18 23:55:25.784978000 +0800
++++ new/dma.c	2025-03-19 00:01:00.397972000 +0800
 @@ -6,6 +6,9 @@
+ #include <linux/dma-mapping.h>
+ #include "mt76.h"
+ #include "dma.h"
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "airoha_npu.h"
++#endif
+ 
+ #if IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED)
+ 
+@@ -391,6 +394,15 @@
+ static void
+ mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
+ {
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	if(arht_wifi_npu_active()){
++		if(!(dev->phy.q_tx[0] == q ||(dev->phys[1] && dev->phys[1]->q_tx[0] == q))){
++			wmb();
++			Q_WRITE(q, cpu_idx, q->head);
++		}
++		return;        
++	}
++#endif
+ 	wmb();
+ 	Q_WRITE(q, cpu_idx, q->head);
+ }
+@@ -722,8 +734,17 @@
+ 		goto unmap;
+ 
+ 	phy->tx_dbg_stats.tx_to_hw++;
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++    if(arht_wifi_npu_active()){
++		npu_mt76_dma_tx_queue_skb(phy, dev, t, skb, txwi, wcid, sta);
++		return -1;
++    }else
++    	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
++				tx_info.info, tx_info.skb, t);
++#else	
+ 	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
+ 				tx_info.info, tx_info.skb, t);
++#endif
+ 
+ unmap:
+ 	for (n--; n > 0; n--)
+@@ -1057,6 +1078,63 @@
+ 	return done;
+ }
+ 
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++int mt76_dma_rx_poll(struct napi_struct *napi, int budget)
++{
++	struct mt76_dev *dev;
++	int qid, done = 0, cur;
++	
++	void * pkt=NULL;
++	unsigned char bReschedule=0;
++	struct sk_buff *skb;
++	int npu_done=0;
++	unsigned int vend_spec = 0;
++
++
++	dev = container_of(napi->dev, struct mt76_dev, napi_dev);
++	qid = napi - dev->napi;
++
++	rcu_read_lock();
++
++	if(qid != MT_RXQ_RRO_IND)
++	{
++		do {
++				cur = mt76_dma_rx_process(dev, &dev->q_rx[qid], budget - done);
++				mt76_rx_poll_complete(dev, qid, napi);
++				done += cur;
++		} while (cur && done < budget);
++	}
++	else{
++		while (npu_done < budget)
++		{		
++			if(fromHostadptPktHandle_hook)
++				pkt = fromHostadptPktHandle_hook(0, &bReschedule, &vend_spec);
++		
++			if(pkt)	{	
++				npu_done++;
++				skb=(struct sk_buff *)pkt;
++				dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
++			}
++			else
++				break;
++		
++			mt76_rx_poll_complete(dev, qid, napi);	
++		}	
++		rcu_read_unlock();
++		if(npu_done < budget && napi_complete(napi))
++			dev->drv->rx_poll_complete(dev, qid);
++		return npu_done;
++	}
++
++	rcu_read_unlock();
++
++	if (done < budget && napi_complete(napi))
++		dev->drv->rx_poll_complete(dev, qid);
++
++	return done;
++}
++#else
++
+ int mt76_dma_rx_poll(struct napi_struct *napi, int budget)
+ {
+ 	struct mt76_dev *dev;
+@@ -1080,6 +1158,8 @@
+ 
+ 	return done;
+ }
++
++#endif
+ EXPORT_SYMBOL_GPL(mt76_dma_rx_poll);
+ 
+ static int
+diff -uNr old/Makefile new/Makefile
+--- old/Makefile	2025-03-18 23:55:19.826973000 +0800
++++ new/Makefile	2025-03-18 23:50:03.885986000 +0800
+@@ -12,7 +12,7 @@
+ 
+ mt76-y := \
+ 	mmio.o util.o trace.o dma.o mac80211.o debugfs.o eeprom.o \
+-	tx.o agg-rx.o mcu.o wed.o
++	tx.o agg-rx.o mcu.o wed.o airoha_npu.o
+ 
+ mt76-$(CONFIG_PCI) += pci.o
+ mt76-$(CONFIG_NL80211_TESTMODE) += testmode.o
+diff -uNr old/mt76.h new/mt76.h
+--- old/mt76.h	2025-03-18 23:55:25.745982000 +0800
++++ new/mt76.h	2025-03-18 19:28:16.752085000 +0800
+@@ -620,6 +620,11 @@
+ 
+ 	void (*sta_remove)(struct mt76_dev *dev, struct ieee80211_vif *vif,
+ 			   struct ieee80211_sta *sta);
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	void (*npu_txwi_free)(struct mt76_dev *dev, struct mt76_txwi_cache *t,
++			 struct ieee80211_sta *sta, struct mt76_wcid *wcid,
++			 struct list_head *free_list);
++#endif
+ };
+ 
+ struct mt76_channel_state {
+diff -uNr old/mt7996/dma.c new/mt7996/dma.c
+--- old/mt7996/dma.c	2025-03-18 23:55:25.822998000 +0800
++++ new/mt7996/dma.c	2025-03-18 23:57:04.325983000 +0800
+@@ -6,7 +6,9 @@
  #include "mt7996.h"
  #include "../dma.h"
  #include "mac.h"
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "airoha_npu.h"
 +#endif
- 
  int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx, int n_desc,
  			  int ring_base, struct mtk_wed_device *wed)
-@@ -545,8 +548,9 @@ int mt7996_dma_rro_init(struct mt7996_de
+ {
+@@ -594,8 +596,10 @@
  			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND1, mt76_dma_rx_poll);
  			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND2, mt76_dma_rx_poll);
  		}
--		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND0, mt76_dma_rx_poll);
--		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND1, mt76_dma_rx_poll);
-+		
-+		//mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND0, mt76_dma_rx_poll);
-+		//mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND1, mt76_dma_rx_poll);
++#ifndef CONFIG_NET_AIROHA_SOC_NPU		
+ 		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND0, mt76_dma_rx_poll);
+ 		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND1, mt76_dma_rx_poll);
++#endif		
  		if (mt7996_band_valid(dev, MT_BAND2))
  			mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND2, mt76_dma_rx_poll);
  		mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
-@@ -797,6 +801,30 @@ int mt7996_dma_init(struct mt7996_dev *d
+@@ -910,6 +914,31 @@
  	return 0;
  }
  
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +extern int tasklet_schedule_rx_data_done_npu(void);
 +extern void mt7996_npu_rx_tasklet(struct tasklet_struct *t);
 +extern struct mt7996_dev *MT7996;
@@ -724,132 +808,134 @@
 +}
 +#endif
 +
++
  void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
  {
  	struct mt76_phy *phy2 = dev->mt76.phys[MT_BAND1];
-@@ -840,6 +868,10 @@ void mt7996_dma_reset(struct mt7996_dev
+@@ -968,6 +997,10 @@
+ 	/* reset wfsys */
  	if (force)
  		mt7996_wfsys_reset(dev);
- 
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+	if(npu_enable())
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++	if(arht_wifi_npu_active())
 +		register_rx_data_done_task(dev, 0);
-+#endif	
++#endif
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED
  	if (dev->hif2 && mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
  		mtk_wed_device_dma_reset(&dev->mt76.mmio.wed_hif2);
- 
-@@ -885,6 +917,12 @@ void mt7996_dma_reset(struct mt7996_dev
- 		mt76_queue_rx_reset(dev, i);
- 	}
- 
-+#if 0//def TCSUPPORT_NPU_WIFI_OFFLOAD
-+	if(npu_enable()){	
-+		npu_init_rxD(dev,NULL);
-+		get_npu_rxd(dev,NULL);
-+	}
-+#endif
- 	mt7996_dma_enable(dev, !force);
- }
- 
---- a/mt7996/init.c
-+++ b/mt7996/init.c
+diff -uNr old/mt7996/init.c new/mt7996/init.c
+--- old/mt7996/init.c	2025-03-18 23:55:25.827996000 +0800
++++ new/mt7996/init.c	2025-03-18 23:57:50.492958000 +0800
 @@ -13,6 +13,9 @@
  #include "mcu.h"
  #include "coredump.h"
  #include "eeprom.h"
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "airoha_npu.h"
 +#endif
  
  static const struct ieee80211_iface_limit if_limits_global = {
  	.max = MT7996_MAX_INTERFACES * MT7996_MAX_RADIOS,
-@@ -865,6 +868,9 @@ static int mt7996_wed_rro_init(struct mt
+@@ -1057,11 +1060,14 @@
+ {
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+-
++#endif
  	struct mt7996_wed_rro_addr *addr;
  	void *ptr;
  	int i;
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +	int isMailBoxSuccess=0;
-+#endif	
- 
++	struct airoha_npu *npu = airoha_npu_get(dev->mt76.dev);
++#endif
  	if (!dev->has_rro)
  		return 0;
-@@ -899,6 +905,10 @@ static int mt7996_wed_rro_init(struct mt
+ 
+@@ -1095,6 +1101,13 @@
  			addr->signature = 0xff;
  			addr++;
  		}
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+		isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
-+			i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);
-+#endif			
- #ifdef CONFIG_NET_MEDIATEK_SOC_WED
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++		if(arht_wifi_npu_active())
++			isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
++				i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);
++			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
++				//i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);		
++#endif	
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED		
  		if (mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed))
  			wed->wlan.ind_cmd.addr_elem_phys[i] = dev->wed_rro.addr_elem[i].phy_addr;
-@@ -930,6 +940,10 @@ static int mt7996_wed_rro_init(struct mt
+@@ -1125,14 +1138,17 @@
+ 		addr->signature = 0xff;
  		addr++;
  	}
- 
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
-+		0, dev->wed_rro.session.phy_addr, 0, 0);
-+#endif
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
++	if(arht_wifi_npu_active())
++		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
++			0, dev->wed_rro.session.phy_addr, 0, 0);
++		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
++			//0, dev->wed_rro.session.phy_addr, 0, 0);	
++#endif	
  	/* rro ind cmd queue init */
  	mt7996_rro_hw_init(dev);
  
-@@ -998,12 +1012,15 @@ static void mt7996_wed_rro_work(struct w
+ 	return mt7996_dma_rro_init(dev);
+-#else
+-	return 0;
+-#endif
+ }
  
- 	while (!list_empty(&list)) {
- 		struct mt7996_wed_rro_session_id *e;
--		int i;
- 
+ static void mt7996_wed_rro_free(struct mt7996_dev *dev)
+@@ -1202,7 +1218,13 @@
  		e = list_first_entry(&list, struct mt7996_wed_rro_session_id,
  				     list);
  		list_del_init(&e->list);
 -
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+		npu_rro_reset_sessions(dev, e->id);
-+		mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
-+#else
-+		int i;
++#ifdef CONFIG_NET_AIROHA_SOC_NPU		
++		if(arht_wifi_npu_active()){
++	  		npu_rro_reset_sessions(dev, e->id);
++			mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
++			goto out;
++		}
++#endif
  		for (i = 0; i < MT7996_RRO_WINDOW_MAX_LEN; i++) {
  			void *ptr = dev->wed_rro.session.ptr;
  			struct mt7996_wed_rro_addr *elem;
-@@ -1026,6 +1043,7 @@ reset:
- 		}
- 		mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
- out:
-+#endif	
- 		kfree(e);
- 	}
- }
---- a/mt7996/mac.c
-+++ b/mt7996/mac.c
-@@ -10,6 +10,9 @@
- #include "../dma.h"
- #include "mac.h"
- #include "mcu.h"
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
+diff -uNr old/mt7996/mac.c new/mt7996/mac.c
+--- old/mt7996/mac.c	2025-03-18 23:55:25.834002000 +0800
++++ new/mt7996/mac.c	2025-03-18 19:33:41.487070000 +0800
+@@ -13,6 +13,9 @@
+ #include "vendor.h"
+ #include "mt7996_trace.h"
+ #include "debug.h"
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +extern void register_rx_data_done_task(struct mt7996_dev *dev, int enable);
 +#endif
  
- #define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
- 
-@@ -455,6 +458,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
+ static const struct mt7996_dfs_radar_spec etsi_radar_specs = {
+ 	.pulse_th = { 110, -10, -80, 40, 5200, 128, 5200 },
+@@ -333,6 +336,12 @@
  
  	band_idx = FIELD_GET(MT_RXD1_NORMAL_BAND_IDX, rxd1);
  	mphy = dev->mt76.phys[band_idx];
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
 +	if(!mphy){
-+//		printk("=======mt7996_mac_fill_rx!!! band_idx = %d =====\n", band_idx);	
++		printk("=======mt7996_mac_fill_rx!!! band_idx = %d =====\n", band_idx);	
 +		return -EINVAL;
 +	}	
++#endif	
  	phy = mphy->priv;
  	status->phy_idx = mphy->band_idx;
  
-@@ -1106,6 +1113,41 @@ out:
+@@ -1228,6 +1237,41 @@
  	mt76_put_txwi(mdev, t);
  }
  
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#ifdef TCSUPPORT_NPU_WIFI_TX
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +void npu_mt7996_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
 +		 struct ieee80211_sta *sta, struct mt76_wcid *wcid,
 +		 struct list_head *free_list)
@@ -881,57 +967,59 @@
 +
 +EXPORT_SYMBOL_GPL(npu_mt7996_txwi_free);
 +#endif
-+#endif
++
 +
  static void
  mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
  {
-@@ -2378,6 +2420,10 @@ void mt7996_mac_reset_work(struct work_s
+@@ -2570,7 +2614,10 @@
+ 		ieee80211_wake_queues(phy3->mt76->hw);
  
  	mt7996_update_beacons(dev);
- 
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD	
-+	register_rx_data_done_task(dev, 1);
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
++	if(arht_wifi_npu_active())	 
++		 register_rx_data_done_task(dev, 1);
 +#endif
-+
- 	ieee80211_queue_delayed_work(mt76_hw(dev), &dev->mphy.mac_work,
- 				     MT7996_WATCHDOG_TIME);
- 	if (phy2)
---- a/mt7996/mmio.c
-+++ b/mt7996/mmio.c
-@@ -13,6 +13,10 @@
- #include "mcu.h"
+ 	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
+ 		 wiphy_name(dev->mt76.hw->wiphy));
+ }
+diff -uNr old/mt7996/mmio.c new/mt7996/mmio.c
+--- old/mt7996/mmio.c	2025-03-18 23:55:25.851974000 +0800
++++ new/mt7996/mmio.c	2025-03-18 23:59:19.148964000 +0800
+@@ -14,6 +14,12 @@
  #include "../trace.h"
  #include "../dma.h"
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
+ 
++
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "airoha_npu.h"
 +struct mt7996_dev *MT7996;
 +#endif
- 
- static bool wed_enable;
++
+ static bool wed_enable = true;
  module_param(wed_enable, bool, 0644);
-@@ -537,10 +541,45 @@ static void mt7996_rx_poll_complete(stru
+ 
+@@ -725,10 +731,42 @@
  				    enum mt76_rxq_id q)
  {
  	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+	if(npu_enable())
-+	{
+-
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++    if(arht_wifi_npu_active()){
 +		if(q != MT_RXQ_RRO_IND)//wifi host not rcv data pkts after enable npu
 +			mt7996_irq_enable(dev, MT_INT_RX(q)); //enable wifi irq
- 
-+		if(q == MT_RXQ_RRO_IND && hostdapt_enable_int_hook){
++
++		if(q == MT_RXQ_RRO_IND && hostdapt_enable_int_hook)
 +			hostdapt_enable_int_hook(0);
-+		}
-+	}
-+	else
++	}else
 +		mt7996_irq_enable(dev, MT_INT_RX(q));
 +#else
  	mt7996_irq_enable(dev, MT_INT_RX(q));
 +#endif
  }
  
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +int tasklet_schedule_rx_data_done_npu(void)
 +{	  
 +	struct mt7996_dev *dev;		
@@ -941,132 +1029,158 @@
 +	}				
 +	return 0;
 +}
++
 +void mt7996_npu_rx_tasklet(struct tasklet_struct *t)
 +{
-+
 +	struct mt7996_dev *dev;		
 +   	if(MT7996){    		
 +   		dev=MT7996;				
 +		napi_schedule(&dev->mt76.napi[MT_RXQ_RRO_IND]);
-+   	}
-+   	
++   	}   	
 +}
 +#endif
++
 +
  /* TODO: support 2/4/6/8 MSI-X vectors */
  static void mt7996_irq_tasklet(struct tasklet_struct *t)
  {
-@@ -594,8 +633,18 @@ static void mt7996_irq_tasklet(struct ta
+@@ -787,8 +825,17 @@
  		napi_schedule(&dev->mt76.tx_napi);
  
  	for (i = 0; i < __MT_RXQ_MAX; i++) {
 -		if ((intr & MT_INT_RX(i)))
 +		if ((intr & MT_INT_RX(i))){
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+		if(npu_enable()){
-+			if (i != MT_RXQ_MAIN_WA)
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
++			if(arht_wifi_npu_active()){
++				if (i != MT_RXQ_MAIN_WA)
++					napi_schedule(&dev->mt76.napi[i]);				
++			}else
 +				napi_schedule(&dev->mt76.napi[i]);
-+		}
-+		else
- 			napi_schedule(&dev->mt76.napi[i]);
 +#else
-+			napi_schedule(&dev->mt76.napi[i]);
+ 			napi_schedule(&dev->mt76.napi[i]);
 +#endif
 +		}
  	}
  
  	if (intr & MT_INT_MCU_CMD) {
-@@ -661,6 +710,11 @@ struct mt7996_dev *mt7996_mmio_probe(str
+@@ -854,6 +901,9 @@
+ 		.sta_remove = mt7996_mac_sta_remove,
+ 		.update_survey = mt7996_update_channel,
  		.set_channel = mt7996_set_channel,
- 		.vif_link_add = mt7996_vif_link_add,
- 		.vif_link_remove = mt7996_vif_link_remove,
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD	
-+#ifdef TCSUPPORT_NPU_WIFI_TX
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
 +		.npu_txwi_free = npu_mt7996_txwi_free,
-+#endif
-+#endif		
++#endif			
  	};
  	struct mt7996_dev *dev;
  	struct mt76_dev *mdev;
-@@ -679,7 +733,16 @@ struct mt7996_dev *mt7996_mmio_probe(str
+@@ -872,7 +922,14 @@
  	tasklet_setup(&mdev->irq_tasklet, mt7996_irq_tasklet);
  
  	mt76_wr(dev, MT_INT_MASK_CSR, 0);
 -
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD	
-+	if(npu_enable()){	
-+		if(hostdapt_registe_wifitask_hook){
++#ifdef CONFIG_NET_AIROHA_SOC_NPU	
++    if(arht_wifi_npu_active()){	
++		if(hostdapt_registe_wifitask_hook)
 +			hostdapt_registe_wifitask_hook(0, tasklet_schedule_rx_data_done_npu);
-+		}
 +		tasklet_setup(&dev->npu_rx_tasklet, mt7996_npu_rx_tasklet);
-+		
-+		MT7996=dev; 		
-+	}	
++		MT7996=dev; 
++    }
 +#endif
  	return dev;
  
  error:
---- a/mt7996/mt7996.h
-+++ b/mt7996/mt7996.h
-@@ -456,6 +456,10 @@ struct mt7996_dev {
- 		u8 type:4;
- 		u8 fem:4;
- 	} var;
-+
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
+diff -uNr old/mt7996/mt7996.h new/mt7996/mt7996.h
+--- old/mt7996/mt7996.h	2025-03-18 23:55:25.855995000 +0800
++++ new/mt7996/mt7996.h	2025-03-18 19:36:14.073059000 +0800
+@@ -964,6 +964,10 @@
+ 		void *txbf_pfmu_tag;
+ 	} test;
+ #endif
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +	struct tasklet_struct npu_rx_tasklet;
 +#endif	
++
  };
  
  enum {
-@@ -785,6 +789,12 @@ int mt7996_tx_prepare_skb(struct mt76_de
+@@ -1454,6 +1458,10 @@
  void mt7996_tx_token_put(struct mt7996_dev *dev);
  void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
  			 struct sk_buff *skb, u32 *info);
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#ifdef TCSUPPORT_NPU_WIFI_TX
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
 +void npu_mt7996_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
 +		 struct ieee80211_sta *sta, struct mt76_wcid *wcid,	 struct list_head *free_list);
-+#endif
 +#endif
  void mt7996_rx_token_put(struct mt7996_dev *dev);
  void mt7996_rro_msdu_pg_free(struct mt7996_dev *dev);
  void mt7996_rro_rx_process(struct mt76_dev *mdev, void *data);
---- a/mt7996/pci.c
-+++ b/mt7996/pci.c
-@@ -9,8 +9,11 @@
+@@ -1587,8 +1595,8 @@
+ int mt7996_mcu_set_mru_probe_en(struct mt7996_phy *phy);
+ #endif
+ 
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ int mt7996_dma_rro_init(struct mt7996_dev *dev);
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ extern void mtk_set_pse_drop(u32 config);
+ #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
+ 
+diff -uNr old/mt7996/pci.c new/mt7996/pci.c
+--- old/mt7996/pci.c	2025-03-18 23:55:25.859984000 +0800
++++ new/mt7996/pci.c	2025-03-19 00:00:18.550957000 +0800
+@@ -9,11 +9,14 @@
  #include "mt7996.h"
  #include "mac.h"
  #include "../trace.h"
 +#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+#include "mt76_npu_offload.h"
++#include "airoha_npu.h"
 +#endif
+ 
+ static bool hif2_enable = false;
+ module_param(hif2_enable, bool, 0644);
  
 -static bool rro_enable = false;
 +static bool rro_enable = true;
  module_param(rro_enable, bool, 0644);
  
  static LIST_HEAD(hif_list);
-@@ -194,7 +197,22 @@ static int mt7996_pci_probe(struct pci_d
+@@ -107,6 +110,8 @@
+ 	return 0;
+ }
+ 
++
++
+ static int mt7996_pci_probe(struct pci_dev *pdev,
+ 			    const struct pci_device_id *id)
+ {
+@@ -174,7 +179,7 @@
+ 			       IRQF_SHARED, KBUILD_MODNAME, dev);
+ 	if (ret)
+ 		goto free_wed_or_irq_vector;
+-
++	
+ 	mt76_wr(dev, MT_INT_MASK_CSR, 0);
+ 	/* master switch of PCIe tnterrupt enable */
+ 	mt76_wr(dev, MT_PCIE_MAC_INT_ENABLE, 0xff);
+@@ -213,7 +218,22 @@
  	ret = mt7996_register_device(dev);
  	if (ret)
  		goto free_hif2_irq;
 -
-+#ifdef TCSUPPORT_NPU_WIFI_OFFLOAD
-+	if(npu_enable()){			
-+		wifi_offload_init_npu(pdev,dev,0);
-+		npu_init_rxD(dev,pdev);
-+		get_npu_rxd(dev,pdev);
-+		
-+		mt7996_irq_disable(dev, MT_INT_RRO_RX_DONE);
-+#ifdef TCSUPPORT_NPU_WIFI_TX
-+		get_npu_txd(dev,pdev);
-+		npu_set_rx_event(dev,pdev);
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++    if(arht_wifi_npu_active()){		
++			wifi_offload_init_npu(pdev,dev,0);
++			npu_init_rxD(dev,pdev);
++			get_npu_rxd(dev,pdev);
++			
++			mt7996_irq_disable(dev, MT_INT_RRO_RX_DONE);
++	        if(arht_wifi_npu_active()){
++				get_npu_txd(dev,pdev);
++				npu_set_rx_event(dev,pdev);
 +
-+		mt7996_irq_disable(dev, MT_INT_RX(MT_RXQ_MAIN_WA));
-+#endif
-+		npu_mt76_init_done(dev,pdev);
-+	}
++				mt7996_irq_disable(dev, MT_INT_RX(MT_RXQ_MAIN_WA));
++			}
++			npu_mt76_init_done(dev,pdev);
++    }	
 +#endif
  	return 0;
  

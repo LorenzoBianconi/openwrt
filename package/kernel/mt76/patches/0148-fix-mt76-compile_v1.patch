@@ -1,0 +1,44 @@
+diff -uNr old/mt7996/main.c new/mt7996/main.c
+--- old/mt7996/main.c	2025-03-06 10:50:00.050725000 +0800
++++ new/mt7996/main.c	2025-03-05 18:34:50.651708000 +0800
+@@ -2085,6 +2085,19 @@
+ 	ieee80211_queue_work(hw, &dev->rc_work);
+ }
+ 
++
++static void mt7996_sta_rc_update(struct ieee80211_hw *hw,
++				 struct ieee80211_vif *vif,
++				 struct ieee80211_sta *sta,
++				 u32 changed)
++{
++	struct mt7996_dev *dev = mt7996_hw_dev(hw);
++
++	mt7996_sta_rc_work(&changed, sta);
++	ieee80211_queue_work(hw, &dev->rc_work);
++}
++
++
+ static int
+ mt7996_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+ 			const struct cfg80211_bitrate_mask *mask,
+@@ -3460,6 +3473,7 @@
+ 	.sta_state = mt76_sta_state,
+ 	.sta_pre_rcu_remove = mt7996_sta_pre_rcu_remove,
+ 	.link_sta_rc_update = mt7996_link_sta_rc_update,
++	.sta_rc_update = mt7996_sta_rc_update,
+ 	.set_key = mt7996_set_key,
+ 	.ampdu_action = mt7996_ampdu_action,
+ 	.set_rts_threshold = mt7996_set_rts_threshold,
+diff -uNr old/mt7996/mcu.c new/mt7996/mcu.c
+--- old/mt7996/mcu.c	2025-03-06 10:50:00.058719000 +0800
++++ new/mt7996/mcu.c	2025-03-05 18:34:58.354722000 +0800
+@@ -731,7 +731,8 @@
+ 			return;
+ 
+ 		dev_sw_netstats_tx_add(wdev->netdev, tx_packets, tx_bytes);
+-		__dev_sw_netstats_rx_add(wdev->netdev, rx_packets, rx_bytes);
++		//__dev_sw_netstats_rx_add(wdev->netdev, rx_packets, rx_bytes);
++		dev_sw_netstats_rx_add(wdev->netdev, rx_bytes);
+ 	}
+ }
+ 

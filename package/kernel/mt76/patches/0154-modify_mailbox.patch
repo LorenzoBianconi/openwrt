@@ -1,0 +1,289 @@
+diff -uNr old/mt7996/init.c new/mt7996/init.c
+--- old/mt7996/init.c	2025-03-25 16:55:59.315848000 +0800
++++ new/mt7996/init.c	2025-03-25 16:31:28.837954000 +0800
+@@ -1140,7 +1140,7 @@
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ #if !MT76_RROV31
+ 		if(arht_wifi_npu_active() && !(IS_ERR(npu_mt76)))
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_inode_txrx_reg_addr_ops(0,
+ 				i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(0,
+ 				//i, dev->wed_rro.addr_elem[i].phy_addr, 0, 0);		
+@@ -1179,7 +1179,7 @@
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ #if !MT76_RROV31
+ 	if(arht_wifi_npu_active() && !(IS_ERR(npu_mt76)))
+-		isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
++		isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_inode_txrx_reg_addr_ops(1,
+ 			0, dev->wed_rro.session.phy_addr, 0, 0);
+ 		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(1,
+ 			//0, dev->wed_rro.session.phy_addr, 0, 0);	
+diff -uNr old/npu.c new/npu.c
+--- old/npu.c	2025-03-25 16:55:59.344847000 +0800
++++ new/npu.c	2025-03-25 16:37:31.208928000 +0800
+@@ -76,10 +76,10 @@
+ 		}
+ 		
+ 		if(slot_id)
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P1);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_port_type_ops(band_idx, P0__P1);
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P1);
+ 		else
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P0);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_port_type_ops(band_idx, P0__P0);
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE(band_idx, P0__P0);
+ 
+ 		if(isMailBoxSuccess != 1) 
+@@ -97,7 +97,7 @@
+ 			#if 1
+ 			reorder_node_pa = npu_wifi_offload_get_ba_node_addr();
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR(band_idx, reorder_node_pa);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_dram_ba_node_addr_ops(band_idx, reorder_node_pa);
+ 			if(isMailBoxSuccess != 1)
+ 				printk("Error: NPU_WIFI_OFFLOAD set BA Node in Dram base fail\n");
+ 			#endif
+@@ -115,15 +115,15 @@
+ 			for(band_idx = 0; band_idx < 2; band_idx++){
+ 				if(band_idx){
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
+-					isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
++					isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 + hif1_ofs));
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
+-					isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops(band_idx, MT7996_RX_RING_SIZE);
+ 				}
+ 				else{
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
+-					isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
++					isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops(band_idx, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80));
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
+-					isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx, MT7996_RX_RING_SIZE);
++					isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops(band_idx, MT7996_RX_RING_SIZE);
+ 				}
+ 			}
+ 			
+@@ -131,31 +131,31 @@
+ 
+ #if MT76_RROV31
+ 			/*rxdmad_c ring*/
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 9, (pcie_pa + MT_RXQ_RRO_AP_RING_BASE));
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops(band_idx + 9, (pcie_pa + MT_RXQ_RRO_AP_RING_BASE));
+ 			if (isMailBoxSuccess != 1)
+ 				printk("%s:: %d:: Error: WIFI_MAIL_API_SET_WAIT_PCIE_ADDR fail\n",__func__, __LINE__);
+ 			
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 9, MT7996_RX_RING_SIZE);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops(band_idx + 9, MT7996_RX_RING_SIZE);
+ 			if (isMailBoxSuccess != 1)
+ 				printk("%s:: %d:: Error: WIFI_MAIL_API_SET_WAIT_DESC fail\n",__func__, __LINE__);
+ #else
+ 
+ 			/* MSDU PG*/
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops(band_idx + 5, (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MSDU_PAGE_BAND0) + 0xa0));
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 5, MT7996_RX_RING_SIZE);
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 5, MT7996_RX_RING_SIZE);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops(band_idx + 5, MT7996_RX_RING_SIZE);
+ 
+ 			/* ind_cmd ring*/
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));			
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));	
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops(band_idx + 8, (pcie_pa + MT_RXQ_RRO_IND_RING_BASE));	
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 8, MT7996_RX_RING_SIZE);
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC(band_idx + 8, MT7996_RX_RING_SIZE);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops(band_idx + 8, MT7996_RX_RING_SIZE);
+ #endif			
+ 
+ 			
+ 			//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_ring_pcie_addr_ops(2, (pcie_pa + MT_RRO_ACK_SN_CTRL));
+ #endif			
+ 			/* npu tx */
+             if(arht_wifi_npu_active()){
+@@ -163,10 +163,10 @@
+ 					if(band_idx)
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x130 + hif1_ofs));
+ 						//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
+-						isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
++						isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_ring_pcie_addr_ops(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs));
+ 				else
+ 					//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
+-					isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
++					isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_ring_pcie_addr_ops(band_idx, (pcie_pa + MT_TXQ_RING_BASE(0) + 0x120));
+ 			}
+                         }			
+ 		}
+@@ -187,14 +187,14 @@
+ 
+ 	/* npu rx rro ring*/
+ 	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
+-	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(0, &get_RingBase);
++	isMailBoxSuccess = npu->ops.wifi_mail_api_get_wait_rxdesc_base_ops(0, &get_RingBase);
+ 	if(isMailBoxSuccess != 1) 
+ 		printk("Error: NPU_WIFI_OFFLOAD get ring0 base fail\n");
+ 	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
+ 	writel(npu_alloc_pa,&dev->mt76.q_rx[MT_RXQ_RRO_BAND0].regs->desc_base);
+ 	
+ 	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(1, &get_RingBase);
+-	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(1, &get_RingBase);
++	isMailBoxSuccess = npu->ops.wifi_mail_api_get_wait_rxdesc_base_ops(1, &get_RingBase);
+ 	if(isMailBoxSuccess != 1) 
+ 		printk("Error: NPU_WIFI_OFFLOAD get ring1 base fail\n");
+ 	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
+@@ -202,7 +202,7 @@
+ 
+ #if MT76_RROV31
+ 		/*rxdmad_c ring*/
+-		isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(9, &get_RingBase);
++		isMailBoxSuccess = npu->ops.wifi_mail_api_get_wait_rxdesc_base_ops(9, &get_RingBase);
+ 		if (isMailBoxSuccess != 1)
+ 			printk("%s:: %d:: Error: WIFI_MAIL_API_GET_WAIT_RXDESC_BASE fail\n",__func__, __LINE__);
+ 		npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
+@@ -211,7 +211,7 @@
+ #else
+ 	/* MSDU PG ring */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(10, &get_RingBase);
+-	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(10, &get_RingBase);
++	isMailBoxSuccess = npu->ops.wifi_mail_api_get_wait_rxdesc_base_ops(10, &get_RingBase);
+ 	if(isMailBoxSuccess != 1) 
+ 		printk("Error: NPU_WIFI_OFFLOAD get MSDU PG base fail\n");
+ 	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
+@@ -219,7 +219,7 @@
+ 	
+ 	/* ind_cmd ring */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(8, &get_RingBase);
+-	isMailBoxSuccess = npu->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE(8, &get_RingBase);
++	isMailBoxSuccess = npu->ops.wifi_mail_api_get_wait_rxdesc_base_ops(8, &get_RingBase);
+ 	if(isMailBoxSuccess != 1) 
+ 		printk("Error: NPU_WIFI_OFFLOAD get ind_cmd ring base fail\n");
+ 	npu_alloc_pa=(NDIS_PHYSICAL_ADDRESS)get_RingBase.info;
+@@ -237,12 +237,12 @@
+ 		return;
+ 	/* rro set done */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(2, 0, 0, 0, 0);
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_inode_txrx_reg_addr_ops(2, 0, 0, 0, 0);
+ 	if (isMailBoxSuccess != 1)
+ 		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 2 fail\n");
+ 	
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(7, 0, 0, 0, 0);
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(7, 0, 0, 0, 0);
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_inode_txrx_reg_addr_ops(7, 0, 0, 0, 0);
+ 	if (isMailBoxSuccess != 1)
+ 		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 7 fail\n");
+ 
+@@ -259,7 +259,7 @@
+ 
+ 	/* init_rro_addr_elem_by_seid */
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR(3, seid, 0, 0, 0);
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_inode_txrx_reg_addr_ops(3, seid, 0, 0, 0);
+ 	if(isMailBoxSuccess != 1){
+ 		printk("Error: WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR 3 fail\n");
+ 	}
+@@ -290,14 +290,14 @@
+ 	for(band_idx = 0; band_idx < 2; band_idx++){
+ 		if(band_idx == 0){
+ 			//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_get_wait_rxdesc_base_ops((band_idx + 5), &get_RingBase);
+ 			npu_alloc_pa = (dma_addr_t)get_RingBase.info;
+ 			npu_alloc_va = ioremap((phys_addr_t)get_RingBase.info,4);					
+ 			writel(npu_alloc_pa, &dev->mt76.phy.q_tx[0]->regs->desc_base);
+ 		}
+ 		else{
+ 			//isMailBoxSuccess = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
+-			isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_GET_WAIT_RXDESC_BASE((band_idx + 5), &get_RingBase);
++			isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_get_wait_rxdesc_base_ops((band_idx + 5), &get_RingBase);
+ 			npu_alloc_pa = (dma_addr_t)get_RingBase.info;
+ 			npu_alloc_va = ioremap((phys_addr_t)get_RingBase.info,4);					
+ 			writel(npu_alloc_pa, &dev->mt76.phys[1]->q_tx[0]->regs->desc_base);
+@@ -323,19 +323,19 @@
+ 		}
+ 		
+ 		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(band_idx, txbuf_alloc_pa_sp);
+-		isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE(band_idx, txbuf_alloc_pa_sp);
++		isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_buf_space_base_ops(band_idx, txbuf_alloc_pa_sp);
+ 		if(isMailBoxSuccess != 1){
+ 			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
+ 		}
+ 		
+ 		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+5), txbuf_alloc_pa_fp);
+-		isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+5), txbuf_alloc_pa_fp);
++		isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_buf_space_base_ops((band_idx+5), txbuf_alloc_pa_fp);
+ 		if(isMailBoxSuccess != 1){
+ 			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
+ 		}
+ 		
+ 		//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+10), txbuf_alloc_pa_swq);
+-		isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE((band_idx+10), txbuf_alloc_pa_swq);
++		isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_tx_buf_space_base_ops((band_idx+10), txbuf_alloc_pa_swq);
+ 		if(isMailBoxSuccess != 1){
+ 			printk("Error: WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE fail\n");
+ 		}
+@@ -475,16 +475,16 @@
+ 		return;
+ 	
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma); // npu  : tx_done_ring0_addr_uncache
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma);
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_rx_ring_for_txdone_hw_base_ops(band_idx, dev->mt76.q_rx[MT_RXQ_MAIN_WA].desc_dma);
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_DESC((band_idx + 10), MT7996_RX_MCU_RING_SIZE); //npu : g_tx_done_ring0_size
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_DESC((band_idx + 10), MT7996_RX_MCU_RING_SIZE);
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_desc_ops((band_idx + 10), MT7996_RX_MCU_RING_SIZE);
+ 	if(isMailBoxSuccess != 1){
+ 		printk( "%s() Error: WIFI_MAIL_API_SET_WAIT_DESC fail\n", __func__);
+ 	}
+ 	
+ 	pcie_pa = pci_resource_start(pdev, 0); //get pcie phy addr
+ 	//isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));//npu : TxDone_ring0_pcie_base
+-	isMailBoxSuccess = npu_mt76->ops.WIFI_MAIL_API_SET_WAIT_PCIE_ADDR((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));
++	isMailBoxSuccess = npu_mt76->ops.wifi_mail_api_set_wait_pcie_addr_ops((band_idx + 10), (pcie_pa + MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20));
+ 	return;
+ }
+ EXPORT_SYMBOL_GPL(npu_set_rx_event);
+diff -uNr old/npu.h new/npu.h
+--- old/npu.h	2025-03-25 16:55:59.351862000 +0800
++++ new/npu.h	2025-03-25 16:16:25.427999000 +0800
+@@ -13,7 +13,8 @@
+ #include <linux/pci.h>
+ #include <linux/platform_device.h>
+ #include <linux/reset.h>
+-
++#include <linux/soc/airoha/airoha_eth_g.h>
++#include <linux/soc/airoha/airoha_npu_g.h>
+ 
+ #define BAND5G_IDX			1
+ #define BAND2G_IDX			0
+@@ -89,6 +90,8 @@
+ //extern void (*hostdapt_registe_wifitask_hook)(unsigned int ringIdx, void *func);
+ extern bool arht_wifi_npu_active(void);
+ 
++
++#if 0
+ #define AIROHA_MAX_NUM_RSTS		3
+ #define AIROHA_MAX_NUM_XSI_RSTS		4
+ #define AIROHA_MAX_NUM_QDMA		2
+@@ -197,10 +200,11 @@
+ 
+ 	struct dentry *debugfs_dir;
+ };
++#endif
+ 
+ extern struct airoha_eth *glb_eth;
+ 
+-
++#if 0
+ #define NPU_NUM_CORES		8
+ //#define MAX_CORE_NUM		8
+ #define NPU_INT_MAX_NUM         (6)
+@@ -253,6 +257,7 @@
+ 		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+ 	} ops;
+ };
++#endif
+ 
+ extern struct airoha_npu *airoha_npu_get(struct device *dev);
+ //extern bool arht_wifi_npu_tx_active(void);
