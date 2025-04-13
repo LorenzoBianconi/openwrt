@@ -669,21 +669,6 @@
  
  void hostadpt_free_interrupt(u32 irq_num)
  {
-@@ -1276,12 +1278,13 @@ int hostadpInit(void)
- 		HOSTADPT_MSG(DBG_ERR, "hostadpt_rxdscp_init failed!\n");
- 		return -ENODEV;
- 	}
--	
-+#if 0	
- 	hostadpt_regiter_interrupt(0, rxdone0_isr, "rxdone0");
- 	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,0x00010000);
- 
- 	hostadpt_regiter_interrupt(1, rxdone1_isr, "rxdone1");
- 	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,0x00020000);
-+#endif
- 
- #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
- 	//hostadpt_dump_debug_create();
 --- a/drivers/net/ethernet/airoha/Makefile
 +++ b/drivers/net/ethernet/airoha/Makefile
 @@ -6,4 +6,4 @@

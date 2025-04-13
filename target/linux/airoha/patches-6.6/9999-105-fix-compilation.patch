@@ -1,0 +1,10 @@
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -95,5 +95,7 @@ struct airoha_npu {
+ 		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+ 	} ops;
+ };
++
++extern struct airoha_npu *npu_glb;
+ extern struct airoha_npu *mt76_get_npu(void);
+ #endif

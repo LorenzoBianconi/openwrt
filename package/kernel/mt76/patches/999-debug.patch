@@ -1,0 +1,10 @@
+--- a/mt7996/mmio.c
++++ b/mt7996/mmio.c
+@@ -941,6 +941,7 @@ struct mt7996_dev *mt7996_mmio_probe(str
+ 	mt76_wr(dev, MT_INT_MASK_CSR, 0);
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU	
+     if(arht_wifi_npu_active()){	
++	    	npu_glb = mt76_get_npu();
+ 		if(!(IS_ERR(npu_glb))) 
+ 			npu_glb->ops.hostdapt_registe_wifitask_ops(0, tasklet_schedule_rx_data_done_npu);
+ 		tasklet_setup(&dev->npu_rx_tasklet, mt7996_npu_rx_tasklet);
