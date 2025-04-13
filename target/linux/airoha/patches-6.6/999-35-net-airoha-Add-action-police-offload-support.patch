@@ -213,7 +213,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	}
 +
 +	if (act->police.peakrate_bytes_ps || act->police.avrate ||
-+	    act->police.overhead) {
++	    act->police.overhead || act->police.mtu) {
 +		NL_SET_ERR_MSG_MOD(f->common.extack,
 +				   "peakrate/avrate/overhead not supported");
 +		return -EOPNOTSUPP;
