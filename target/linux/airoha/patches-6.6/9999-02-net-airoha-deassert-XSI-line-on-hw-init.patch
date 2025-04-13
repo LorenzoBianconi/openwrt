@@ -13,7 +13,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1343,6 +1343,11 @@ static int airoha_hw_init(struct platfor
+@@ -1404,6 +1404,11 @@ static int airoha_hw_init(struct platfor
  	if (err)
  		return err;
  
