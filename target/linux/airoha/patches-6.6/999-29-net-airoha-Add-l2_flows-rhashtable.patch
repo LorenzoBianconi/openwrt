@@ -66,7 +66,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static bool airoha_ppe2_is_enabled(struct airoha_eth *eth)
  {
  	return airoha_fe_rr(eth, REG_PPE_GLO_CFG(1)) & PPE_GLO_CFG_EN_MASK;
-@@ -513,11 +520,36 @@ unlock:
+@@ -511,11 +518,36 @@ unlock:
  	spin_unlock_bh(&ppe_lock);
  }
  
@@ -104,7 +104,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	e->hash = 0xffff;
  
  	spin_lock_bh(&ppe_lock);
-@@ -532,13 +564,18 @@ static void airoha_ppe_foe_flow_remove_e
+@@ -530,13 +562,18 @@ static void airoha_ppe_foe_flow_remove_e
  {
  	spin_lock_bh(&ppe_lock);
  
@@ -130,7 +130,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  
  	spin_unlock_bh(&ppe_lock);
-@@ -899,10 +936,20 @@ int airoha_ppe_init(struct airoha_eth *e
+@@ -897,10 +934,20 @@ int airoha_ppe_init(struct airoha_eth *e
  	if (err)
  		return err;
  
@@ -152,7 +152,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	return err;
  }
  
-@@ -918,5 +965,6 @@ void airoha_ppe_deinit(struct airoha_eth
+@@ -916,5 +963,6 @@ void airoha_ppe_deinit(struct airoha_eth
  	}
  	rcu_read_unlock();
  

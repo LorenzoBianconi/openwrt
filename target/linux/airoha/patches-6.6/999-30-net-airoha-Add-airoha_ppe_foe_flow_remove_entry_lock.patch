@@ -18,7 +18,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -491,6 +491,26 @@ static int airoha_ppe_foe_commit_entry(s
+@@ -489,6 +489,26 @@ static int airoha_ppe_foe_commit_entry(s
  	return 0;
  }
  
@@ -45,7 +45,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static void airoha_ppe_foe_insert_entry(struct airoha_ppe *ppe, u32 hash)
  {
  	struct airoha_flow_table_entry *e;
-@@ -559,25 +579,12 @@ static int airoha_ppe_foe_flow_commit_en
+@@ -557,25 +577,12 @@ static int airoha_ppe_foe_flow_commit_en
  	return 0;
  }
  
@@ -75,7 +75,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	spin_unlock_bh(&ppe_lock);
  }
  
-@@ -771,7 +778,7 @@ static int airoha_ppe_flow_offload_repla
+@@ -769,7 +776,7 @@ static int airoha_ppe_flow_offload_repla
  	return 0;
  
  remove_foe_entry:
@@ -84,7 +84,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  free_entry:
  	kfree(e);
  
-@@ -789,7 +796,7 @@ static int airoha_ppe_flow_offload_destr
+@@ -787,7 +794,7 @@ static int airoha_ppe_flow_offload_destr
  	if (!e)
  		return -ENOENT;
  

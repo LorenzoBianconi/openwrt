@@ -194,7 +194,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
  		else
  			/* uplink relies on GDM2 loopback for GDM3 and GDM4 */
-@@ -662,7 +663,7 @@ static int airoha_ppe_flow_offload_repla
+@@ -640,7 +641,7 @@ static int airoha_ppe_flow_offload_repla
  	    !is_valid_ether_addr(data.eth.h_dest))
  		return -EINVAL;
  

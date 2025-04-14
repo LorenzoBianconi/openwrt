@@ -72,7 +72,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_ppe_foe_entry_prepare(struct airoha_eth *eth,
  					struct airoha_foe_entry *hwe,
  					struct net_device *dev, int type,
-@@ -262,13 +271,7 @@ static int airoha_ppe_foe_entry_prepare(
+@@ -260,13 +269,7 @@ static int airoha_ppe_foe_entry_prepare(
  		FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
  
  	if (type == PPE_PKT_TYPE_BRIDGE) {
@@ -87,7 +87,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		hwe->bridge.data = qdata;
  		hwe->bridge.ib2 = val;
  		l2 = &hwe->bridge.l2.common;
-@@ -393,6 +396,19 @@ static u32 airoha_ppe_foe_get_entry_hash
+@@ -391,6 +394,19 @@ static u32 airoha_ppe_foe_get_entry_hash
  		hv3 = hwe->ipv6.src_ip[1] ^ hwe->ipv6.dest_ip[1];
  		hv3 ^= hwe->ipv6.src_ip[0];
  		break;
@@ -107,7 +107,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	case PPE_PKT_TYPE_IPV4_DSLITE:
  	case PPE_PKT_TYPE_IPV6_6RD:
  	default:
-@@ -491,30 +507,100 @@ static int airoha_ppe_foe_commit_entry(s
+@@ -489,30 +505,100 @@ static int airoha_ppe_foe_commit_entry(s
  	return 0;
  }
  
@@ -222,7 +222,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct hlist_node *n;
  	u32 index, state;
  
-@@ -530,12 +616,33 @@ static void airoha_ppe_foe_insert_entry(
+@@ -528,12 +614,33 @@ static void airoha_ppe_foe_insert_entry(
  
  	index = airoha_ppe_foe_get_entry_hash(hwe);
  	hlist_for_each_entry_safe(e, n, &ppe->foe_flow[index], list) {
@@ -260,7 +260,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  unlock:
  	spin_unlock_bh(&ppe_lock);
  }
-@@ -899,7 +1006,8 @@ int airoha_ppe_setup_tc_block_cb(enum tc
+@@ -897,7 +1004,8 @@ int airoha_ppe_setup_tc_block_cb(enum tc
  	return err;
  }
  
@@ -270,7 +270,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	u16 now, diff;
  
-@@ -912,7 +1020,7 @@ void airoha_ppe_check_skb(struct airoha_
+@@ -910,7 +1018,7 @@ void airoha_ppe_check_skb(struct airoha_
  		return;
  
  	ppe->foe_check_time[hash] = now;

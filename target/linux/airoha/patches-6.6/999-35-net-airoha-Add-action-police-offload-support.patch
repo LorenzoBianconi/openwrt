@@ -310,7 +310,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  struct airoha_foe_entry *airoha_ppe_foe_get_entry(struct airoha_ppe *ppe,
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -982,18 +982,13 @@ error_npu_put:
+@@ -980,18 +980,13 @@ error_npu_put:
  	return err;
  }
  
