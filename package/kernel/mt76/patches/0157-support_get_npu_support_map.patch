@@ -1,0 +1,38 @@
+--- a/mt7996/mtk_debugfs.c
++++ b/mt7996/mtk_debugfs.c
+@@ -10,6 +10,9 @@
+ #include "mtk_debug.h"
+ #include "mtk_mcu.h"
+ #include "coredump.h"
++#ifdef CONFIG_NET_AIROHA_SOC_NPU
++#include "../npu.h"
++#endif
+ 
+ #ifdef CONFIG_MTK_DEBUG
+ 
+@@ -250,6 +253,15 @@ static int mt7996_amsdu_result_read(stru
+ 	return 0;
+ }
+ 
++static int npu_support_map_read(struct seq_file *s, void *data)
++{
++	unsigned int npu_support_map; 
++	if(!(IS_ERR(npu_glb)))
++			npu_glb->ops.wifi_get_npu_support_map(0, npu_support_map);
++	return 0;
++}
++
++
+ /* DBG MODLE */
+ static int
+ mt7996_fw_debug_module_set(void *data, u64 module)
+@@ -4641,6 +4653,9 @@ void mt7996_mtk_init_dev_debugfs(struct
+ 	debugfs_create_devm_seqfile(dev->mt76.dev, "wtbl_info", dir,
+ 				    mt7996_wtbl_read);
+ 
++	debugfs_create_devm_seqfile(dev->mt76.dev, "npu_support_map", dir,
++				    npu_support_map_read);	
++
+ 	debugfs_create_devm_seqfile(dev->mt76.dev, "token", dir, mt7996_token_read);
+ 	debugfs_create_file("red", 0200, dir, dev, &fops_red_config);
+ 	debugfs_create_file("vow_drr_dbg", 0200, dir, dev, &fops_vow_drr_dbg);
