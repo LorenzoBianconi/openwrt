@@ -28,19 +28,29 @@
 			reg = <0x0 0x84b00000 0x0 0x100000>;
 		};
 
-		npu-pkt@85000000 {
+		npu_pkt: npu-pkt@85000000 {
 			no-map;
 			reg = <0x0 0x85000000 0x0 0x1a00000>;
 		};
 
-		npu-phyaddr@86b00000 {
+		npu_txpkt: npu-txpkt@86b00000 {
 			no-map;
 			reg = <0x0 0x86b00000 0x0 0x100000>;
 		};
 
-		npu-rxdesc@86d00000 {
+		npu_ba: npu-ba@86d00000 {
 			no-map;
 			reg = <0x0 0x86d00000 0x0 0x100000>;
+		};
+
+		npu_txbufid: npu-txbufid@86f00000 {
+			no-map;
+			reg = <0x0 0x86f00000 0x0 0x100000>;
+		};
+
+		npu_dbg: npu-dbg@87100000 {
+			no-map;
+			reg = <0x0 0x87100000 0x0 0x100000>;
 		};
 	};
 
@@ -797,7 +807,10 @@
 				     <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
-			memory-region = <&npu_binary>;
+			memory-region = <&npu_binary>, <&npu_pkt>, <&npu_txpkt>,
+					<&npu_ba>, <&npu_txbufid>, <&npu_dbg>;
+			memory-region-names = "binary", "pkt", "tx-pkt", "ba",
+					      "tx-bufid", "dbg";
 			status = "disabled";
 		};
 
