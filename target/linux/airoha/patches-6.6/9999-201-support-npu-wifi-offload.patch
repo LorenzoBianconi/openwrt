@@ -1,0 +1,100 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -18,6 +18,7 @@ unsigned long int *HOSTADPT_CNT_Base, *H
+ #endif
+ 
+ extern int get_npu_irq(int index);
++extern struct airoha_eth *glb_eth;
+ 
+ #if defined(TCSUPPORT_WLAN_INODE) || defined(TCSUPPORT_NPU_WIFI_TX)
+ u32 hostadpt_tx_dma_idx[2] = {0};
+@@ -747,6 +748,11 @@ error:
+ 	else if(ring_idx == 1)
+ 		set_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
+ 		
++	if(skb != NULL){	
++		skb_reset_mac_header(skb);
++		npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
++	}
++		
+ #if 0
+ 	if(skb != NULL){
+ 		//skb_put(skb, pHostadptRX->pkt_ctrl.len);
+@@ -973,6 +979,36 @@ int hostadpt_tx_handler(unsigned char ba
+ 		printk("\nget_ecnt_npu_dev failed\n");
+ 		return 0;
+ 	}
++
++#if 1
++	struct port_info wifi_info;
++	unsigned char bss_idx, is_tcp, qos_tid;
++	unsigned int wcidx;	
++	npu_hif_v2_info npu_txp_info;
++	__le32 *_txd = (__le32 *)vnd;
++	
++	memset(&wifi_info, 0 , sizeof(struct port_info));
++	
++	wifi_info.tsid = 0x7F;
++	wifi_info.nbq = band;
++	bss_idx = _txd[9] & 0xff; //txp[9] bss_id[7:0]
++	wcidx = (_txd[9] >> 8) & 0xffff; //txp[9] wtbl_idx[23:8]
++		
++	if (bss_idx > 0x7f) {
++		  printk("npu_wifi bss index is error\n");
++	}
++
++	qos_tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
++
++	npu_txp_info._detail.ring_num = band;
++	npu_txp_info._detail.qos_tid	=	qos_tid;
++
++	wifi_info.udf = (bss_idx & 0x7f) | (is_tcp << 7);		
++	wifi_info.stag = ((wcidx & 0x7ff) | ((npu_txp_info.ctrl_word & 0x1f) << 11));
++	airoha_ppe_foe_flow_update_wifi_npu_offload(glb_eth->ppe, skb, &wifi_info);
++
++#endif
++	
+ 	if(band == 0)
+ 	{
+ 		//disable isr
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -18,6 +18,8 @@
+ #include <linux/soc/airoha/npu_host_adpt.h>
+ #include <linux/soc/airoha/npu_test_common.h>
+ 
++#include "airoha_eth.h"
++
+ #ifndef TCSUPPORT_CPU_EN7581
+ #define TCSUPPORT_CPU_EN7581
+ #endif
+@@ -137,6 +139,17 @@ enum HOSTADPT_COUNTER_OFFSET
+ 	HADPT_CNT_BOTTOM			//
+ };
+ 
++#define IEEE80211_QOS_CTL_TID_MASK		0x000f
++
++typedef union {
++	struct {
++		unsigned char ring_num		: 1;
++		unsigned char qos_tid		: 4;
++		unsigned char wcid_dummy	: 3;//Do no use since area not enough
++	} _detail;
++	unsigned char ctrl_word;
++} npu_hif_v2_info;
++
+ int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+ void hostdapt_enable_interrupt(unsigned int ringIdx);
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -379,7 +379,8 @@ void npu_rv32_init(void)
+ 	*/	
+ 	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
++//	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 0);
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
+ }
+ char npu_stat;

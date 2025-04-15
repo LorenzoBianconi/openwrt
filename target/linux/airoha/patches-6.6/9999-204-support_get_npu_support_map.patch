@@ -1,0 +1,131 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -491,6 +491,7 @@ static int airoha_npu_probe(struct platf
+ 	npu_glb->ops.wifi_get_rxdesc_base = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE;
+ 	npu_glb->ops.wifi_set_tx_buf_space_base = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE;
+ 	npu_glb->ops.wifi_set_rx_ring_for_txdone_hw_base = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE;
++	npu_glb->ops.wifi_get_npu_support_map = WIFI_MAIL_API_GET_WAIT_NPU_SUPPORT_MAP;
+ 	npu_glb->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+ 	npu_glb->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+ 	npu_glb->ops.hostdapt_enable_interrupt_ops = hostdapt_enable_interrupt;
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -88,6 +88,7 @@ struct airoha_npu {
+ 		int (*wifi_set_tx_buf_space_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+ 		//int (*WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+ 		int (*wifi_set_rx_ring_for_txdone_hw_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
++		int (*wifi_get_npu_support_map)(unsigned int interfaceID, unsigned int npu_support_map);
+ 		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ 		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+ 		void (*hostdapt_enable_interrupt_ops)(unsigned int ringIdx);
+--- a/include/linux/soc/airoha/wifi_mail.h
++++ b/include/linux/soc/airoha/wifi_mail.h
+@@ -883,6 +883,79 @@ mboxAPI_fail_exit:
+ 	return ret;
+ }
+ 
++static inline int WIFI_MAIL_API_GET_WAIT_NPU_SUPPORT_MAP(unsigned int interfaceID, unsigned int npu_support_map)
++{
++	WIFI_MAIL_Data_t* in_data;
++	npuMboxInfo_t mboxInfo;
++	unsigned long pa = 0, va=0;
++	int ret = 0;
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) 
++	va = (unsigned long)dma_alloc_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)&pa, GFP_KERNEL);
++#else
++	struct device *dev=NULL;
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++	va =  (unsigned long)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++#endif
++	if (!va)  {
++		printk("%s dma_alloc_coherent failed\n", __func__);
++		return ret;
++	}
++	in_data=(WIFI_MAIL_Data_t*)va;
++	
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = GET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_GET_WAIT_NPU_SUPPORT_MAP;
++
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va;
++	mboxInfo.physAddr = pa;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++
++	npu_support_map = in_data->wifi_mail_private.npu_support_map;
++	if(npu_support_map & NPU_SUPPORT_WIFI_SLOW_PATH)
++		printk("support slow path \n");
++	if(npu_support_map & NPU_SUPPORT_WIFI_FAST_PATH)
++		printk("support fast path \n");
++	if(npu_support_map & NPU_SUPPORT_FLOW_CNT)
++		printk("support flow cnt \n");
++	if(npu_support_map & NPU_SUPPORT_HWNAT_INIT)
++		printk("support hwnat init \n");
++
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) 
++	dma_free_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#endif
++	return ret;
++
++mboxAPI_fail_exit:  
++#if LINUX_VERSION_CODE < KERNEL_VERSION(4,15,0) 
++	dma_free_coherent(NULL, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#endif
++
++	printk("WIFI_MAIL_API_GET_WAIT_NPU_INFO fail!\n");
++	return ret;
++}
++
++
+ static inline int WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(unsigned int interfaceID, unsigned int band0onCpu)
+ {
+ 	npuMboxInfo_t mboxInfo;
+--- a/include/linux/soc/airoha/wifi_mail_type.h
++++ b/include/linux/soc/airoha/wifi_mail_type.h
+@@ -84,6 +84,10 @@ ECONET SOFTWARE.
+ #define TCSUPPORT_NPU_WIFI_OFFLOAD
+ #endif
+ #define WIFI_RX_BUF_ID_DEBUG 0	
++#define NPU_SUPPORT_WIFI_SLOW_PATH 0x1
++#define NPU_SUPPORT_WIFI_FAST_PATH 0x2
++#define NPU_SUPPORT_FLOW_CNT 0x4
++#define NPU_SUPPORT_HWNAT_INIT 0x8
+ typedef enum {
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_ADDR = 0,
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_DESC,
+@@ -141,6 +145,7 @@ typedef enum {
+ 	WIFI_MAIL_FUNCTION_GET_WAIT_WCID_DBG_COUNTER,
+ 	WIFI_MAIL_FUNCTION_GET_WAIT_DMA_ADDR,		//TCSUPPORT_WLAN_INODE
+ 	WIFI_MAIL_FUNCTION_GET_WAIT_RING_SIZE,		//TCSUPPORT_WLAN_INODE
++	WIFI_MAIL_FUNCTION_GET_WAIT_NPU_SUPPORT_MAP,
+ #ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
+ 	WIFI_MAIL_FUNCTION_GET_WAIT_MDC_LOCK_ADDRESS,
+ #endif
+@@ -270,6 +275,7 @@ typedef struct WIFI_MAIL_Data {
+ #if WIFI_RX_BUF_ID_DEBUG		
+ 		unsigned int npuDebugArrayAddr;
+ #endif
++		unsigned int npu_support_map;
+ 		unsigned int isforTestNoBaFlag;
+ 		unsigned int flushone_timeout;
+ 		unsigned int flushall_timeout;		

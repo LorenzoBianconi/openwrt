@@ -1,0 +1,353 @@
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -35,11 +35,12 @@ EXPORT_SYMBOL_GPL(arht_wifi_npu_active);
+ u32 npu_pkt_buf_addr;
+ u32 npu_ba_node_addr;
+ u32 npu_tx_pkt_buf_addr;
++u32 npu_tx_buffid_addr;
++u32 npu_debug_array_addr;
++
++
+ int wdog_intr_bit[] = {21,22,23,24,21,22};
+ int wdog_en_bit[] = {25,26,27,28,25,26};
+-u32 npu_pkt_buf_addr;
+-u32 npu_ba_node_addr;
+-u32 npu_tx_pkt_buf_addr;
+ npuMboxObj_t mboxObj[MAX_CORE_NUM];
+ struct tasklet_struct mbox_tasklet;
+ typedef void (*isr_cb_t)(void);
+@@ -105,6 +106,34 @@ u32 npu_wifi_offload_get_ba_node_addr(vo
+ }
+ EXPORT_SYMBOL(npu_wifi_offload_get_ba_node_addr);
+ 
++void npu_set_tx_buffid_addr(u32 buff_id_addr)
++{
++	npu_tx_buffid_addr = buff_id_addr;
++	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
++	return;
++}
++u32 npu_get_tx_buffid_addr(void)
++{
++	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
++	return npu_tx_buffid_addr;
++	
++}
++EXPORT_SYMBOL(npu_get_tx_buffid_addr);
++
++void npu_set_debug_array_addr(u32 buff_id_addr)
++{
++	npu_debug_array_addr = buff_id_addr;
++	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
++	return;
++}
++u32 npu_get_debug_array_addr(void)
++{
++	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
++	return npu_debug_array_addr;
++	
++}
++EXPORT_SYMBOL(npu_get_debug_array_addr);
++
+ // Reserve 16M block to save packet, and the address will be got after npu bring up.
+ void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr)
+ {
+@@ -367,6 +396,12 @@ void npu_rv32_init(void)
+ 	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(1, isNpuBand0OnCpu);
+ 	
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get NPU Band0 On CPU flag Fail!!!\n");
++#if WIFI_RX_BUF_ID_DEBUG  
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_debug_array_ADDR(0, npu_get_debug_array_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get debug array address Fail!!!\n");
++#endif
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_CHECK_ADDR(0, npu_get_tx_buffid_addr());
++	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+ 
+ 	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(0,npu_wifi_offload_get_pkt_buf_addr());
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");	
+@@ -379,8 +414,9 @@ void npu_rv32_init(void)
+ 	*/	
+ 	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
++
+ //	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 0);
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 1);
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
+ }
+ char npu_stat;
+@@ -389,6 +425,12 @@ EXPORT_SYMBOL(npu_stat);
+ #define NPU_TX_PKT_BUF_SIZE 0x3a00000
+ #define NPU_BA_NODE_SIZE (0x200000)
+ 
++#define TX_BUFID_IN_SRAM_MAX_NUMBER 	((4096+2048+512)*2)
++#define TX_BUFID_CHECK_SIZE			(sizeof(short int) * TX_BUFID_IN_SRAM_MAX_NUMBER)
++
++#define SKB_NODE_MAX_NUMBER			(5600+5600)
++#define SKB_ARRAY_SIZE				(sizeof(short int) * SKB_NODE_MAX_NUMBER)//(SKB_NODE_MAX_NUMBER+1))
++
+ void arioha_arm_memblock_init_inline_hook(void)
+ {
+ 	/***pkt buf addr****/
+@@ -445,6 +487,45 @@ void arioha_arm_memblock_init_inline_hoo
+ 	{
+ 		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
+ 	}
++	
++	/** tx buf_id check addr **/
++	phys_addr_t tx_bufid_check_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	tx_bufid_check_addr = memblock_phys_alloc_range(TX_BUFID_CHECK_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	tx_bufid_check_addr = memblock_alloc(TX_BUFID_CHECK_SIZE, 64);
++#endif
++	if(tx_bufid_check_addr)
++	{
++		memblock_reserve(tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
++		npu_set_tx_buffid_addr(tx_bufid_check_addr);
++		//printk("npu_ba_node memblock_alloc:%lx,buf_size=%x\n\r", tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
++	}
++	
++	/** tx buf_id check addr **/
++	phys_addr_t debug_array_addr = 0;
++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
++	debug_array_addr = memblock_phys_alloc_range(SKB_ARRAY_SIZE, 64, 0x80000000, 0xbfffffff);
++#else
++	debug_array_addr = memblock_alloc(SKB_ARRAY_SIZE, 64);
++#endif
++	if(debug_array_addr)
++	{
++		memblock_reserve(debug_array_addr, SKB_ARRAY_SIZE);
++		npu_set_debug_array_addr(debug_array_addr);
++		//printk("npu_ba_node memblock_alloc:%lx,buf_size=%x\n\r", tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
++	}
++	else
++	{
++		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
++	}
++
++
++
+ }
+ EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
+ 
+--- a/include/linux/soc/airoha/wifi_mail.h
++++ b/include/linux/soc/airoha/wifi_mail.h
+@@ -1123,6 +1123,166 @@ mboxAPI_fail_exit:
+ 	return ret;
+ }
+ 
++/*set tx buff id check addr*/
++static inline int WIFI_MAIL_API_SET_WAIT_TX_BUF_CHECK_ADDR(unsigned int interfaceID, phys_addr_t npuBufcheckAddr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	printk("%s:%d npuBufcheckAddr=%llx !!!!!!\n",__func__,__LINE__,npuBufcheckAddr);
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_CHECK_ADDR;
++	in_data->wifi_mail_private.npuBufcheckAddr = npuBufcheckAddr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_CHECK_ADDR;
++	in_data.wifi_mail_private.npuBufcheckAddr = npuBufcheckAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR fail! \n");
++	return ret;
++}
++
++#if WIFI_RX_BUF_ID_DEBUG  
++/*set debug array addr*/
++static inline int WIFI_MAIL_API_SET_WAIT_debug_array_ADDR(unsigned int interfaceID, phys_addr_t npuDebugArrayAddr) 
++{
++	npuMboxInfo_t mboxInfo;
++	struct device *dev=NULL;
++
++#ifdef TCSUPPORT_NPU_V2
++	WIFI_MAIL_Data_t* in_data;
++	unsigned long int pa = 0, va=0;
++#else
++	struct WIFI_MAIL_Data in_data;
++	unsigned long phy_src_addr = 0;
++#endif
++	int ret = 0;
++	printk("%s:%d npuBufcheckAddr=%llx !!!!!!\n",__func__,__LINE__,npuDebugArrayAddr);
++	/*just only get vaild dev*/
++    if ((dev=(struct device *)get_ecnt_npu_dev())==NULL) {
++        printk("\nget_ecnt_npu_dev failed\n");
++		return ret;
++    }
++#ifdef TCSUPPORT_NPU_V2
++	va = (unsigned long int)dma_alloc_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)&pa, (GFP_ATOMIC|__GFP_NOWARN|GFP_DMA));
++	in_data=(WIFI_MAIL_Data_t*)va;
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));
++	memset(in_data, 0, sizeof(WIFI_MAIL_Data_t));
++	in_data->interfaceID = interfaceID;
++	in_data->funcType = SET_WAIT;
++	in_data->funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DEBUG_ARRAY_ADDR;
++	in_data->wifi_mail_private.npuDebugArrayAddr = npuDebugArrayAddr;
++	mboxInfo.core_id = CORE0;
++	mboxInfo.func_id = MFUNC_WIFI;
++	mboxInfo.virtAddr = va; 
++	mboxInfo.physAddr = pa&0xffffffff;
++	mboxInfo.len = sizeof(WIFI_MAIL_Data_t);
++	mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++	mboxInfo.cb = NULL;
++	//ecnt_dcache_wback_inv((unsigned long int)(mboxInfo),  sizeof(npuMboxInfo_t));
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_free_coherent(dev, sizeof(WIFI_MAIL_Data_t), (void *)va, pa);
++#else
++
++	memset(&in_data, 0, sizeof(in_data));
++	memset(&mboxInfo, 0, sizeof(npuMboxInfo_t));	
++	in_data.interfaceID = interfaceID;
++	in_data.funcType = SET_WAIT;
++	in_data.funcId = WIFI_MAIL_FUNCTION_SET_WAIT_DEBUG_ARRAY_ADDR;
++	in_data.wifi_mail_private.npuDebugArrayAddr = npuDebugArrayAddr;
++
++    mboxInfo.core_id = CORE0;
++    mboxInfo.func_id = MFUNC_WIFI;
++    mboxInfo.virtAddr = (unsigned long)(&in_data);
++    mboxInfo.physAddr = virt_to_phys(&in_data);
++    mboxInfo.len = sizeof(in_data);
++    mboxInfo.flags.isBlockingMode = 1;
++	mboxInfo.blockTimeout = 10000; /* 100ms */
++    mboxInfo.cb = NULL;
++	
++	/* dma_map_single will clean (wback) dcache for DMA_TO_DEVICE */
++    phy_src_addr = dma_map_single(dev, (void *)(&in_data), sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++	if (dma_mapping_error(dev, phy_src_addr)) {
++		printk("dma_map_single TO_DEVICE error\n");
++		goto mboxAPI_fail_exit;
++	}
++
++	ret = host_notify_npuMbox(&mboxInfo);
++	dma_unmap_single(dev, phy_src_addr, sizeof(WIFI_MAIL_Data_t), DMA_TO_DEVICE);
++#endif
++	if (ret != 1)
++		goto mboxAPI_fail_exit;
++
++	return ret;
++
++mboxAPI_fail_exit: 
++	
++	printk("WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR fail! \n");
++	return ret;
++}
++#endif
++
+ static inline int WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(unsigned int interfaceID, unsigned int isForceToCpu)
+ {
+ 	npuMboxInfo_t mboxInfo;
+--- a/include/linux/soc/airoha/wifi_mail_type.h
++++ b/include/linux/soc/airoha/wifi_mail_type.h
+@@ -83,7 +83,7 @@ ECONET SOFTWARE.
+ #ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
+ #define TCSUPPORT_NPU_WIFI_OFFLOAD
+ #endif
+-	
++#define WIFI_RX_BUF_ID_DEBUG 0	
+ typedef enum {
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_PCIE_ADDR = 0,
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_DESC,
+@@ -115,9 +115,13 @@ typedef enum {
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_STOP_ACTION,		//TCSUPPORT_WLAN_INODE
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_INODE_PCIE_SWAP,		//TCSUPPORT_WLAN_INODE
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_RATELIMIT_CTRL,
+-#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
++//#ifdef TCSUPPORT_CHIP_VARIANT_CONFIG
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_HWNAT_INIT,
++//#endif
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_ARHT_CHIP_INFO,
++	WIFI_MAIL_FUNCTION_SET_WAIT_TX_BUF_CHECK_ADDR,		//TCSUPPORT_NPU_WIFI_TX
++#if WIFI_RX_BUF_ID_DEBUG 	
++	WIFI_MAIL_FUNCTION_SET_WAIT_DEBUG_ARRAY_ADDR,		//TCSUPPORT_NPU_WIFI_TX
+ #endif
+ 	WIFI_MAIL_FUNCTION_SET_WAIT_MAX_NUM
+ } WIFI_MAIL_Set_Wait_Func_t;
+@@ -239,7 +243,7 @@ typedef struct arht_chip_info{
+ 	int phy_tx_gpio;
+ }arht_chip_info_t;
+ #endif
+-
++#define WIFI_RX_BUF_ID_DEBUG 0
+ typedef struct WIFI_MAIL_Data {
+ 	unsigned int interfaceID:4;
+ 	unsigned int funcType:4;
+@@ -261,7 +265,11 @@ typedef struct WIFI_MAIL_Data {
+ 		unsigned int wcid;
+ 		unsigned int isForceToCpu_flag;
+ 		unsigned int band0OnCpuFlag;
+-		phys_addr_t npuPktBufAddr;
++		unsigned int npuPktBufAddr;
++		unsigned int npuBufcheckAddr;
++#if WIFI_RX_BUF_ID_DEBUG		
++		unsigned int npuDebugArrayAddr;
++#endif
+ 		unsigned int isforTestNoBaFlag;
+ 		unsigned int flushone_timeout;
+ 		unsigned int flushall_timeout;		

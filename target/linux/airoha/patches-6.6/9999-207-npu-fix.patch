@@ -1,0 +1,238 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -469,6 +469,8 @@ static int airoha_npu_probe(struct platf
+ 	npuCoreId_t core_id;
+ 	int irq_idx,ret;
+ #endif
++	int index;
++
+ 	base = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(base))
+ 		return PTR_ERR(base);
+@@ -505,7 +507,11 @@ static int airoha_npu_probe(struct platf
+ 	if (IS_ERR(npu_glb->regmap))
+ 		return PTR_ERR(npu_glb->regmap);
+ 
+-	np = of_parse_phandle(dev->of_node, "memory-region", 0);
++	index = of_property_match_string(dev->of_node,  "memory-region-names", "binary");
++	if (index < 0)
++		return index;
++
++	np = of_parse_phandle(dev->of_node, "memory-region", index);
+ 	if (!np)
+ 		return -ENODEV;
+ 
+@@ -590,7 +596,7 @@ static int airoha_npu_probe(struct platf
+ 	platform_set_drvdata(pdev, npu_glb);
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-	arioha_arm_memblock_init_inline_hook();
++	arioha_arm_memblock_init_inline_hook(dev->of_node);
+ 	npu_rv32_init();
+ 	hostadpInit();	
+ #endif
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -431,101 +431,93 @@ EXPORT_SYMBOL(npu_stat);
+ #define SKB_NODE_MAX_NUMBER			(5600+5600)
+ #define SKB_ARRAY_SIZE				(sizeof(short int) * SKB_NODE_MAX_NUMBER)//(SKB_NODE_MAX_NUMBER+1))
+ 
+-void arioha_arm_memblock_init_inline_hook(void)
++int arioha_arm_memblock_init_inline_hook(struct device_node *node)
+ {
+-	/***pkt buf addr****/
+-	phys_addr_t npu_pkt_buf_phy_addr = 0;
+-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
+-//#else
+-//	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
+-//#endif	
+-	if(npu_pkt_buf_phy_addr)
+-	{
+-		memblock_reserve(npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
+-		npu_wifi_offload_set_pkt_buf_addr(npu_pkt_buf_phy_addr);
+-		printk("npu_pkt_buffer memblock_alloc:%llx,buf_size=%x\n\r", npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_pkt_buffer memblock_alloc fail \n\r");
+-	}
+-	/*** tx pkt buff addr ***/
+-	phys_addr_t npu_tx_pkt_buf_phy_addr = 0;
+-	//printk("try alloc for tx pkt buf\n");
+-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_tx_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_TX_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
+-//#else
+-//	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
+-//#endif
+-
+-	if(npu_tx_pkt_buf_phy_addr)
+-	{
+-		memblock_reserve(npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
+-		npu_wifi_offload_set_tx_pkt_buf_addr(npu_tx_pkt_buf_phy_addr);
+-		printk("npu_tx_pkt_buffer 7581 memblock_alloc:%llx, buf_size=%x\n\r", npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_tx_pkt_buffer memblock_alloc fail \n\r");
+-	}	
+-	
+-	/*** ba node addr ***/
+-	phys_addr_t npu_ba_node_phy_addr = 0;
+-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	npu_ba_node_phy_addr = memblock_phys_alloc_range(NPU_BA_NODE_SIZE, 64, 0x80000000, 0xbfffffff);
+-//#else
+-//	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
+-//#endif
+-	if(npu_ba_node_phy_addr)
+-	{
+-		memblock_reserve(npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
+-		npu_wifi_offload_set_ba_node_addr(npu_ba_node_phy_addr);
+-		printk("npu_ba_node memblock_alloc:%llx,buf_size=%x\n\r", npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
+-	}
+-	
+-	/** tx buf_id check addr **/
+-	phys_addr_t tx_bufid_check_addr = 0;
+-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	tx_bufid_check_addr = memblock_phys_alloc_range(TX_BUFID_CHECK_SIZE, 64, 0x80000000, 0xbfffffff);
+-//#else
+-//	tx_bufid_check_addr = memblock_alloc(TX_BUFID_CHECK_SIZE, 64);
+-//#endif
+-	if(tx_bufid_check_addr)
+-	{
+-		memblock_reserve(tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
+-		npu_set_tx_buffid_addr(tx_bufid_check_addr);
+-		//printk("npu_ba_node memblock_alloc:%lx,buf_size=%x\n\r", tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
+-	}
+-	
+-	/** tx buf_id check addr **/
+-	phys_addr_t debug_array_addr = 0;
+-//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-	debug_array_addr = memblock_phys_alloc_range(SKB_ARRAY_SIZE, 64, 0x80000000, 0xbfffffff);
+-//#else
+-//	debug_array_addr = memblock_alloc(SKB_ARRAY_SIZE, 64);
+-//#endif
+-	if(debug_array_addr)
+-	{
+-		memblock_reserve(debug_array_addr, SKB_ARRAY_SIZE);
+-		npu_set_debug_array_addr(debug_array_addr);
+-		//printk("npu_ba_node memblock_alloc:%lx,buf_size=%x\n\r", tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
+-	}
+-	else
+-	{
+-		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
+-	}
++        struct reserved_mem *rmem;
++        struct device_node *np;
++        int index;
++        
++        index = of_property_match_string(node, "memory-region-names", "pkt");
++        if (index < 0)
++                return index;
+ 
++        np = of_parse_phandle(node, "memory-region", index);
++        if (!np)
++                return -ENODEV;
+ 
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
+ 
++	if (!rmem)
++		return -ENODEV;
++
++        npu_wifi_offload_set_pkt_buf_addr(rmem->base);
++
++        index = of_property_match_string(node, "memory-region-names", "tx-pkt");
++        if (index < 0)
++                return index;
++
++        np = of_parse_phandle(node, "memory-region", index);
++        if (!np)
++                return -ENODEV;
++
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++
++	if (!rmem)
++		return -ENODEV;
++
++        npu_wifi_offload_set_tx_pkt_buf_addr(rmem->base);
++
++        index = of_property_match_string(node, "memory-region-names", "ba");
++        if (index < 0)
++                return index;
++
++        np = of_parse_phandle(node, "memory-region", index);
++        if (!np)
++                return -ENODEV;
++
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++
++	if (!rmem)
++		return -ENODEV;
++
++        npu_wifi_offload_set_ba_node_addr(rmem->base);
++
++        index = of_property_match_string(node, "memory-region-names", "tx-bufid");
++        if (index < 0)
++                return index;
++
++        np = of_parse_phandle(node, "memory-region", index);
++        if (!np)
++                return -ENODEV;
++
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++
++	if (!rmem)
++		return -ENODEV;
++
++        npu_set_tx_buffid_addr(rmem->base);
++
++        index = of_property_match_string(node, "memory-region-names", "dbg");
++        if (index < 0)
++                return index;
++
++        np = of_parse_phandle(node, "memory-region", index);
++        if (!np)
++                return -ENODEV;
++
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++
++	if (!rmem)
++		return -ENODEV;
++
++        npu_set_debug_array_addr(rmem->base);
++
++        return 0;
+ }
+ EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
+ 
+--- a/drivers/net/ethernet/airoha/npu_rv32.h
++++ b/drivers/net/ethernet/airoha/npu_rv32.h
+@@ -91,7 +91,7 @@ void mbox_tasklet_handler(unsigned long
+ irqreturn_t npuMbox2host_isr(int irq, void *dev_id);
+ void host_dump_npu_csr(int core);
+ void npu_rv32_init(void);
+-void arioha_arm_memblock_init_inline_hook(void);
++int arioha_arm_memblock_init_inline_hook(struct device_node *node);
+ typedef struct npuMboxObj
+ {
+     unsigned long virtAddr[MAX_MBOX_FUNC];
+@@ -110,4 +110,4 @@ typedef struct npuMboxObj
+ 
+ 
+ #endif
+-#endif
+\ No newline at end of file
++#endif

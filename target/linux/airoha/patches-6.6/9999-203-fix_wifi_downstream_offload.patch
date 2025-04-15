@@ -1,0 +1,11 @@
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -416,7 +416,7 @@ void npu_rv32_init(void)
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+ 
+ //	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 1);
++	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 0);
+ 	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
+ }
+ char npu_stat;
