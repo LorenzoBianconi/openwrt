@@ -241,7 +241,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #define AIROHA_MAX_DSA_PORTS		7
  #define AIROHA_MAX_NUM_RSTS		3
  #define AIROHA_MAX_NUM_XSI_RSTS		5
-@@ -474,17 +475,23 @@ struct airoha_flow_table_entry {
+@@ -481,17 +482,23 @@ struct airoha_flow_table_entry {
  	unsigned long cookie;
  };
  
