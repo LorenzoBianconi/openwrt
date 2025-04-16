@@ -33,7 +33,7 @@
  #endif
 --- a/drivers/net/ethernet/airoha/npu_rv32.c
 +++ b/drivers/net/ethernet/airoha/npu_rv32.c
-@@ -431,101 +431,93 @@ EXPORT_SYMBOL(npu_stat);
+@@ -431,103 +431,94 @@ EXPORT_SYMBOL(npu_stat);
  #define SKB_NODE_MAX_NUMBER			(5600+5600)
  #define SKB_ARRAY_SIZE				(sizeof(short int) * SKB_NODE_MAX_NUMBER)//(SKB_NODE_MAX_NUMBER+1))
  
@@ -42,11 +42,11 @@
  {
 -	/***pkt buf addr****/
 -	phys_addr_t npu_pkt_buf_phy_addr = 0;
--//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
 -	npu_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
--//#else
--//	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
--//#endif	
+-#else
+-	npu_pkt_buf_phy_addr = memblock_alloc(NPU_PKT_BUF_SIZE, 64);
+-#endif	
 -	if(npu_pkt_buf_phy_addr)
 -	{
 -		memblock_reserve(npu_pkt_buf_phy_addr, NPU_PKT_BUF_SIZE);
@@ -60,12 +60,19 @@
 -	/*** tx pkt buff addr ***/
 -	phys_addr_t npu_tx_pkt_buf_phy_addr = 0;
 -	//printk("try alloc for tx pkt buf\n");
--//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
 -	npu_tx_pkt_buf_phy_addr = memblock_phys_alloc_range(NPU_TX_PKT_BUF_SIZE, 64, 0x80000000, 0xbfffffff);
--//#else
--//	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
--//#endif
--
+-#else
+-	npu_tx_pkt_buf_phy_addr = memblock_alloc(NPU_TX_PKT_BUF_SIZE, 4);
+-#endif
++        struct reserved_mem *rmem;
++        struct device_node *np;
++        int index;
++        
++        index = of_property_match_string(node, "memory-region-names", "pkt");
++        if (index < 0)
++                return index;
+ 
 -	if(npu_tx_pkt_buf_phy_addr)
 -	{
 -		memblock_reserve(npu_tx_pkt_buf_phy_addr, NPU_TX_PKT_BUF_SIZE);
@@ -79,11 +86,11 @@
 -	
 -	/*** ba node addr ***/
 -	phys_addr_t npu_ba_node_phy_addr = 0;
--//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
 -	npu_ba_node_phy_addr = memblock_phys_alloc_range(NPU_BA_NODE_SIZE, 64, 0x80000000, 0xbfffffff);
--//#else
--//	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
--//#endif
+-#else
+-	npu_ba_node_phy_addr = memblock_alloc(NPU_BA_NODE_SIZE, 64);
+-#endif
 -	if(npu_ba_node_phy_addr)
 -	{
 -		memblock_reserve(npu_ba_node_phy_addr, NPU_BA_NODE_SIZE);
@@ -97,11 +104,11 @@
 -	
 -	/** tx buf_id check addr **/
 -	phys_addr_t tx_bufid_check_addr = 0;
--//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
 -	tx_bufid_check_addr = memblock_phys_alloc_range(TX_BUFID_CHECK_SIZE, 64, 0x80000000, 0xbfffffff);
--//#else
--//	tx_bufid_check_addr = memblock_alloc(TX_BUFID_CHECK_SIZE, 64);
--//#endif
+-#else
+-	tx_bufid_check_addr = memblock_alloc(TX_BUFID_CHECK_SIZE, 64);
+-#endif
 -	if(tx_bufid_check_addr)
 -	{
 -		memblock_reserve(tx_bufid_check_addr, TX_BUFID_CHECK_SIZE);
@@ -115,11 +122,11 @@
 -	
 -	/** tx buf_id check addr **/
 -	phys_addr_t debug_array_addr = 0;
--//#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 55))
 -	debug_array_addr = memblock_phys_alloc_range(SKB_ARRAY_SIZE, 64, 0x80000000, 0xbfffffff);
--//#else
--//	debug_array_addr = memblock_alloc(SKB_ARRAY_SIZE, 64);
--//#endif
+-#else
+-	debug_array_addr = memblock_alloc(SKB_ARRAY_SIZE, 64);
+-#endif
 -	if(debug_array_addr)
 -	{
 -		memblock_reserve(debug_array_addr, SKB_ARRAY_SIZE);
@@ -130,21 +137,13 @@
 -	{
 -		printk("\r\n npu_ba_node memblock_alloc fail \n\r");
 -	}
-+        struct reserved_mem *rmem;
-+        struct device_node *np;
-+        int index;
-+        
-+        index = of_property_match_string(node, "memory-region-names", "pkt");
-+        if (index < 0)
-+                return index;
- 
 +        np = of_parse_phandle(node, "memory-region", index);
 +        if (!np)
 +                return -ENODEV;
- 
++
 +        rmem = of_reserved_mem_lookup(np);
 +	of_node_put(np);
- 
++
 +	if (!rmem)
 +		return -ENODEV;
 +
@@ -208,16 +207,18 @@
 +
 +        rmem = of_reserved_mem_lookup(np);
 +	of_node_put(np);
-+
+ 
 +	if (!rmem)
 +		return -ENODEV;
-+
+ 
 +        npu_set_debug_array_addr(rmem->base);
-+
+ 
 +        return 0;
  }
- EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
+-EXPORT_SYMBOL(arioha_arm_memblock_init_inline_hook);
  
+ #endif
+ #endif
 --- a/drivers/net/ethernet/airoha/npu_rv32.h
 +++ b/drivers/net/ethernet/airoha/npu_rv32.h
 @@ -91,7 +91,7 @@ void mbox_tasklet_handler(unsigned long

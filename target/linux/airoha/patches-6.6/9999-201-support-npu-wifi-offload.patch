@@ -1,3 +1,279 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -3479,6 +3479,19 @@ static struct platform_driver airoha_dri
+ };
+ module_platform_driver(airoha_driver);
+ 
++void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason)
++{
++	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Hash: %u\n", hash);
++	if (hash < PPE_SRAM_NUM_ENTRIES)
++		skb_set_hash(skb, hash,
++				 PKT_HASH_TYPE_L4);
++
++	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "CPU_REASON: %u\n", reason);
++	if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED){
++		airoha_ppe_check_skb(glb_eth->ppe, skb, hash);
++	}
++}
++
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+ MODULE_DESCRIPTION("Ethernet driver for Airoha SoC");
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -622,4 +622,8 @@ static inline int airoha_ppe_debugfs_ini
+ }
+ #endif
+ 
++void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason);
++void airoha_ppe_foe_flow_update_wifi_npu_offload(struct airoha_ppe *ppe, struct sk_buff *skb, struct port_info *pinfo);
++
++
+ #endif /* AIROHA_ETH_H */
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -213,6 +213,20 @@ static void airoha_ppe_foe_set_bridge_ad
+ 	br->src_mac_lo = get_unaligned_be32(eh->h_source + 2);
+ }
+ 
++static inline int airoha_ppe_is_wifi_dev(struct net_device *dev)
++{
++    return ((dev != NULL) && \
++			(strncmp(dev->name,"phy", 3) == 0)) || \
++		((dev != NULL) && \
++			(strncmp(dev->name,"ap-mld", 6) == 0));
++}
++
++static inline int airoha_ppe_is_wifi2G_dev(struct net_device *dev)
++{
++    return ((dev != NULL) && \
++			(strncmp(dev->name,"phy0.0", 6) == 0));
++}
++
+ static int airoha_ppe_foe_entry_prepare(struct airoha_eth *eth,
+ 					struct airoha_foe_entry *hwe,
+ 					struct net_device *dev, int type,
+@@ -243,17 +257,22 @@ static int airoha_ppe_foe_entry_prepare(
+ 		struct airoha_gdm_port *port = netdev_priv(dev);
+ 		u8 pse_port;
+ 
+-		if (!airoha_is_valid_gdm_port(eth, port))
+-			return -EINVAL;
+-
+-		if (dsa_port >= 0 || eth->ports[1])
+-			pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
+-		else
+-			/* uplink relies on GDM2 loopback for GDM3 and GDM4 */
+-			pse_port = 2;
+-		val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port);
+-		channel = dsa_port >= 0 ? dsa_port : port->id;
+-		channel = channel % AIROHA_NUM_QOS_CHANNELS;
++		if(airoha_ppe_is_wifi_dev(dev)){
++			pse_port = FE_PSE_PORT_CDM4;
++			val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port);
++		} else {
++			if (!airoha_is_valid_gdm_port(eth, port))
++				return -EINVAL;
++
++			if (dsa_port >= 0 || eth->ports[1])
++				pse_port = port->id == 4 ? FE_PSE_PORT_GDM4 : port->id;
++			else
++				/* uplink relies on GDM2 loopback for GDM3 and GDM4 */
++				pse_port = 2;
++			val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port);
++			channel = dsa_port >= 0 ? dsa_port : port->id;
++			channel = channel % AIROHA_NUM_QOS_CHANNELS;
++		}
+ 	}
+ 
+ 	if (is_multicast_ether_addr(data->eth.h_dest))
+@@ -656,14 +675,18 @@ airoha_ppe_foe_commit_subflow_entry(stru
+ 	memcpy(l2, &e->data.bridge.l2, sizeof(*l2));
+ 
+ 	type = FIELD_GET(AIROHA_FOE_IB1_BIND_PACKET_TYPE, hwe.ib1);
+-	if (type == PPE_PKT_TYPE_IPV4_HNAPT)
++	if (type == PPE_PKT_TYPE_IPV4_HNAPT){
+ 		memcpy(&hwe.ipv4.new_tuple, &hwe.ipv4.orig_tuple,
+ 		       sizeof(hwe.ipv4.new_tuple));
++	}
+ 	else if (type >= PPE_PKT_TYPE_IPV6_ROUTE_3T &&
+ 		 l2->common.etype == ETH_P_IP)
+ 		l2->common.etype = ETH_P_IPV6;
+ 
+ 	hwe.bridge.ib2 = e->data.bridge.ib2;
++	
++	hwe.bridge.data = e->data.bridge.data;
++	
+ 	airoha_ppe_foe_commit_entry(ppe, &hwe, hash);
+ 
+ 	return 0;
+@@ -743,6 +766,165 @@ airoha_ppe_foe_l2_flow_commit_entry(stru
+ 				       airoha_l2_flow_table_params);
+ }
+ 
++void airoha_ppe_foe_flow_update_wifi_npu_offload(struct airoha_ppe *ppe, struct sk_buff *skb, struct port_info *pinfo)
++{
++	u32 hash = FOE_ENTRY_NUM(skb);
++	int type;
++	struct airoha_flow_table_entry *e;
++	struct airoha_foe_entry *hwe;
++	struct hlist_node *n;
++//	struct airoha_foe_bridge br = {};
++
++	u32 index, data;
++	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "hash at wifi_tx: %u\n", hash);
++	if (hash >= PPE_SRAM_NUM_ENTRIES || !skb->l4_hash || skb->sw_hash != false) {
++		AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Incorrect hash:%u\n", hash);
++        return;
++    }
++	
++	spin_lock_bh(&ppe_lock);
++	hwe = airoha_ppe_foe_get_entry(ppe, hash);
++	if (!hwe)
++	{
++		goto unlock;
++	}
++	
++	type = FIELD_GET(AIROHA_FOE_IB1_BIND_PACKET_TYPE, hwe->ib1);
++	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Packet type:%d\n", type);
++	index = airoha_ppe_foe_get_entry_hash(hwe);
++	
++	if(airoha_ppe_is_wifi2G_dev(skb->dev)){		
++		pinfo->nbq = 0;
++	}
++	else{		
++		pinfo->nbq = 1;
++	}
++	
++	hlist_for_each_entry_safe(e, n, &ppe->foe_flow[index], list) {
++		if (airoha_ppe_foe_compare_entry(e, hwe)) {
++			data = FIELD_PREP(AIROHA_FOE_ACTDP, pinfo->udf) |
++	       			FIELD_PREP(AIROHA_FOE_SHAPER_ID, pinfo->tsid);
++			
++			switch (type) {
++				case PPE_PKT_TYPE_IPV4_ROUTE:
++				case PPE_PKT_TYPE_IPV4_HNAPT:
++					e->data.ipv4.data = data;
++					e->data.ipv4.l2.common.etype = pinfo->stag;
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);		//TDMA
++					break;
++				
++				case PPE_PKT_TYPE_BRIDGE:
++					e->data.bridge.data = data;
++					e->data.bridge.l2.common.etype = pinfo->stag;
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++				
++				case PPE_PKT_TYPE_IPV6_ROUTE_3T:
++				case PPE_PKT_TYPE_IPV6_ROUTE_5T:
++				case PPE_PKT_TYPE_IPV6_6RD:
++					e->data.ipv6.data = data;
++					e->data.ipv6.l2.etype = pinfo->stag;
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++					
++				case PPE_PKT_TYPE_IPV4_DSLITE:
++					e->data.dslite.data = data;		
++					e->data.dslite.l2.common.etype = pinfo->stag;
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++					
++				default:
++					break;
++			}			
++			break;
++		}
++	}
++	
++#if 0
++	/*---START------ For Bridge Case, it should be get from L2_flows not foe_flow ---------*/
++	airoha_ppe_foe_set_bridge_addrs(&br, eth_hdr(skb));
++	e = rhashtable_lookup_fast(&ppe->l2_flows, &br,
++				   airoha_l2_flow_table_params);
++	if(e){
++			data = FIELD_PREP(AIROHA_FOE_ACTDP, pinfo->udf) |
++	       			FIELD_PREP(AIROHA_FOE_SHAPER_ID, pinfo->tsid);
++			
++			switch (type) {
++				case PPE_PKT_TYPE_IPV4_ROUTE:
++				case PPE_PKT_TYPE_IPV4_HNAPT:
++					e->data.ipv4.data = data;
++					e->data.ipv4.l2.common.etype = pinfo->stag;
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);		//TDMA
++					
++					AIROHA_LOG(AIROHA_DEBUG_LEVEL_ERR, "Packet type:%d, hash at wifi_tx: %u, stag = %x, info2 = %x, data = %x\n", 
++								type, hash, pinfo->stag, e->data.ipv4.ib2, e->data.ipv4.data);
++					break;
++				
++				case PPE_PKT_TYPE_BRIDGE:
++					e->data.bridge.data = data;
++					e->data.bridge.l2.common.etype = pinfo->stag;
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);
++					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++				
++				case PPE_PKT_TYPE_IPV6_ROUTE_3T:
++				case PPE_PKT_TYPE_IPV6_ROUTE_5T:
++				case PPE_PKT_TYPE_IPV6_6RD:
++					e->data.ipv6.data = data;
++					e->data.ipv6.l2.etype = pinfo->stag;
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++					
++				case PPE_PKT_TYPE_IPV4_DSLITE:
++					e->data.dslite.data = data;		
++					e->data.dslite.l2.common.etype = pinfo->stag;
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_NBQ;
++					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
++					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
++					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
++					break;
++					
++				default:
++					break;
++			}			
++			e->tx_modified_bit = 1; 
++		}else{
++		AIROHA_LOG(AIROHA_DEBUG_LEVEL_WARN, "wifi tx hash:%d Can't find Flow table and L2 Table \n",hash);
++	}
++	/*----END----- For Bridge Case, it should be get from L2_flows not foe_flow ---------*/
++#endif						   
++unlock:
++	spin_unlock_bh(&ppe_lock);
++}
++
+ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
+ 					    struct airoha_flow_table_entry *e)
+ {
 --- a/drivers/net/ethernet/airoha/hostadpt.c
 +++ b/drivers/net/ethernet/airoha/hostadpt.c
 @@ -18,6 +18,7 @@ unsigned long int *HOSTADPT_CNT_Base, *H

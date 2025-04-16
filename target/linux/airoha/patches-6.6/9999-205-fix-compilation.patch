@@ -1,0 +1,104 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -20,6 +20,9 @@
+ #include "airoha_regs.h"
+ #include "airoha_eth.h"
+ 
++struct airoha_eth *glb_eth;
++EXPORT_SYMBOL(glb_eth);
++
+ u32 airoha_rr(void __iomem *base, u32 offset)
+ {
+ 	return readl(base + offset);
+@@ -3401,6 +3404,8 @@ static int airoha_probe(struct platform_
+ 	if (err)
+ 		goto error_napi_stop;
+ 
++	glb_eth = eth;
++
+ 	return 0;
+ 
+ error_napi_stop:
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -622,8 +622,43 @@ static inline int airoha_ppe_debugfs_ini
+ }
+ #endif
+ 
++#define AIROHA_DEBUG_LEVEL_NONE 0
++#define AIROHA_DEBUG_LEVEL_ERR  1
++#define AIROHA_DEBUG_LEVEL_WARN 2
++#define AIROHA_DEBUG_LEVEL_INFO 3
++#define AIROHA_DEBUG_LEVEL_DBG  4
++
++extern int airoha_debug_level;
++
++#define AIROHA_LOG(level, fmt, ...) \
++	do { \
++		if (level <= airoha_debug_level) \
++		printk(fmt, ##__VA_ARGS__); \
++	} while (0)
++
++struct port_info {
++    unsigned long int tsid:8;
++    unsigned long int channel:5;
++    unsigned long int nbq:5;
++    unsigned long int fast:1;
++    unsigned long int txq:4;
++    unsigned long int atm_pppoa:1;
++    unsigned long int atm_ipoa:1;
++    unsigned long int atm_vc_mux:1;
++    unsigned long int eth_macSTagEn:1;
++	unsigned long int eth_is_wan:1;
++    unsigned long int ds_to_qdma:1;
++    unsigned long int ds_need_offload:1;
++    unsigned long int force_high_priority_ring:1;
++	unsigned long int txq_is_valid:1;
++    unsigned long int stag:16;
++    unsigned long int magic:16;
++	unsigned long int udf:8;//add for inode wifi 
++};
++
+ void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason);
+ void airoha_ppe_foe_flow_update_wifi_npu_offload(struct airoha_ppe *ppe, struct sk_buff *skb, struct port_info *pinfo);
+ 
++#define FOE_ENTRY_NUM(skb)		skb_get_hash(skb)
+ 
+ #endif /* AIROHA_ETH_H */
+--- a/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
+@@ -6,6 +6,11 @@
+ 
+ #include "airoha_eth.h"
+ 
++int airoha_debug_level = AIROHA_DEBUG_LEVEL_NONE;
++int airoha_upstream_fast_path_enable = 0;
++int airoha_downstream_fast_path_enable = 1;
++extern struct airoha_eth *glb_eth;
++
+ static void airoha_debugfs_ppe_print_tuple(struct seq_file *m,
+ 					   void *src_addr, void *dest_addr,
+ 					   u16 *src_port, u16 *dest_port,
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -1332,7 +1332,7 @@ int hostadpInit(void)
+ 	return 0;
+ }
+ EXPORT_SYMBOL(hostadpInit);
+-void __exit hostadpExit(void)
++void hostadpExit(void)
+ {
+ 	hostadpt_free_interrupt(0);
+ 	hostadpt_free_interrupt(1);
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -158,6 +158,6 @@ void hostdapt_registe_wifitask(unsigned
+ extern u32 get_npu_hostadpt_reg(int hadap_ofs);
+ extern u32 set_npu_hostadpt_reg(int hadap_ofs,int val);
+ int hostadpInit(void);
+-void __exit hostadpExit(void);
++void hostadpExit(void);
+ 
+-#endif
+\ No newline at end of file
++#endif

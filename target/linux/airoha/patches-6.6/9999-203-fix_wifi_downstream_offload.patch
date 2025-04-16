@@ -1,3 +1,29 @@
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -221,6 +221,12 @@ static inline int airoha_ppe_is_wifi_dev
+ 			(strncmp(dev->name,"ap-mld", 6) == 0));
+ }
+ 
++static inline int airoha_ppe_is_br_dev(struct net_device *dev)
++{
++	return ((dev != NULL) && \
++			(strncmp(dev->name,"br-lan", 6) == 0));
++}
++
+ static inline int airoha_ppe_is_wifi2G_dev(struct net_device *dev)
+ {
+     return ((dev != NULL) && \
+@@ -257,9 +263,8 @@ static int airoha_ppe_foe_entry_prepare(
+ 		struct airoha_gdm_port *port = netdev_priv(dev);
+ 		u8 pse_port;
+ 
+-		if(airoha_ppe_is_wifi_dev(dev)){
++		if(airoha_ppe_is_wifi_dev(dev) || airoha_ppe_is_br_dev(dev)) {
+ 			pse_port = FE_PSE_PORT_CDM4;
+-			val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port);
+ 		} else {
+ 			if (!airoha_is_valid_gdm_port(eth, port))
+ 				return -EINVAL;
 --- a/drivers/net/ethernet/airoha/npu_rv32.c
 +++ b/drivers/net/ethernet/airoha/npu_rv32.c
 @@ -416,7 +416,7 @@ void npu_rv32_init(void)
