@@ -1,0 +1,60 @@
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -32,13 +32,6 @@ bool arht_wifi_npu_active(void)
+ #endif
+ EXPORT_SYMBOL_GPL(arht_wifi_npu_active);
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-u32 npu_pkt_buf_addr;
+-u32 npu_ba_node_addr;
+-u32 npu_tx_pkt_buf_addr;
+-u32 npu_tx_buffid_addr;
+-u32 npu_debug_array_addr;
+-
+-
+ int wdog_intr_bit[] = {21,22,23,24,21,22};
+ int wdog_en_bit[] = {25,26,27,28,25,26};
+ npuMboxObj_t mboxObj[MAX_CORE_NUM];
+@@ -279,33 +272,6 @@ irqreturn_t npuMbox2host_isr(int irq, vo
+     }
+ 	return IRQ_HANDLED;
+ }
+-
+-void host_dump_npu_csr(int core)
+-{
+-    #ifdef TCSUPPORT_NPU_V2
+-    const char * CSR_NAME[] = {"PC", "SP", "LR"};
+-	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8};
+-    #else
+-	const char * CSR_NAME[] = {"PC", "SP", "LR", "Cyc_Cnt[31:0]" ,"Cyc_Cnt[63:32]" ,"Ins_Cnt[31:0]", 
+-												"Ins_Cnt[63:32]", "MTVAL", "MCAUSE", "MEPC", "MSTATUS", "MICAUSE"};
+-	const unsigned int csr_ofs[CSR_REG_NUM] = {0x0, 0x4, 0x8, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x2c, 0x30};
+-    #endif
+-	unsigned int tmpVal;
+-	int i;
+-
+-
+-	printk("\n[H]Dump NPU core %d CSR START\n", core);
+-	for (i = 0; i < CSR_REG_NUM; i++) {
+-        tmpVal = get_npu_dbg_csr(core, csr_ofs[i]);
+-		printk("%-15s<0x%x>\n", CSR_NAME[i], tmpVal);
+-	}
+-	printk("[H]Dump CSR END\n\n");
+-	
+-	return;
+-}
+-EXPORT_SYMBOL(host_dump_npu_csr);
+-char npu_stat;
+-EXPORT_SYMBOL(npu_stat);
+ #endif
+ #endif
+ 
+--- a/drivers/net/ethernet/airoha/npu_rv32.h
++++ b/drivers/net/ethernet/airoha/npu_rv32.h
+@@ -82,7 +82,6 @@ int get_npu_irq(int index);
+ int host_notify_npuMbox(npuMboxInfo_t *mboxInfo);
+ void mbox_tasklet_handler(unsigned long data);
+ irqreturn_t npuMbox2host_isr(int irq, void *dev_id);
+-void host_dump_npu_csr(int core);
+ typedef struct npuMboxObj
+ {
+     unsigned long virtAddr[MAX_MBOX_FUNC];

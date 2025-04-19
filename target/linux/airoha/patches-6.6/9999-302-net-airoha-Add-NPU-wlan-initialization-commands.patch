@@ -1,0 +1,458 @@
+From ef6f506f1e752013c8cea5e25ac62e9eb6c98be5 Mon Sep 17 00:00:00 2001
+Message-ID: <ef6f506f1e752013c8cea5e25ac62e9eb6c98be5.1745075735.git.lorenzo@kernel.org>
+In-Reply-To: <7cd8e4639536c9889041a0a72d7066c16daf3aa1.1745075735.git.lorenzo@kernel.org>
+References: <7cd8e4639536c9889041a0a72d7066c16daf3aa1.1745075735.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Sat, 19 Apr 2025 11:38:07 +0200
+Subject: [PATCH net-next 2/2] net: airoha: Add NPU wlan initialization
+ commands
+
+Introeuce NPU APIs used during wlan offloading initialization.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_npu.c | 155 +++++++++++++++++++++++
+ 1 file changed, 155 insertions(+)
+
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -128,6 +128,70 @@ struct ppe_mbox_data {
+ 	};
+ };
+ 
++enum {
++	WLAN_FUNC_SET_WAIT_PCIE_ADDR,
++	WLAN_FUNC_SET_WAIT_DESC,
++	WLAN_FUNC_SET_WAIT_NPU_INIT_DONE,
++	WLAN_FUNC_SET_WAIT_TRAN_TO_CPU,
++	WLAN_FUNC_SET_WAIT_BA_WIN_SIZE,
++	WLAN_FUNC_SET_WAIT_DRIVER_MODEL,
++	WLAN_FUNC_SET_WAIT_DEL_STA,
++	WLAN_FUNC_SET_WAIT_DRAM_BA_NODE_ADDR,
++	WLAN_FUNC_SET_WAIT_PKT_BUF_ADDR,
++	WLAN_FUNC_SET_WAIT_IS_TEST_NOBA,
++	WLAN_FUNC_SET_WAIT_FLUSHONE_TIMEOUT,
++	WLAN_FUNC_SET_WAIT_FLUSHALL_TIMEOUT,
++	WLAN_FUNC_SET_WAIT_IS_FORCE_TO_CPU,
++	WLAN_FUNC_SET_WAIT_PCIE_STATE,
++	WLAN_FUNC_SET_WAIT_PCIE_PORT_TYPE,
++	WLAN_FUNC_SET_WAIT_ERROR_RETRY_TIMES,
++	WLAN_FUNC_SET_WAIT_BAR_INFO,
++	WLAN_FUNC_SET_WAIT_FAST_FLAG,
++	WLAN_FUNC_SET_WAIT_NPU_BAND0_ONCPU,
++	WLAN_FUNC_SET_WAIT_TX_RING_PCIE_ADDR,
++	WLAN_FUNC_SET_WAIT_TX_DESC_HW_BASE,
++	WLAN_FUNC_SET_WAIT_TX_BUF_SPACE_HW_BASE,
++	WLAN_FUNC_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE,
++	WLAN_FUNC_SET_WAIT_TX_PKT_BUF_ADDR,
++	WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR,
++	WLAN_FUNC_SET_WAIT_INODE_DEBUG_FLAG,
++	WLAN_FUNC_SET_WAIT_INODE_HW_CFG_INFO,
++	WLAN_FUNC_SET_WAIT_INODE_STOP_ACTION,
++	WLAN_FUNC_SET_WAIT_INODE_PCIE_SWAP,
++	WLAN_FUNC_SET_WAIT_RATELIMIT_CTRL,
++	WLAN_FUNC_SET_WAIT_HWNAT_INIT,
++	WLAN_FUNC_SET_WAIT_ARHT_CHIP_INFO,
++	WLAN_FUNC_SET_WAIT_TX_BUF_CHECK_ADDR,
++	WLAN_FUNC_SET_WAIT_DEBUG_ARRAY_ADDR,
++};
++
++#define WLAN_MAX_SSID	8
++#define WLAN_MAX_ENTRY	128
++
++struct wlan_mbox_data {
++	u32 ifindex:4;
++	u32 func_type:4;
++	u32 func_id;
++	union {
++		u32 data;
++		struct {
++			u32 tx_pkts;
++			u64 rx_pkts_2g[WLAN_MAX_SSID];
++			u64 rx_pkts_5g[WLAN_MAX_SSID];
++			u64 rx_bytes_2g[WLAN_MAX_SSID];
++			u64 rx_bytes_5g[WLAN_MAX_SSID];
++			u8 omac_idx_5g[WLAN_MAX_SSID];
++			u8 omac_idx_2g[WLAN_MAX_SSID];
++			u64 rx_ap_cli_pkts_2g;
++			u64 rx_ap_cli_pkts_5g;
++			u64 rx_ap_cli_bytes_2g;
++			u64 rx_ap_cli_bytes_5g;
++			u64 rx_pkts_entry[2][WLAN_MAX_ENTRY];
++			u64 rx_bytes_entry[2][WLAN_MAX_ENTRY];
++		} stats;
++	};
++};
++
+ static int airoha_npu_send_msg(struct airoha_npu *npu, int func_id,
+ 			       void *p, int size)
+ {
+@@ -390,6 +454,93 @@ static int airoha_npu_stats_setup(struct
+ 	return 0;
+ }
+ 
++static int airoha_npu_wlan_send_msg(struct airoha_npu *npu, int index,
++				    int func_id, u32 data)
++{
++	struct wlan_mbox_data *wlan_data;
++	int err;
++
++	wlan_data = kzalloc(sizeof(*wlan_data), GFP_KERNEL);
++	if (!wlan_data)
++		return -ENOMEM;
++
++	wlan_data->ifindex = index;
++	wlan_data->func_type = NPU_OP_SET;
++	wlan_data->func_id = func_id;
++	wlan_data->data = data;
++
++	err = airoha_npu_send_msg(npu, NPU_FUNC_WIFI, wlan_data,
++				  sizeof(*wlan_data));
++	kfree(wlan_data);
++
++	return err;
++}
++
++static struct reserved_mem *
++airoha_npu_get_reserved_memory(struct airoha_npu *npu, const char *name)
++{
++	struct device *dev = npu->dev;
++	struct reserved_mem *rmem;
++	struct device_node *np;
++	int index;
++
++	index = of_property_match_string(dev->of_node, "memory-region-names",
++					 name);
++	if (index < 0)
++		return NULL;
++
++	 np = of_parse_phandle(dev->of_node, "memory-region", index);
++        if (!np)
++                return NULL;
++
++        rmem = of_reserved_mem_lookup(np);
++	of_node_put(np);
++
++	return rmem;
++}
++
++static int airoha_npu_wlan_set_reserved_memory(struct airoha_npu *npu,
++					       int index, const char *name,
++					       int func_id)
++{
++	struct reserved_mem *rmem;
++
++	rmem = airoha_npu_get_reserved_memory(npu, name);
++	if (!rmem)
++		return -ENODEV;
++
++	return airoha_npu_wlan_send_msg(npu, index, func_id, rmem->base);
++}
++
++static int airoha_npu_wlan_init(struct airoha_npu *npu)
++{
++	int err;
++
++	err = airoha_npu_wlan_send_msg(npu, 1,
++				       WLAN_FUNC_SET_WAIT_NPU_BAND0_ONCPU, 0);
++	if (err)
++		return err;
++
++	err = airoha_npu_wlan_set_reserved_memory(npu, 0, "tx-bufid",
++			WLAN_FUNC_SET_WAIT_TX_BUF_CHECK_ADDR);
++	if (err)
++		return err;
++
++	err = airoha_npu_wlan_set_reserved_memory(npu, 0, "pkt",
++			WLAN_FUNC_SET_WAIT_PKT_BUF_ADDR);
++	if (err)
++		return err;
++
++	err = airoha_npu_wlan_set_reserved_memory(npu, 0, "tx-pkt",
++			WLAN_FUNC_SET_WAIT_TX_PKT_BUF_ADDR);
++	if (err)
++		return err;
++
++	return airoha_npu_wlan_send_msg(npu, 0,
++					WLAN_FUNC_SET_WAIT_IS_FORCE_TO_CPU,
++					0);
++}
++
+ struct airoha_npu *airoha_npu_get(struct device *dev,
+ 				  dma_addr_t foe_stats_addr)
+ {
+@@ -607,11 +758,14 @@ static int airoha_npu_probe(struct platf
+     }	
+ 
+ 	msleep(100);
++
++	err = airoha_npu_wlan_init(npu_glb);
++	if (err)
++		return err;
++
+ 	platform_set_drvdata(pdev, npu_glb);
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-	arioha_arm_memblock_init_inline_hook(dev->of_node);
+-	npu_rv32_init();
+ 	hostadpInit();	
+ #endif
+ 	return 0;
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -74,91 +74,7 @@ void host_register_mbox_cb(npuCoreId_t c
+ }
+ char *wdog_name[8] = {"npu_wdog0","npu_wdog1","npu_wdog2","npu_wdog3","npu_wdog4","npu_wdog5","npu_wdog6","npu_wdog7"};
+ 
+-unsigned char isNpuBand0OnCpu = 0;
+ // Reserve 16M block to save packet, and the address will be got after npu bring up.
+-
+-void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr)
+-{
+-    npu_tx_pkt_buf_addr = pkt_buf_addr;
+-    printk("[%s]npu_tx_pkt_buf_addr=%x:%x\n", __func__, npu_tx_pkt_buf_addr, pkt_buf_addr);
+-    return;
+-}
+-u32 npu_wifi_offload_get_tx_pkt_buf_addr(void)
+-{
+-    printk("[%s]npu_tx_pkt_buf_addr=%x\n", __func__, npu_tx_pkt_buf_addr);
+-    return npu_tx_pkt_buf_addr;
+-}
+-
+-EXPORT_SYMBOL(npu_wifi_offload_get_tx_pkt_buf_addr);
+-
+-void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr)
+-{
+-	npu_ba_node_addr = ba_node_addr;
+-	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
+-	return;
+-	
+-}
+-u32 npu_wifi_offload_get_ba_node_addr(void)
+-{
+-	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
+-	return npu_ba_node_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_wifi_offload_get_ba_node_addr);
+-
+-void npu_set_tx_buffid_addr(u32 buff_id_addr)
+-{
+-	npu_tx_buffid_addr = buff_id_addr;
+-	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
+-	return;
+-}
+-u32 npu_get_tx_buffid_addr(void)
+-{
+-	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
+-	return npu_tx_buffid_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_get_tx_buffid_addr);
+-
+-void npu_set_debug_array_addr(u32 buff_id_addr)
+-{
+-	npu_debug_array_addr = buff_id_addr;
+-	//printk("[%s]npu_ba_node_addr=%x:%x\n", __func__, npu_ba_node_addr, ba_node_addr);
+-	return;
+-}
+-u32 npu_get_debug_array_addr(void)
+-{
+-	//printk("[%s]npu_ba_node_addr=%x\n", __func__, npu_ba_node_addr);
+-	return npu_debug_array_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_get_debug_array_addr);
+-
+-// Reserve 16M block to save packet, and the address will be got after npu bring up.
+-void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr)
+-{
+-	npu_pkt_buf_addr = pkt_buf_addr;
+-	return;
+-	
+-}
+-u32 npu_wifi_offload_get_pkt_buf_addr(void)
+-{
+-	return npu_pkt_buf_addr;
+-	
+-}
+-EXPORT_SYMBOL(npu_wifi_offload_get_pkt_buf_addr);
+-
+-char npu_wifi_offload_get_force_to_cpu_flag(void)
+-{
+-#if 0
+-#if defined(TCSUPPORT_RA_HWNAT) && defined(TCSUPPORT_HWNAT_V3)
+-	return forceToCpu;
+-#else
+-	return 1;
+-#endif
+-#endif
+-	return 1;
+-}
+ u32 get_npu_reg_data(u32 reg)
+ {
+ 	return readl(npu_glb->Regbase + reg);
+@@ -388,138 +304,8 @@ void host_dump_npu_csr(int core)
+ 	return;
+ }
+ EXPORT_SYMBOL(host_dump_npu_csr);
+-void npu_rv32_init(void)
+-{
+-	// NPU wifi offload reserve 16M block to save packet when boot, and get the address in here (after npu bring up)
+-	//npu_wifi_offload_dbg_proc_create();
+-	unsigned int isMailBoxSuccess = 0;
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_NPU_BAND0_ONCPU(1, isNpuBand0OnCpu);
+-	
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get NPU Band0 On CPU flag Fail!!!\n");
+-#if WIFI_RX_BUF_ID_DEBUG  
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_debug_array_ADDR(0, npu_get_debug_array_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get debug array address Fail!!!\n");
+-#endif
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_BUF_CHECK_ADDR(0, npu_get_tx_buffid_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_PKT_BUF_ADDR(0,npu_wifi_offload_get_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");	
+-	/* when TDMA tx is used with DRAM, need these func
+-#ifdef TCSUPPORT_NPU_WIFI_TDMA_OFFLOAD
+-	printk("npu_wifi_offload_get_tdma_tx_pkt_buf_addr=%x\n", npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TDMA_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tdma_tx_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-#endif
+-	*/	
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_TX_PKT_BUF_ADDR(0, npu_wifi_offload_get_tx_pkt_buf_addr());
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get packet buf address Fail!!!\n");
+-
+-//	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, npu_wifi_offload_get_force_to_cpu_flag());
+-	isMailBoxSuccess = WIFI_MAIL_API_SET_WAIT_IS_FORCE_TO_CPU(0, 0);
+-	if(isMailBoxSuccess != 1) printk("Error: NPU_WIFI_OFFLOAD Get isForceToCpu flag Fail!!!\n");
+-}
+ char npu_stat;
+ EXPORT_SYMBOL(npu_stat);
+-#define NPU_PKT_BUF_SIZE (0x2c00000)
+-#define NPU_TX_PKT_BUF_SIZE 0x3a00000
+-#define NPU_BA_NODE_SIZE (0x200000)
+-
+-#define TX_BUFID_IN_SRAM_MAX_NUMBER 	((4096+2048+512)*2)
+-#define TX_BUFID_CHECK_SIZE			(sizeof(short int) * TX_BUFID_IN_SRAM_MAX_NUMBER)
+-
+-#define SKB_NODE_MAX_NUMBER			(5600+5600)
+-#define SKB_ARRAY_SIZE				(sizeof(short int) * SKB_NODE_MAX_NUMBER)//(SKB_NODE_MAX_NUMBER+1))
+-
+-int arioha_arm_memblock_init_inline_hook(struct device_node *node)
+-{
+-        struct reserved_mem *rmem;
+-        struct device_node *np;
+-        int index;
+-        
+-        index = of_property_match_string(node, "memory-region-names", "pkt");
+-        if (index < 0)
+-                return index;
+-
+-        np = of_parse_phandle(node, "memory-region", index);
+-        if (!np)
+-                return -ENODEV;
+-
+-        rmem = of_reserved_mem_lookup(np);
+-	of_node_put(np);
+-
+-	if (!rmem)
+-		return -ENODEV;
+-
+-        npu_wifi_offload_set_pkt_buf_addr(rmem->base);
+-
+-        index = of_property_match_string(node, "memory-region-names", "tx-pkt");
+-        if (index < 0)
+-                return index;
+-
+-        np = of_parse_phandle(node, "memory-region", index);
+-        if (!np)
+-                return -ENODEV;
+-
+-        rmem = of_reserved_mem_lookup(np);
+-	of_node_put(np);
+-
+-	if (!rmem)
+-		return -ENODEV;
+-
+-        npu_wifi_offload_set_tx_pkt_buf_addr(rmem->base);
+-
+-        index = of_property_match_string(node, "memory-region-names", "ba");
+-        if (index < 0)
+-                return index;
+-
+-        np = of_parse_phandle(node, "memory-region", index);
+-        if (!np)
+-                return -ENODEV;
+-
+-        rmem = of_reserved_mem_lookup(np);
+-	of_node_put(np);
+-
+-	if (!rmem)
+-		return -ENODEV;
+-
+-        npu_wifi_offload_set_ba_node_addr(rmem->base);
+-
+-        index = of_property_match_string(node, "memory-region-names", "tx-bufid");
+-        if (index < 0)
+-                return index;
+-
+-        np = of_parse_phandle(node, "memory-region", index);
+-        if (!np)
+-                return -ENODEV;
+-
+-        rmem = of_reserved_mem_lookup(np);
+-	of_node_put(np);
+-
+-	if (!rmem)
+-		return -ENODEV;
+-
+-        npu_set_tx_buffid_addr(rmem->base);
+-
+-        index = of_property_match_string(node, "memory-region-names", "dbg");
+-        if (index < 0)
+-                return index;
+-
+-        np = of_parse_phandle(node, "memory-region", index);
+-        if (!np)
+-                return -ENODEV;
+-
+-        rmem = of_reserved_mem_lookup(np);
+-	of_node_put(np);
+-
+-	if (!rmem)
+-		return -ENODEV;
+-
+-        npu_set_debug_array_addr(rmem->base);
+-
+-        return 0;
+-}
+-
+ #endif
+ #endif
+ 
+--- a/drivers/net/ethernet/airoha/npu_rv32.h
++++ b/drivers/net/ethernet/airoha/npu_rv32.h
+@@ -73,13 +73,6 @@
+ 
+ struct device* get_ecnt_npu_dev(void);
+ void host_register_mbox_cb(npuCoreId_t core_id, npuMboxFuncId_t func_id, h_mbox_cb_t cb);
+-void npu_wifi_offload_set_tx_pkt_buf_addr(u32 pkt_buf_addr);
+-u32 npu_wifi_offload_get_tx_pkt_buf_addr(void);
+-void npu_wifi_offload_set_ba_node_addr(u32 ba_node_addr);
+-u32 npu_wifi_offload_get_ba_node_addr(void);
+-void npu_wifi_offload_set_pkt_buf_addr(u32 pkt_buf_addr);
+-u32 npu_wifi_offload_get_pkt_buf_addr(void);
+-char npu_wifi_offload_get_force_to_cpu_flag(void);
+ u32 get_npu_reg_data(u32 reg);
+ u32 get_npu_dbg_csr(int core, const unsigned int csr_ofs);
+ void set_npu_reg_data(u32 reg, u32 val);
+@@ -90,8 +83,6 @@ int host_notify_npuMbox(npuMboxInfo_t *m
+ void mbox_tasklet_handler(unsigned long data);
+ irqreturn_t npuMbox2host_isr(int irq, void *dev_id);
+ void host_dump_npu_csr(int core);
+-void npu_rv32_init(void);
+-int arioha_arm_memblock_init_inline_hook(struct device_node *node);
+ typedef struct npuMboxObj
+ {
+     unsigned long virtAddr[MAX_MBOX_FUNC];
