@@ -1,0 +1,79 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -291,7 +291,7 @@ out:
+ 	return ret;
+ }
+ 
+-#if 0
++
+ static irqreturn_t airoha_npu_mbox_handler(int irq, void *npu_instance)
+ {
+ 	struct airoha_npu *npu = npu_instance;
+@@ -306,7 +306,7 @@ static irqreturn_t airoha_npu_mbox_handl
+ 
+ 	return IRQ_HANDLED;
+ }
+-#endif
++
+ static void airoha_npu_wdt_work(struct work_struct *work)
+ {
+ 	struct airoha_npu_core *core;
+@@ -828,6 +828,15 @@ static int airoha_npu_probe(struct platf
+ 	if (!rmem)
+ 		return -ENODEV;
+ 
++	irq = platform_get_irq(pdev, 0);
++	if (irq < 0)
++		return irq;
++
++	err = devm_request_irq(dev, irq, airoha_npu_mbox_handler,
++			       IRQF_SHARED, "airoha-npu-mbox", npu_glb);
++	if (err)
++		return err;
++
+ 	for (i = 0; i < ARRAY_SIZE(npu_glb->cores); i++) {
+ 		struct airoha_npu_core *core = &npu_glb->cores[i];
+ 
+@@ -882,12 +891,6 @@ static int airoha_npu_probe(struct platf
+ 	regmap_write(npu_glb->regmap, REG_CR_BOOT_CONFIG, 0xff);
+ 	regmap_write(npu_glb->regmap, REG_CR_BOOT_TRIGGER, 0x1);
+ 
+-	//npu_glb->mbox2host_irq = platform_get_irq(pdev, NPU_INT_MAX_NUM);
+-	npu_glb->mbox2host_irq = platform_get_irq(pdev, 0);
+-	if(npu_glb->mbox2host_irq <= 0) {
+-		return npu_glb->mbox2host_irq;
+-	}	
+-
+ 	msleep(100);
+ 
+ 	err = airoha_npu_wlan_init(npu_glb);
+@@ -908,13 +911,11 @@ static void airoha_npu_remove(struct pla
+ 	int i;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(npu->cores); i++)
+-		cancel_work_sync(&npu->cores[i].wdt_work);	
++		cancel_work_sync(&npu->cores[i].wdt_work);
++
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-    /*not add debug count now, add later*/
+-    //npu_wifi_offload_dbg_proc_remove();
+ 	hostadpExit();
+ #endif	
+-	//hostadpExit();
+ }
+ 
+ static struct platform_driver airoha_npu_driver = {
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -45,10 +45,7 @@ struct airoha_npu {
+ 	struct regmap *regmap;
+ 	void __iomem *Regbase;
+ 	int irq[NPU_INT_MAX_NUM];
+-    int mbox2host_irq;
+-#if defined(TCSUPPORT_NPU_V2)
+-    int wdog_irq[NPU_NUM_CORES];
+-#endif
++
+ 	struct airoha_npu_core {
+ 		struct airoha_npu *npu;
+ 		/* protect concurrent npu memory accesses */

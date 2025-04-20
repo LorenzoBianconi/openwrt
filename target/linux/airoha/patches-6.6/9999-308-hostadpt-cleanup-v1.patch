@@ -1,0 +1,165 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -1284,134 +1284,6 @@ static int hostadpt_txdscp_init(void)
+ 	
+ 	return 0;
+ }
+-#if 0
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t hostadpt_debug_read_proc(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+-{
+-	char user_buf[512] = {0};
+-	size_t len = count, buf_length = 0;
+-	loff_t pos = *ppos;
+-	unsigned long ret = 0;
+-	ssize_t retval = 0;
+-	
+-	/* use memory size for data stream or use length of string buffer */
+-	buf_length += sprintf(user_buf+buf_length, "band 0 tx skb cnt=%d, free cnt=%d\r\n", hostadpt_tx_skbin_cnt[0],hostadpt_tx_skbfree_cnt[0]);
+-	buf_length += sprintf(user_buf+buf_length, "band 1 tx skb cnt=%d, free cnt=%d\r\n",hostadpt_tx_skbin_cnt[1],hostadpt_tx_skbfree_cnt[1]);
+-	buf_length += sprintf(user_buf+buf_length, "band 0 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[0],hostadpt_tx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX));
+-	buf_length += sprintf(user_buf+buf_length, "band 1 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[1],hostadpt_tx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX));
+-
+-	buf_length += sprintf(user_buf+buf_length, "band 0 rx dmaIdx=%d cpuidx=%d,%d\r\n",
+-		hostadpt_rx_dma_idx[0],hostadpt_rx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX));
+-	buf_length += sprintf(user_buf+buf_length, "band 1 rx dmaIdx=%d cpuidx=%d,%d\r\n",
+-		hostadpt_rx_dma_idx[1],hostadpt_rx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX));
+-
+-	/* valid check */
+-	if ( pos >= buf_length )
+-		return 0;
+-	if ( len >= buf_length )
+-		len = buf_length;
+-	if ( pos + len > buf_length )
+-		len = buf_length - pos;
+-	
+-	/* ret contains the amount of chars wasn't successfully written to buf */
+-	ret = copy_to_user(buf, user_buf + pos, len);
+-	
+-	*ppos += len;
+-	retval = len - ret;
+-
+-	return retval;
+-}
+-#else
+-static int hostadpt_debug_read_proc(char *page, char **start, off_t off, 
+-	int count, int *eof, void *data)
+-{
+-	int len=0;
+-	len += sprintf(page+len, "band 0 tx skb cnt=%d, free cnt=%d\r\n", hostadpt_tx_skbin_cnt[0],hostadpt_tx_skbfree_cnt[0]);
+-	len += sprintf(page+len, "band 1 tx skb cnt=%d, free cnt=%d\r\n",hostadpt_tx_skbin_cnt[1],hostadpt_tx_skbfree_cnt[1]);
+-	len += sprintf(page+len, "band 0 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[0],hostadpt_tx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_TX2_CPU_IDX));
+-	len += sprintf(page+len, "band 1 tx dmaIdx=%d cpuidx=%d,%d\r\n",hostadpt_tx_dma_idx[1],hostadpt_tx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_TX3_CPU_IDX));
+-
+-	len += sprintf(page+len, "band 0 rx dmaIdx=%d cpuidx=%d,%d\r\n",
+-		hostadpt_rx_dma_idx[0],hostadpt_rx_cpu_idx[0],get_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX));
+-	len += sprintf(page+len, "band 1 rx dmaIdx=%d cpuidx=%d,%d\r\n",
+-		hostadpt_rx_dma_idx[1],hostadpt_rx_cpu_idx[1],get_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX));
+-	return len;
+-}
+-#endif
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t hostadpt_debug_write_proc(struct file *file, const char __user *buffer, size_t count, loff_t *data)
+-#else
+-static int hostadpt_debug_write_proc(struct file *file, const char *buffer,
+-		unsigned long count, void *data)
+-#endif
+-{
+-	int i=0 ;
+-	char get_buf[120];
+-	int band=0;
+-	int flag=0;
+-
+-	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX = NULL;
+-	if (count > (sizeof(get_buf) - 1))
+-		return -EINVAL ;
+-	
+-	memset(get_buf, 0, sizeof(get_buf));
+-	
+-	if(copy_from_user(get_buf, buffer, count))
+-		return -EFAULT;
+-
+-	get_buf[count] = '\0';
+-	if(sscanf(get_buf, "%d %d ", &band, &flag)==2){
+-			if(band==0 || band==1){
+-			host_apd_debug[band]=flag;
+-		}
+-	}
+-	else if(sscanf(get_buf, "%d ", &band)==1){// dump done bit=1 's txD index
+-		if(band < 0 || band > 1){
+-			printk("error: band must be 0/1\n");
+-			return count;
+-			}
+-			printk("hostadpt_tx_dma_idx[0]=%d [1]=%d\n", hostadpt_tx_dma_idx[0], hostadpt_tx_dma_idx[1]);
+-		for(i=0;i<1024;i++){
+-			pHostadptTX = pHostadptTX_BASE[band] + i;
+-			if(pHostadptTX->pkt_ctrl.done==1){
+-				printk("%d: done=1 \n",i);
+-			}
+-		}
+-	}
+-	return count;
+-
+-}
+-
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static const struct proc_ops hostadpt_debug_proc_ops =
+-{
+-	.proc_read	= hostadpt_debug_read_proc,
+-	.proc_write	= hostadpt_debug_write_proc,		
+-};
+-
+-static void hostadpt_dump_debug_create(void) 
+-{
+-	struct proc_dir_entry *npu_proc=NULL;
+-
+-	npu_proc = proc_create("hostadpt_debug", 0, NULL, &hostadpt_debug_proc_ops);
+-
+-	return;
+-}
+-#else
+-static void hostadpt_dump_debug_create(void) 
+-{
+-	struct proc_dir_entry *npu_proc = NULL;
+-
+-	npu_proc = create_proc_entry("hostadpt_debug", 0, NULL);
+-	npu_proc->read_proc = hostadpt_debug_read_proc;
+-	npu_proc->write_proc = hostadpt_debug_write_proc;
+-
+-	return;
+-}
+-#endif
+-#endif
+ #endif
+ int hostadpInit(void)
+ {
+@@ -1428,8 +1300,6 @@ int hostadpInit(void)
+ 	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,0x00020000);
+ 
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-	//hostadpt_dump_debug_create();
+-
+ 	if(hostadpt_txdscp_init())
+ 	{
+ 		return -ENODEV;
+@@ -1442,18 +1312,7 @@ void hostadpExit(void)
+ {
+ 	hostadpt_free_interrupt(0);
+ 	hostadpt_free_interrupt(1);
+-	
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-	//remove_proc_entry("hostadpt_debug",  NULL);
+-	//rcu_assign_pointer(toHostadptPktHandle_hook, NULL);
+-#endif
+ 
+ 	HOSTADPT_MSG(DBG_LOG, "host adaptor exit .\n");
+ }
+ EXPORT_SYMBOL(hostadpExit);
+-//late_initcall(hostadpInit);
+-//module_exit(hostadpExit);
+-
+-//MODULE_DESCRIPTION("EcoNet Host Adaptor Driver");
+-//MODULE_LICENSE("Proprietary");
+-
