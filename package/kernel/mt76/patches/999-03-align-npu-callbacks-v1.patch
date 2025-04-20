@@ -1,0 +1,75 @@
+--- a/mt7996/mmio.c
++++ b/mt7996/mmio.c
+@@ -745,7 +745,7 @@ static void mt7996_rx_poll_complete(stru
+ #else
+ 		if(q == MT_RXQ_RRO_IND && !(IS_ERR(npu_glb)))
+ #endif	
+-			npu_glb->ops.hostdapt_enable_interrupt_ops(0);
++			npu_glb->ops.wlan_irq_enable(npu_glb, 0);
+ 	}else
+ 		mt7996_irq_enable(dev, MT_INT_RX(q));
+ #else
+--- a/npu.h
++++ b/npu.h
+@@ -203,61 +203,6 @@ struct airoha_eth {
+ 
+ extern struct airoha_eth *glb_eth;
+ 
+-#if 0
+-#define NPU_NUM_CORES		8
+-//#define MAX_CORE_NUM		8
+-#define NPU_INT_MAX_NUM         (6)
+-
+-
+-typedef struct npu_info {
+-	unsigned int info;
+-}npu_info_t;
+-struct airoha_npu {
+-	struct device *dev;
+-	struct regmap *regmap;
+-	void __iomem *Regbase;
+-	int irq[NPU_INT_MAX_NUM];
+-    int mbox2host_irq;
+-//#if defined(TCSUPPORT_NPU_V2)
+-    int wdog_irq[NPU_NUM_CORES];
+-//#endif
+-	struct airoha_npu_core {
+-		struct airoha_npu *npu;
+-		/* protect concurrent npu memory accesses */
+-		spinlock_t lock;
+-		struct work_struct wdt_work;
+-	} cores[NPU_NUM_CORES];
+-
+-	struct {
+-		int (*ppe_init)(struct airoha_npu *npu);
+-		int (*ppe_deinit)(struct airoha_npu *npu);
+-		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
+-					      dma_addr_t foe_addr,
+-					      int sram_num_entries);
+-		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
+-					    dma_addr_t foe_addr,
+-					    u32 entry_size, u32 hash,
+-					    bool ppe2);
+-		
+-		/*mailbox api called by wifi*/
+-		int (*WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
+-		int (*WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE)(unsigned int interfaceID, unsigned int PciePortType);
+-		int (*WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR)(unsigned int interfaceID, unsigned int dramBaNode_pa);
+-		int (*WIFI_MAIL_API_SET_WAIT_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		int (*WIFI_MAIL_API_SET_WAIT_DESC)(unsigned int interfaceID, unsigned int desc) ;
+-		int (*WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		int (*WIFI_MAIL_API_GET_WAIT_RXDESC_BASE)(unsigned int interfaceID, npu_info_t *pnpuInfo);
+-		int (*WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		int (*WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+-		void (*hostdapt_enable_interrupt_ops)(unsigned int ringIdx);
+-		void (*hostdapt_disable_interrupt_ops)(unsigned int ringIdx);
+-		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+-	} ops;
+-};
+-#endif
+-
+ extern struct airoha_npu *airoha_npu_get(struct device *dev);
+ //extern bool arht_wifi_npu_tx_active(void);
+ #endif

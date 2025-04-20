@@ -1,0 +1,210 @@
+From ab282bfa56606905a022a81fcea814e17e962c59 Mon Sep 17 00:00:00 2001
+Message-ID: <ab282bfa56606905a022a81fcea814e17e962c59.1745164496.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Sun, 20 Apr 2025 17:54:09 +0200
+Subject: [PATCH net-next] net: airoha: npu: Add wlan irq enable/disable
+ callbacks
+
+---
+ drivers/net/ethernet/airoha/airoha_npu.c | 20 ++++++++++++++++++++
+ drivers/net/ethernet/airoha/airoha_npu.h |  2 ++
+ 2 files changed, 22 insertions(+)
+
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -46,6 +46,12 @@
+ #define REG_CR_MBQ8_CTRL(_n)		(NPU_MBOX_BASE_ADDR + 0x0b0 + ((_n) << 2))
+ #define REG_CR_NPU_MIB(_n)		(NPU_MBOX_BASE_ADDR + 0x140 + ((_n) << 2))
+ 
++#define NPU_WLAN_BASE_ADDR		0x30d000
++
++#define REG_IRQ_STATUS			(NPU_WLAN_BASE_ADDR + 0x030)
++#define REG_IRQ_RXDONE(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 2) + 0x034)
++#define NPU_IRQ_RX_MASK(_n)		((_n) == 1 ? BIT(17) : BIT(16))
++
+ #define NPU_TIMER_BASE_ADDR		0x310100
+ #define REG_WDT_TIMER_CTRL(_n)		(NPU_TIMER_BASE_ADDR + ((_n) * 0x100))
+ #define WDT_EN_MASK			BIT(25)
+@@ -679,6 +685,31 @@ static int airoha_npu_wlan_init(struct a
+ 					0);
+ }
+ 
++static void airoha_npu_wlan_set_irq_mask(struct airoha_npu *npu, int q)
++{
++	/* FIXME */
++	regmap_set_bits(npu->regmap, REG_IRQ_STATUS, NPU_IRQ_RX_MASK(q));
++}
++
++static u32 airoha_npu_wlan_get_irq(struct airoha_npu *npu, int q)
++{
++	/* FIXME */
++	u32 val;
++
++	regmap_read(npu->regmap, REG_IRQ_STATUS, &val);
++	return val;
++}
++
++static void airoha_npu_wlan_irq_enable(struct airoha_npu *npu, int q)
++{
++	regmap_set_bits(npu->regmap, REG_IRQ_RXDONE(q), NPU_IRQ_RX_MASK(q));
++}
++
++static void airoha_npu_wlan_irq_disable(struct airoha_npu *npu, int q)
++{
++	regmap_clear_bits(npu->regmap, REG_IRQ_RXDONE(q), NPU_IRQ_RX_MASK(q));
++}
++
+ struct airoha_npu *airoha_npu_get(struct device *dev,
+ 				  dma_addr_t foe_stats_addr)
+ {
+@@ -800,11 +831,13 @@ static int airoha_npu_probe(struct platf
+ 		airoha_npu_wlan_set_rx_ring_for_txdone;
+ 	npu_glb->ops.wlan_get_npu_support_map =
+ 		airoha_npu_wlan_get_npu_support_map;
++	npu_glb->ops.wlan_set_irq_mask = airoha_npu_wlan_set_irq_mask;
++	npu_glb->ops.wlan_get_irq = airoha_npu_wlan_get_irq;
++	npu_glb->ops.wlan_irq_enable = airoha_npu_wlan_irq_enable;
++	npu_glb->ops.wlan_irq_disable = airoha_npu_wlan_irq_disable;
+ 
+ 	npu_glb->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+ 	npu_glb->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+-	npu_glb->ops.hostdapt_enable_interrupt_ops = hostdapt_enable_interrupt;
+-	npu_glb->ops.hostdapt_disable_interrupt_ops = hostdapt_disable_interrupt;
+ 	npu_glb->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -895,49 +895,35 @@ void (*tasklet_schedule_WIFI2G)(void);
+ void (*tasklet_schedule_WIFI5G)(void);
+ irqreturn_t rxdone0_isr(int irq, void *dev_id)
+ {
+-	unsigned long int status, tmp;
++	unsigned long int status;
+ 	//HOSTADPT_MSG(DBG_LOG, "rxdone0 interrput......\n"); 
+-	status = get_npu_hostadpt_reg(0x0030);
++	status = npu_glb->ops.wlan_get_irq(npu_glb, 0);
+ 	//printk("host apd 0 interrput status: %x\n",status);
+-	set_npu_hostadpt_reg(0x0030,0x00010000);
++	npu_glb->ops.wlan_set_irq_mask(npu_glb, 0);
+ 	//status = get_npu_hostadpt_reg(0x0030);
+ 	//printk("host apd 0 interrput status: %x\n",status);
+ 	if(tasklet_schedule_WIFI2G){
+ 		//printk("host apd 0 tasklet_schedule_WIFI2G: %x\n",tasklet_schedule_WIFI2G);
+ 		tasklet_schedule_WIFI2G();
+-	
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
+-		tmp &= ~(0x00010000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
++		npu_glb->ops.wlan_irq_disable(npu_glb, 0);
+ 	}	
+-	//if(temp_rx_data_done){
+-	//	printk("Hostadp : temp_rx_data_done %x \n", temp_rx_data_done);
+-	//	tasklet_hi_schedule(temp_rx_data_done);
+-	//}	
+     return IRQ_HANDLED;
+ }
+ EXPORT_SYMBOL(rxdone0_isr);
+ 
+ irqreturn_t rxdone1_isr(int irq, void *dev_id)
+ {
+-	unsigned long int tmp;
+ 	//status = get_npu_hostadpt_reg(0x0030);
+ 	//printk("Hostadp : rxdone1_isr interrput status: %x\n",status);
+-	set_npu_hostadpt_reg(0x0030,0x00020000);
++	npu_glb->ops.wlan_set_irq_mask(npu_glb, 1);
+ 	//status = get_npu_hostadpt_reg(0x0030);
+ 	//printk("host apd 1 interrput status: %x\n",status);
+ 	if(tasklet_schedule_WIFI5G){
+ 		//printk("Hostadp : rxdone1_isr tasklet_schedule_WIFI5G: %x\n",tasklet_schedule_WIFI5G);
+ 		tasklet_schedule_WIFI5G();
++		npu_glb->ops.wlan_irq_disable(npu_glb, 1);
+ 
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
+-		tmp &= ~(0x00020000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
+ 	}	
+-	//if(temp_rx_data_done5G){
+-	//	printk("Hostadp : temp_rx_data_done5G %x\n", temp_rx_data_done5G);
+-	//	tasklet_hi_schedule(temp_rx_data_done5G);
+-	//}	
+     return IRQ_HANDLED;
+ }
+ EXPORT_SYMBOL(rxdone1_isr);
+@@ -967,37 +953,6 @@ void hostadpt_free_interrupt(u32 irq_num
+ 	free_irq(npu_glb->irq[irq_num], NULL);
+ 	return ;
+ }
+-void hostdapt_enable_interrupt(unsigned int ringIdx)
+-{
+-	unsigned long int tmp;
+-
+-	//printk("hostdapt_enable_interrupt %d\n", ringIdx);
+-	if(ringIdx == 0){
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
+-		tmp |= (0x00010000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
+-	}else{
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
+-		tmp |= (0x00020000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
+-	}
+-}
+-void hostdapt_disable_interrupt(unsigned int ringIdx)
+-{
+-	unsigned long int tmp;
+-
+-	
+-	//printk("hostdapt_diable_interrupt %d\n", ringIdx);
+-	if(ringIdx == 0){
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK);
+-		tmp &= ~(0x00010000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,tmp);
+-	}else{
+-		tmp = get_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK);
+-		tmp &= ~(0x00020000);
+-		set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,tmp);
+-	}
+-}
+ 
+ void hostdapt_registe_wifitask(unsigned int ringIdx, void *func)
+ {
+@@ -1294,10 +1249,10 @@ int hostadpInit(void)
+ 	}
+ 	
+ 	hostadpt_regiter_interrupt(0, rxdone0_isr, "rxdone0");
+-	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE0_INT_MASK,0x00010000);
++	npu_glb->ops.wlan_irq_enable(npu_glb, 0);
+ 
+ 	hostadpt_regiter_interrupt(1, rxdone1_isr, "rxdone1");
+-	set_npu_hostadpt_reg(HOSTADPT_TXRXDONE1_INT_MASK,0x00020000);
++	npu_glb->ops.wlan_irq_enable(npu_glb, 1);
+ 
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ 	if(hostadpt_txdscp_init())
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -152,8 +152,6 @@ typedef union {
+ 
+ int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+-void hostdapt_enable_interrupt(unsigned int ringIdx);
+-void hostdapt_disable_interrupt(unsigned int ringIdx);
+ void hostdapt_registe_wifitask(unsigned int ringIdx, void *func);
+ int hostadpInit(void);
+ void hostadpExit(void);
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -79,8 +79,10 @@ struct airoha_npu {
+ 		int (*wlan_get_npu_support_map)(struct airoha_npu *npu, int interfaceID, u32 *npu_support_map);
+ 		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ 		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+-		void (*hostdapt_enable_interrupt_ops)(unsigned int ringIdx);
+-		void (*hostdapt_disable_interrupt_ops)(unsigned int ringIdx);
++		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
++		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);
++		void (*wlan_irq_enable)(struct airoha_npu *npu, int q);
++		void (*wlan_irq_disable)(struct airoha_npu *npu, int q);
+ 		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+ 	} ops;
+ };

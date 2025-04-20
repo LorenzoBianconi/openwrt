@@ -1,0 +1,498 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -74,12 +74,6 @@ HOSTADPT_DMA_DSCP_T *pHostadptRX_BASE[HO
+ u32 hostadpt_rx_dscp_max_num[HOSTADPT_RX_RING_NUM] = {HOSTADPT_RX0_DSCP_NUM, HOSTADPT_RX1_DSCP_NUM};
+ u32 hostadpt_rx_dma_idx[HOSTADPT_RX_RING_NUM] = {0};
+ u32 hostadpt_rx_cpu_idx[HOSTADPT_RX_RING_NUM] = {0};
+-unsigned long int *HOSTADPT_CNT_Base, *HOSTADPT_CNT_2GBase;
+-#ifdef TCSUPPORT_NPU_V2
+-#define HOSTADPT_COUNTER(addr,i)		(*((unsigned long int *)((unsigned long int)addr + (i << 3))))
+-#else 
+-#define HOSTADPT_COUNTER(addr,i)		(*((unsigned long int *)((unsigned long int)addr + (i << 2))))
+-#endif
+ 
+ extern struct airoha_eth *glb_eth;
+ extern struct airoha_npu *npu_glb;
+@@ -138,251 +132,6 @@ static DEFINE_SPINLOCK(hostadpt_lock_2G)
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ static DEFINE_SPINLOCK(hostadpt_lock_test);
+ #endif
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t hostadpt_dbg_counter(struct file *file, char __user *buf, size_t count, loff_t *data)
+-#else
+-static int hostadpt_dbg_counter(char *buf, char **start, off_t offset, int count, int *eof, void *data)
+-#endif
+-{
+-
+-	//printk("------NPU Hostadpt Counter (5G)----------\n");
+-	printk("------NPU Hostadpt Counter (6G)----------\n");
+-	printk("GET_NORMAL_SIZE_PKT:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,GET_NORMAL_PKT));
+-	printk("GET_BIGGER_PKT:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,GET_BIGGER_PKT));
+-	printk("BIGPKT_CHECK_PKT_LOSE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE));
+-	printk("BIGPKT_CHECK_PKT_LOSE1:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE1));
+-	printk("BIGPKT_CHECK_PKT_LOSE2:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE2));
+-	printk("BIGPKT_CHECK_PKT_LOSE3:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_LOSE3));
+-	printk("BIGPKT_CHECK_PKT_OVER_RETRY:\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_CHECK_PKT_OVER_RETRY));
+-	printk("BIGPKT_COMBINE_PKT_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_COMBINE_PKT_FAIL));
+-	printk("BIGPKT_COMBINE_PKT_DONE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,BIGPKT_COMBINE_PKT_DONE));
+-	printk("ALLOC_NEW_SKB_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,ALLOC_NEW_SKB_FAIL));
+-	printk("SEND_PKT_TO_DRIVER:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,SEND_PKT_TO_DRIVER));
+-	printk("TX_GET_PKT_FROM_TXRING:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,TX_GET_PKT_FROM_TXRING));
+-	printk("TX_Q_IS_FULL:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_Base,TX_Q_IS_FULL));
+-
+-	//printk("------NPU Hostadpt Counter (2.4G)----------\n");
+-	printk("------NPU Hostadpt Counter (2.4G/5G)----------\n");
+-	printk("GET_NORMAL_SIZE_PKT:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,GET_NORMAL_PKT));
+-	printk("GET_BIGGER_PKT:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,GET_BIGGER_PKT));
+-	printk("BIGPKT_CHECK_PKT_LOSE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE));
+-	printk("BIGPKT_CHECK_PKT_LOSE1:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE1));
+-	printk("BIGPKT_CHECK_PKT_LOSE2:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE2));
+-	printk("BIGPKT_CHECK_PKT_LOSE3:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_LOSE3));
+-	printk("BIGPKT_CHECK_PKT_OVER_RETRY:\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_CHECK_PKT_OVER_RETRY));
+-	printk("BIGPKT_COMBINE_PKT_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_COMBINE_PKT_FAIL));
+-	printk("BIGPKT_COMBINE_PKT_DONE:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,BIGPKT_COMBINE_PKT_DONE));
+-	printk("ALLOC_NEW_SKB_FAIL:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,ALLOC_NEW_SKB_FAIL));
+-	printk("SEND_PKT_TO_DRIVER:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,SEND_PKT_TO_DRIVER));
+-	printk("TX_GET_PKT_FROM_TXRING:\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,TX_GET_PKT_FROM_TXRING));
+-	printk("TX_Q_IS_FULL:\t\t\t%lu\n",HOSTADPT_COUNTER(HOSTADPT_CNT_2GBase,TX_Q_IS_FULL));
+-	return 0;
+-}
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t retry_times_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+-{
+-	char user_buf[32] = {0};
+-	size_t len = count, buf_length = 0;
+-	loff_t pos = *ppos;
+-	unsigned long ret = 0;
+-	ssize_t retval = 0;
+-	
+-	/* use memory size for data stream or use length of string buffer */
+-	buf_length = snprintf(user_buf, sizeof(user_buf), "%d\n", reTryTimes);
+-	
+-	/* valid check */
+-	if ( pos >= buf_length )
+-		return 0;
+-	if ( len >= buf_length )
+-		len = buf_length;
+-	if ( pos + len > buf_length )
+-		len = buf_length - pos;
+-	
+-	/* ret contains the amount of chars wasn't successfully written to buf */
+-	ret = copy_to_user(buf, user_buf + pos, len);
+-	
+-	*ppos += len;
+-	retval = len - ret;
+-
+-	return retval;
+-}
+-#else
+-static int retry_times_proc_read(char *buf, char **start, off_t offset, int count, int *eof, void *data)
+-{
+-	int len = 0;
+-
+-	len += sprintf(buf +len, "%d\n", reTryTimes);
+-	if(len > PAGE_SIZE)
+-	{
+-		return -ENOBUFS;
+-	}
+-	return len;
+-}
+-#endif
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t retry_times_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *data)
+-#else
+-static int retry_times_proc_write(struct file *file, const char *buffer, unsigned long count, void *data)
+-#endif
+-{
+-	char buf[16];
+-	unsigned long int len = count;
+-	unsigned short int n;
+-
+-	//printk();
+-	if(len >= sizeof(buf))
+-	{
+-		len = sizeof(buf) - 1;
+-	}
+-	
+-	if(copy_from_user(buf, buffer, len))
+-	{
+-		return -EFAULT;
+-	}
+-	buf[len] = '\n';
+-
+-	n = simple_strtol(buf, NULL, 10);
+-	if(n > 0)
+-	{
+-		reTryTimes = n;
+-		printk("[HOSTADPT]retry times is %d\n", reTryTimes);
+-	}
+-	else
+-		printk("retry times should be greater than 0\n");
+-	
+-	return len;
+-}
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t hostapt_dbg_flag_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+-{
+-	char user_buf[32] = {0};
+-	size_t len = count, buf_length = 0;
+-	loff_t pos = *ppos;
+-	unsigned long ret = 0;
+-	ssize_t retval = 0;
+-	
+-	/* use memory size for data stream or use length of string buffer */
+-	buf_length = snprintf(user_buf, sizeof(user_buf), "%d\n", hostaptDebug);
+-	
+-	/* valid check */
+-	if ( pos >= buf_length )
+-		return 0;
+-	if ( len >= buf_length )
+-		len = buf_length;
+-	if ( pos + len > buf_length )
+-		len = buf_length - pos;
+-	
+-	/* ret contains the amount of chars wasn't successfully written to buf */
+-	ret = copy_to_user(buf, user_buf + pos, len);
+-	
+-	*ppos += len;
+-	retval = len - ret;
+-
+-	return retval;
+-}
+-#else
+-static int hostapt_dbg_flag_proc_read(char *buf, char **start, off_t offset, int count, int *eof, void *data)
+-{
+-	int len = 0;
+-
+-	len += sprintf(buf +len, "%d\n", hostaptDebug);
+-	if(len > PAGE_SIZE)
+-	{
+-		return -ENOBUFS;
+-	}
+-	return len;
+-}
+-#endif
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static ssize_t hostapt_dbg_flag_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *data)
+-#else
+-static int hostapt_dbg_flag_proc_write(struct file *file, const char *buffer, unsigned long count, void *data)
+-#endif
+-{
+-	char buf[16];
+-	unsigned long int len = count;
+-	unsigned short int n;
+-
+-	//printk();
+-	if(len >= sizeof(buf))
+-	{
+-		len = sizeof(buf) - 1;
+-	}
+-	
+-	if(copy_from_user(buf, buffer, len))
+-	{
+-		return -EFAULT;
+-	}
+-	buf[len] = '\n';
+-
+-	n = simple_strtol(buf, NULL, 10);
+-	if(n > 0)
+-	{
+-		if(n >= DBG_MAX)
+-			n = DBG_MAX - 1;
+-		
+-		hostaptDebug = n;	
+-		printk("[HOSTADPT]hostaptDebug is %d\n", hostaptDebug);
+-	}
+-	else
+-		printk("hostaptDebug should be greater than 0\n");
+-	
+-	return len;
+-}
+-
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-static const struct proc_ops hostadpt_dbg_counter_proc_ops =
+-{
+-	.proc_read	= hostadpt_dbg_counter,
+-};
+-
+-static const struct proc_ops retry_times_proc_ops =
+-{
+-	.proc_read	= retry_times_proc_read,
+-	.proc_write	= retry_times_proc_write,		
+-};
+-
+-static const struct proc_ops hostapt_dbg_flag_proc_ops =
+-{
+-	.proc_read	= hostapt_dbg_flag_proc_read,
+-	.proc_write	= hostapt_dbg_flag_proc_write,		
+-};
+-
+-#endif
+-
+-void HOST_PKT_COUNTER(unsigned long int offset, unsigned char ring_idx)
+-{
+-	unsigned long int *COUNTER_ADDR = NULL;
+-	if(offset >= HADPT_CNT_BOTTOM)
+-	{
+-		return;
+-	}
+-	if(ring_idx)
+-	{
+-#ifdef TCSUPPORT_NPU_V2
+-		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_Base + (offset << 3));
+-#else 
+-		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_Base + (offset << 2));
+-#endif
+-	}
+-	else
+-	{
+-#ifdef TCSUPPORT_NPU_V2
+-		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_2GBase + (offset << 3));
+-#else 
+-		COUNTER_ADDR = (unsigned long int *)((unsigned long int)HOSTADPT_CNT_2GBase + (offset << 2));
+-#endif
+-	}
+-	//if(*COUNTER_ADDR == 0xffffffff) (*COUNTER_ADDR) = 0;
+-	//else
+-	(*COUNTER_ADDR) += 1;
+-	return;
+-
+-}
+ 
+ static int hostadpt_rxdscp_init(void)
+ {
+@@ -404,19 +153,6 @@ static int hostadpt_rxdscp_init(void)
+ 		HOSTADPT_MSG(DBG_ERR, "Get device failed.\n") ; 
+ 		return -ENOMEM ;
+ 	}
+-	//alloc for dbg counter
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-	HOSTADPT_CNT_Base = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (long long unsigned int *)&hostadpt_cnt_pa, GFP_KERNEL);
+-	memset(HOSTADPT_CNT_Base, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
+-	HOSTADPT_CNT_2GBase = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (long long unsigned int *)&hostadpt_cnt_pa2, GFP_KERNEL);
+-	memset(HOSTADPT_CNT_2GBase, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
+-#else
+-	HOSTADPT_CNT_Base = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (unsigned int *)&hostadpt_cnt_pa, GFP_KERNEL);
+-	memset(HOSTADPT_CNT_Base, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
+-	HOSTADPT_CNT_2GBase = dma_alloc_coherent(dev, sizeof(unsigned long int) * HADPT_CNT_BOTTOM, (unsigned int *)&hostadpt_cnt_pa2, GFP_KERNEL);
+-	memset(HOSTADPT_CNT_2GBase, 0x0, (HADPT_CNT_BOTTOM*sizeof(unsigned long int)));
+-#endif
+-	//printk("%d alloc size:%d*%d ", __LINE__, sizeof(HOSTADPT_DMA_DSCP_T), HOSTADPT_RX_TOTAL_DSCP_NUM);
+ 
+ #ifdef TCSUPPORT_NPU_V2
+ #if defined(TCSUPPORT_CPU_ARMV8_64)
+@@ -478,56 +214,6 @@ static int hostadpt_rxdscp_init(void)
+ 	set_npu_hostadpt_reg(HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
+ 	set_npu_hostadpt_reg(HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
+ 
+-#if 0
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-	// create a proc for show debug counter
+-	dbg_entry = proc_create("tc3162/hostadpt_dbg_counter", 0666, NULL, &hostadpt_dbg_counter_proc_ops);
+-
+-	// create a proc for setting retry times
+-	entry = proc_create("tc3162/hostadpt_set_retry_times", 0666, NULL, &retry_times_proc_ops);
+-	reTryTimes = 3;
+-
+-	// create a proc for setting retry times
+-	entry_debug = proc_create("tc3162/hostadpt_set_dbg_flag", 0666, NULL, &hostapt_dbg_flag_proc_ops);
+-#else
+-	// create a proc for show debug counter
+-	dbg_entry = create_proc_entry("tc3162/hostadpt_dbg_counter", 0666, NULL);
+-	if(dbg_entry == NULL)
+-	{
+-		printk(KERN_WARNING"proc: unable to create proc(hostadpt_dbg_counter) entry\n");
+-
+-	}
+-	else
+-	{
+-		dbg_entry->read_proc = hostadpt_dbg_counter;
+-	}
+-
+-	// create a proc for setting retry times
+-	entry = create_proc_entry("tc3162/hostadpt_set_retry_times", 0666, NULL);
+-	if(entry == NULL)
+-	{
+-		printk(KERN_WARNING"proc: unable to create proc entry\n");
+-	}
+-	else
+-	{
+-		entry->read_proc = retry_times_proc_read;
+-		entry->write_proc = retry_times_proc_write;
+-		reTryTimes = 3;
+-	}
+-
+-	// create a proc for setting retry times
+-	entry_debug = create_proc_entry("tc3162/hostadpt_set_dbg_flag", 0666, NULL);
+-	if(entry_debug == NULL)
+-	{
+-		printk(KERN_WARNING"proc: unable to create proc entry\n");
+-	}
+-	else
+-	{
+-		entry_debug->read_proc = hostapt_dbg_flag_proc_read;
+-		entry_debug->write_proc = hostapt_dbg_flag_proc_write;
+-	}
+-#endif
+-#endif
+ 	return 0;
+ 
+ }
+@@ -597,9 +283,7 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 	if(1)
+ 	{
+ 		if(pHostadptRX->pkt_ctrl.len != pHostadptRX->pkt_ctrl.cur_len)
+-		{
+-			HOST_PKT_COUNTER(GET_BIGGER_PKT, ring_idx);
+-			
++		{			
+ 			cpu_idx_tmp = hostadpt_rx_cpu_idx[ring_idx];
+ 			pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
+ 			scatter_pkt_len = pHostadptRX->pkt_ctrl.len;
+@@ -642,7 +326,6 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d cur_len:%d scatter_pkt_len:%d\n\n",
+ 							//	scatter_cnt, pkt_cnt, pkt_idx, cur_len, scatter_pkt_len);
+ 							checkfail = 1;
+-							HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE1, ring_idx);
+ 							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE1\n");
+ 							goto error;
+ 						}
+@@ -660,7 +343,6 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 							//	cpu_idx_tmp, hostadpt_rx_cpu_idx[ring_idx], pkt_cnt_dbg, is_last);
+ 							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d scatter_pkt_len:%d single_total_len:%d\n\n",
+ 							//	scatter_cnt, pkt_cnt, pkt_idx, scatter_pkt_len, single_total_len);
+-							HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE2, ring_idx);
+ 							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE2\n");
+ 							goto error;
+ 						}
+@@ -676,7 +358,6 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 											HOSTADPT_MSG(DBG_CATTER, "hostapterror check:temptotallen=%d,scatter_pkt_len=%d,pkt_cnt=%d,scatter_cnt=%d,len=%d,cur_len=%d!\n",all_total_len,scatter_pkt_len,pkt_cnt,scatter_cnt,scatter_pkt_len,single_total_len);
+ 									}
+ 									HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE3\n");
+-									HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE3, ring_idx);
+ 									goto error;
+ 							}
+ 							break;
+@@ -696,11 +377,6 @@ error:
+ 					HOSTADPT_MSG(DBG_CATTER, " get all scatter packets fail,checkfail=%d,current try_times=%d\n",checkfail,try_times);
+ 					allPkt_done = 0;
+ 					try_times = 0;
+-					if(checkfail)
+-						HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_LOSE, ring_idx);
+-					else
+-						HOST_PKT_COUNTER(BIGPKT_CHECK_PKT_OVER_RETRY, ring_idx);
+-					//scatter_cnt = 0;
+ 					break;
+ 				}
+ 				
+@@ -746,7 +422,6 @@ error:
+ 						}
+ 						else
+ 						{
+-							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_FAIL, ring_idx);
+ 							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL\n",pkt_idx, pkt_cnt,scatter_cnt);
+ 						}
+ 						//isLastPkt = 0;
+@@ -769,12 +444,10 @@ error:
+ 							}
+ 							
+ 							skb = skb_all;
+-							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_DONE, ring_idx);
+ 							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt]scatter handle end\n");
+ 						}
+ 						else
+ 						{
+-							HOST_PKT_COUNTER(BIGPKT_COMBINE_PKT_FAIL, ring_idx);
+ 							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL,is_last=%d\n",pkt_idx, pkt_cnt,scatter_cnt,pHostadptRX->pkt_ctrl.is_last);
+ 							skb = NULL;
+ 						}
+@@ -794,7 +467,6 @@ error:
+ 		}
+ 		else
+ 		{
+-			HOST_PKT_COUNTER(GET_NORMAL_PKT, ring_idx);
+ 			skb = (struct sk_buff *)pHostadptRX->skb_p;
+ 	                skb_put(skb,pHostadptRX->pkt_ctrl.len);
+ #if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+@@ -804,7 +476,6 @@ error:
+ #endif
+ 			if(skb_new == NULL)
+ 			{
+-					HOST_PKT_COUNTER(ALLOC_NEW_SKB_FAIL, ring_idx);
+ 				HOSTADPT_MSG(DBG_ERR, "alloc new skb failed!\n");
+ 				skb_new = skb;
+ 				skb = NULL;
+@@ -858,35 +529,6 @@ error:
+ 		skb_reset_mac_header(skb);
+ 		npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
+ 	}
+-		
+-#if 0
+-	if(skb != NULL){
+-		//skb_put(skb, pHostadptRX->pkt_ctrl.len);
+-		//*preschedule = pHostadptRX->pkt_ctrl.reschedule;
+-		if (likely(ra_sw_nat_hook_rxinfo))
+-		{
+-#ifdef TCSUPPORT_SOFT_RATELIMIT		
+-			if(pHostadptRX->vend_specific==1){//for softratelimit of mt7916
+-				return skb;
+-			}
+-			else
+-			{
+-#endif			
+-			pHostadptRX->pkt_info.src_port = 1;
+-#if (defined(TCSUPPORT_CPU_EN7581) || defined(TCSUPPORT_CPU_EN7551)) && (defined(TCSUPPORT_WLAN_MT7990) || defined(TCSUPPORT_WLAN_MT7992) || defined(TCSUPPORT_WLAN_MT7993))
+-            //#define SKB_FROM_WIFI_BIT (1<<15), defined in skb
+-            skb->mark2 |= SKB_FROM_WIFI_BIT; // Bit will be checked in hw_nat, if this bit was set, packet from wlan to lan/wan will send to QDMA fast path.
+-#endif
+-			ra_sw_nat_hook_rxinfo(skb, FOE_MAGIC_GE, (char*)&pHostadptRX->pkt_info, 4);
+-#ifdef TCSUPPORT_SOFT_RATELIMIT			
+-			}
+-#endif			
+-		}			
+-		HOST_PKT_COUNTER(SEND_PKT_TO_DRIVER, ring_idx);
+-	}else{
+-		*preschedule = 0;
+-	}
+-#endif	
+ 	return skb;
+ }
+ 
+@@ -1081,7 +723,6 @@ int hostadpt_tx_handler(unsigned char ba
+ 		if(pHostadptTX0->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[0],
+ 			cpuIdx0, HOSTADPT_TX0_DSCP_NUM))
+ 		{
+-			HOST_PKT_COUNTER(TX_GET_PKT_FROM_TXRING, 0);
+ 			enque_to_hostapdt_tx(dev,pHostadptTX0, skb, vnd, vnd_len);
+ 			hostadpt_tx_skbin_cnt[0]++;
+ 
+@@ -1092,8 +733,6 @@ int hostadpt_tx_handler(unsigned char ba
+ 		}
+ 		else
+ 		{
+-			HOST_PKT_COUNTER(TX_Q_IS_FULL, 0);
+-			//printk("%s L%d dmaIdx0=%d,cpuIdx0=%d \n",__func__, __LINE__, hostadpt_tx_dma_idx[0], cpuIdx0);
+ 			dev_kfree_skb_any(skb);
+ 			ret = -1;
+ 		}
+@@ -1128,7 +767,6 @@ int hostadpt_tx_handler(unsigned char ba
+ 		if(pHostadptTX1->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[1],
+ 			cpuIdx1, HOSTADPT_TX1_DSCP_NUM))
+ 		{
+-			HOST_PKT_COUNTER(TX_GET_PKT_FROM_TXRING, 1);
+ 			enque_to_hostapdt_tx(dev,pHostadptTX1, skb, vnd, vnd_len);
+ 			hostadpt_tx_skbin_cnt[1]++;
+ 
+@@ -1139,8 +777,6 @@ int hostadpt_tx_handler(unsigned char ba
+ 		}
+ 		else 
+ 		{
+-			HOST_PKT_COUNTER(TX_Q_IS_FULL, 1);
+-			//printk("%s L%d dmaIdx1=%d,cpuIdx1=%d \n",__func__,__LINE__,hostadpt_tx_dma_idx[1],cpuIdx1);
+ 			dev_kfree_skb_any(skb);
+ 			ret = -1;
+ 		}
