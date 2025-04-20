@@ -1,0 +1,153 @@
+--- a/drivers/net/ethernet/airoha/npu_rv32.c
++++ b/drivers/net/ethernet/airoha/npu_rv32.c
+@@ -106,126 +106,6 @@ int get_npu_irq(int index)
+ }
+ EXPORT_SYMBOL(get_npu_irq);
+ 
+-int host_notify_npuMbox(npuMboxInfo_t *mboxInfo)
+-{
+-    int reg_shift;
+-    mboxArg_t arg;
+-    int res=0;
+-    int timeoutCnt=300; /* default 30ms */
+-    unsigned long flag;
+-#if 1 //mail box DBG
+-#define NPU_SAVE_LOG_TIME 256
+-    unsigned int npu_pc_log[NPU_SAVE_LOG_TIME];
+-    int i;
+-#endif
+-
+-    if ((mboxInfo->core_id>=MAX_CORE_NUM) || (mboxInfo->func_id>=MAX_MBOX_FUNC)) {
+-        printk("Error: (core_id:%d >= %d) || (func_id:%d >= %d)\n", 
+-                mboxInfo->core_id, MAX_CORE_NUM, mboxInfo->func_id, MAX_MBOX_FUNC);
+-        return 0;
+-    }
+-
+-    arg.hWord=0;
+-
+-    if ((mboxInfo->flags.isStaticBuffInit)||(mboxInfo->flags.isStaticBuffDel)) {
+-        arg.bits.static_buff=1;
+-    }
+-
+-    if (mboxInfo->flags.isBlockingMode) {
+-        if (mboxInfo->blockTimeout)
+-            timeoutCnt = mboxInfo->blockTimeout;
+-        arg.bits.block_mode=1;
+-    }
+-
+-    spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-	
+-    host_register_mbox_cb(mboxInfo->core_id, mboxInfo->func_id, mboxInfo->cb);
+-
+-    arg.bits.func_id= (mboxInfo->func_id&MASK_FUNC_ID);
+-    reg_shift = (mboxInfo->core_id<<4);
+-    if (((mboxInfo->virtAddr)&&(mboxInfo->physAddr)&&(mboxInfo->len)) ||
+-        (mboxInfo->flags.isStaticBuffDel)) {
+-        mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id] = mboxInfo->virtAddr;
+-        mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id] = mboxInfo->physAddr;
+-        mboxObj[mboxInfo->core_id].size[mboxInfo->func_id] = mboxInfo->len;
+-    }
+-    else {
+-        if (mboxObj[mboxInfo->core_id].virtAddr[mboxInfo->func_id]==0) {
+-            printk("Error(%s): no default (virtAddr,physAddr,len), please assign them!\n", __func__);
+-            spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-			return 0;
+-        }
+-    }
+-
+-    //spin_lock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
+-    //spin_lock_irqsave(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-
+-    #ifdef MBOX_DBG_ON
+-    printk("%s: core_id:%d, func_id:%d, arg:0x%x, timeoutCnt:%d\n", 
+-            __func__, mboxInfo->core_id, mboxInfo->func_id, arg.hWord, timeoutCnt);
+-    #endif
+-    set_npu_reg_data(CR_MBQ0_CTRL0+reg_shift, mboxObj[mboxInfo->core_id].physAddr[mboxInfo->func_id]);
+-    set_npu_reg_data(CR_MBQ0_CTRL1+reg_shift, mboxObj[mboxInfo->core_id].size[mboxInfo->func_id]);
+-    set_npu_reg_data(CR_MBQ0_CTRL3+reg_shift, arg.hWord);
+-    set_npu_reg_data(CR_MBQ0_CTRL2+reg_shift, get_npu_reg_data(CR_MBQ0_CTRL2+reg_shift)+1);
+-
+-#if 1 //mail box DBG
+-    for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
+-        npu_pc_log[i] = 0;
+-    }
+-    i = 0;
+-#endif
+-    while (1) 
+-    {
+-        arg.hWord = get_npu_reg_data(CR_MBQ0_CTRL3+reg_shift);
+-        if (arg.bits.done_bit==1) {
+-            res = (arg.bits.ret_status&MASK_RET_STATUS);
+-            break;
+-        }
+-        
+-        #if 1 //mail box DBG
+-        if((timeoutCnt & 0x3) == 0)
+-        {
+-            if(i < NPU_SAVE_LOG_TIME) {
+-                npu_pc_log[i] = get_npu_reg_data(CR_PC_BASE_ADDR);
+-                i++;
+-            }
+-
+-        }
+-        #endif
+-
+-        timeoutCnt--;
+-        if (timeoutCnt>=0){
+-            if((CORE5 == mboxInfo->core_id) && (MFUNC_DBA == mboxInfo->func_id)){
+-                udelay(40);
+-            }else{
+-                udelay(100);
+-            }
+-		}
+-        else {
+-            #if 1 //mail box DBG
+-            printk("dump NPU pc\n");
+-            for (i = 0; i < NPU_SAVE_LOG_TIME; i++) {
+-                printk("0x%x ", npu_pc_log[i]);
+-                if((i & 0x3) == 0x3)
+-                    printk("\n");
+-            }
+-            #endif
+-            printk("Error: %s timeout for core_id:%d, func_id:%d\n", __func__, mboxInfo->core_id, mboxInfo->func_id);
+-            break;
+-        }
+-    }
+-    #ifdef MBOX_DBG_ON
+-    printk("%s exit (res:%d, timeoutCnt:%d)\n", __func__, res, timeoutCnt);
+-    #endif
+-
+-    //spin_unlock_bh(&mboxObj[mboxInfo->core_id].npuMboxLock);
+-    spin_unlock_irqrestore(&mboxObj[mboxInfo->core_id].npuMboxLock,flag);
+-    
+-    return res;
+-}
+-EXPORT_SYMBOL(host_notify_npuMbox);
+-
+ void mbox_tasklet_handler(unsigned long data)
+ {
+     unsigned short core_id = get_npu_reg_data(CR_MBQ8_CTRL0)&MASK_CORE_ID;
+--- a/drivers/net/ethernet/airoha/npu_rv32.h
++++ b/drivers/net/ethernet/airoha/npu_rv32.h
+@@ -79,7 +79,6 @@ void set_npu_reg_data(u32 reg, u32 val);
+ u32 get_npu_hostadpt_reg(int hadap_ofs);
+ u32 set_npu_hostadpt_reg(int hadap_ofs,int val);
+ int get_npu_irq(int index);
+-int host_notify_npuMbox(npuMboxInfo_t *mboxInfo);
+ void mbox_tasklet_handler(unsigned long data);
+ irqreturn_t npuMbox2host_isr(int irq, void *dev_id);
+ typedef struct npuMboxObj
+--- a/include/linux/soc/airoha/wifi_mail.h
++++ b/include/linux/soc/airoha/wifi_mail.h
+@@ -81,7 +81,10 @@ ECONET SOFTWARE.
+ #endif
+ 
+ extern struct device* get_ecnt_npu_dev(void);
+-extern int host_notify_npuMbox(npuMboxInfo_t *mboxInfo);
++static int host_notify_npuMbox(npuMboxInfo_t *mboxInfo)
++{
++	return 0;
++}
+ 
+ /************************************************************************
+ *                  D E F I N E S   &   C O N S T A N T S

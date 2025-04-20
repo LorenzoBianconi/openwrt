@@ -1,0 +1,253 @@
+From 436917907202e70a553f5745259d7f1bb5353ff5 Mon Sep 17 00:00:00 2001
+Message-ID: <436917907202e70a553f5745259d7f1bb5353ff5.1745098403.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Sat, 19 Apr 2025 23:32:51 +0200
+Subject: [PATCH net-next] net: airoha: npu: Add more Npu wlan callbacks
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_npu.c | 155 +++++++++++++++++++++++
+ drivers/net/ethernet/airoha/airoha_npu.h |  24 ++++
+ 2 files changed, 179 insertions(+)
+
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -165,6 +165,19 @@ enum {
+ 	WLAN_FUNC_SET_WAIT_DEBUG_ARRAY_ADDR,
+ };
+ 
++enum {
++	WLAN_FUNC_GET_WAIT_NPU_INFO,
++	WLAN_FUNC_GET_WAIT_LAST_RATE,
++	WLAN_FUNC_GET_WAIT_COUNTER,
++	WLAN_FUNC_GET_WAIT_DBG_COUNTER,
++	WLAN_FUNC_GET_WAIT_RXDESC_BASE,
++	WLAN_FUNC_GET_WAIT_WCID_DBG_COUNTER,
++	WLAN_FUNC_GET_WAIT_DMA_ADDR,
++	WLAN_FUNC_GET_WAIT_RING_SIZE,
++	WLAN_FUNC_GET_WAIT_NPU_SUPPORT_MAP,
++	WLAN_FUNC_GET_WAIT_MDC_LOCK_ADDRESS,
++};
++
+ #define WLAN_MAX_SSID	8
+ #define WLAN_MAX_ENTRY	128
+ 
+@@ -175,6 +188,12 @@ struct wlan_mbox_data {
+ 	union {
+ 		u32 data;
+ 		struct {
++			u32 dir;
++			u32 in_counter_addr;
++			u32 out_status_addr;
++			u32 out_counter_addr;
++		} txrx_addr;
++		struct {
+ 			u32 tx_pkts;
+ 			u64 rx_pkts_2g[WLAN_MAX_SSID];
+ 			u64 rx_pkts_5g[WLAN_MAX_SSID];
+@@ -476,6 +495,30 @@ static int airoha_npu_wlan_send_msg(stru
+ 	return err;
+ }
+ 
++static int airoha_npu_wlan_get_msg(struct airoha_npu *npu, int index,
++				   int func_id, u32 *data)
++{
++	struct wlan_mbox_data *wlan_data;
++	int err;
++
++	wlan_data = kzalloc(sizeof(*wlan_data), GFP_KERNEL);
++	if (!wlan_data)
++		return -ENOMEM;
++
++	wlan_data->ifindex = index;
++	wlan_data->func_type = NPU_OP_GET;
++	wlan_data->func_id = func_id;
++
++	err = airoha_npu_send_msg(npu, NPU_FUNC_WIFI, wlan_data,
++				  sizeof(*wlan_data));
++	if (!err)
++		*data = wlan_data->data;
++
++	kfree(wlan_data);
++
++	return err;
++}
++
+ static struct reserved_mem *
+ airoha_npu_get_reserved_memory(struct airoha_npu *npu, const char *name)
+ {
+@@ -512,6 +555,102 @@ static int airoha_npu_wlan_set_reserved_
+ 	return airoha_npu_wlan_send_msg(npu, index, func_id, rmem->base);
+ }
+ 
++static int airoha_npu_wlan_set_txrx_reg_addr(struct airoha_npu *npu,
++					     int index, u32 dir,
++					     u32 in_counter_addr,
++					     u32 out_status_addr,
++					     u32 out_counter_addr)
++{
++	struct wlan_mbox_data *wlan_data;
++	int err;
++
++	wlan_data = kzalloc(sizeof(*wlan_data), GFP_KERNEL);
++	if (!wlan_data)
++		return -ENOMEM;
++
++	wlan_data->ifindex = index;
++	wlan_data->func_type = NPU_OP_SET;
++	wlan_data->func_id = WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR;
++	wlan_data->txrx_addr.dir = dir;
++	wlan_data->txrx_addr.in_counter_addr = in_counter_addr;
++	wlan_data->txrx_addr.out_status_addr = out_status_addr;
++	wlan_data->txrx_addr.out_counter_addr = out_counter_addr;
++
++	err = airoha_npu_send_msg(npu, NPU_FUNC_WIFI, wlan_data,
++				  sizeof(*wlan_data));
++	kfree(wlan_data);
++
++	return err;
++}
++
++static int airoha_npu_wlan_set_pcie_port_type(struct airoha_npu *npu,
++					      int index, u32 port_type)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++					WLAN_FUNC_SET_WAIT_PCIE_PORT_TYPE,
++					port_type);
++}
++
++static int airoha_npu_wlan_set_dram_ba_node_addr(struct airoha_npu *npu,
++						 int index, u32 addr)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++					WLAN_FUNC_SET_WAIT_DRAM_BA_NODE_ADDR,
++					addr);
++}
++
++static int airoha_npu_wlan_set_pcie_addr(struct airoha_npu *npu,
++					 int index, u32 addr)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++					WLAN_FUNC_SET_WAIT_PCIE_ADDR, addr);
++}
++
++static int airoha_npu_wlan_set_desc(struct airoha_npu *npu, int index,
++				    u32 desc)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++					WLAN_FUNC_SET_WAIT_DESC, desc);
++}
++
++static int airoha_npu_wlan_set_tx_ring_pcie_addr(struct airoha_npu *npu,
++						 int index, u32 addr)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++					WLAN_FUNC_SET_WAIT_TX_RING_PCIE_ADDR,
++					addr);
++}
++
++static int airoha_npu_wlan_get_rx_desc_base(struct airoha_npu *npu, int index,
++					    u32 *data)
++
++{
++	return airoha_npu_wlan_get_msg(npu, index,
++				       WLAN_FUNC_GET_WAIT_RXDESC_BASE, data);
++}
++
++static int airoha_npu_wlan_set_tx_buf_space_base(struct airoha_npu *npu,
++						 int index, u32 addr)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++			WLAN_FUNC_SET_WAIT_TX_BUF_SPACE_HW_BASE, addr);
++}
++
++static int airoha_npu_wlan_set_rx_ring_for_txdone(struct airoha_npu *npu,
++						  int index, u32 addr)
++{
++	return airoha_npu_wlan_send_msg(npu, index,
++			WLAN_FUNC_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE, addr);
++}
++
++static int airoha_npu_wlan_get_npu_support_map(struct airoha_npu *npu,
++					       int index, u32 *map)
++{
++	return airoha_npu_wlan_get_msg(npu, index,
++				       WLAN_FUNC_GET_WAIT_NPU_SUPPORT_MAP,
++				       map);
++}
++
+ static int airoha_npu_wlan_init(struct airoha_npu *npu)
+ {
+ 	int err;
+@@ -649,16 +788,23 @@ static int airoha_npu_probe(struct platf
+ 	npu_glb->ops.ppe_deinit = airoha_npu_ppe_deinit;
+ 	npu_glb->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
+ 	npu_glb->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
+-	npu_glb->ops.wifi_set_txrx_reg_addr = WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR;
+-	npu_glb->ops.wifi_set_pcie_port_type = WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE;
+-	npu_glb->ops.wifi_set_dram_ba_node_addr = WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR;
+-	npu_glb->ops.wifi_set_pcie_addr = WIFI_MAIL_API_SET_WAIT_PCIE_ADDR;
+-	npu_glb->ops.wifi_set_desc = WIFI_MAIL_API_SET_WAIT_DESC;
+-	npu_glb->ops.wifi_set_tx_ring_pcie_addr = WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR;
+-	npu_glb->ops.wifi_get_rxdesc_base = WIFI_MAIL_API_GET_WAIT_RXDESC_BASE;
+-	npu_glb->ops.wifi_set_tx_buf_space_base = WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE;
+-	npu_glb->ops.wifi_set_rx_ring_for_txdone_hw_base = WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE;
+-	npu_glb->ops.wifi_get_npu_support_map = WIFI_MAIL_API_GET_WAIT_NPU_SUPPORT_MAP;
++	/* wlan */
++	npu_glb->ops.wlan_set_txrx_reg_addr = airoha_npu_wlan_set_txrx_reg_addr;
++	npu_glb->ops.wlan_set_pcie_port_type = airoha_npu_wlan_set_pcie_port_type;
++	npu_glb->ops.wlan_set_dram_ba_node_addr =
++		airoha_npu_wlan_set_dram_ba_node_addr;
++	npu_glb->ops.wlan_set_pcie_addr = airoha_npu_wlan_set_pcie_addr;
++	npu_glb->ops.wlan_set_desc = airoha_npu_wlan_set_desc;
++	npu_glb->ops.wlan_set_tx_ring_pcie_addr =
++		airoha_npu_wlan_set_tx_ring_pcie_addr;
++	npu_glb->ops.wlan_get_rx_desc_base = airoha_npu_wlan_get_rx_desc_base;
++	npu_glb->ops.wlan_set_tx_buf_space_base =
++		airoha_npu_wlan_set_tx_buf_space_base;
++	npu_glb->ops.wlan_set_rx_ring_for_txdone =
++		airoha_npu_wlan_set_rx_ring_for_txdone;
++	npu_glb->ops.wlan_get_npu_support_map =
++		airoha_npu_wlan_get_npu_support_map;
++
+ 	npu_glb->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+ 	npu_glb->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+ 	npu_glb->ops.hostdapt_enable_interrupt_ops = hostdapt_enable_interrupt;
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ b/include/linux/soc/airoha/airoha_npu_g.h
+@@ -70,25 +70,16 @@ struct airoha_npu {
+ 					    bool ppe2);
+ 		
+ 		/*mailbox api called by wifi*/
+-		//int (*WIFI_MAIL_API_SET_WAIT_INODE_TXRX_REG_ADDR)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
+-		int (*wifi_set_txrx_reg_addr)(unsigned int interfaceID, unsigned int dir, unsigned int inCounterAddress,unsigned int outStatusAddress,unsigned int outCounterAddress);
+-		//int (*WIFI_MAIL_API_SET_WAIT_PCIE_PORT_TYPE)(unsigned int interfaceID, unsigned int PciePortType);
+-		int (*wifi_set_pcie_port_type)(unsigned int interfaceID, unsigned int PciePortType);
+-		//int (*WIFI_MAIL_API_SET_WAIT_DRAM_BA_NODE_ADDR)(unsigned int interfaceID, unsigned int dramBaNode_pa);
+-		int (*wifi_set_dram_ba_node_addr)(unsigned int interfaceID, unsigned int dramBaNode_pa);
+-		//int (*WIFI_MAIL_API_SET_WAIT_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		int (*wifi_set_pcie_addr)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		//int (*WIFI_MAIL_API_SET_WAIT_DESC)(unsigned int interfaceID, unsigned int desc) ;
+-		int (*wifi_set_desc)(unsigned int interfaceID, unsigned int desc) ;
+-		//int (*WIFI_MAIL_API_SET_WAIT_TX_RING_PCIE_ADDR)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		int (*wifi_set_tx_ring_pcie_addr)(unsigned int interfaceID, unsigned int PCIEAddr) ;
+-		//int (*WIFI_MAIL_API_GET_WAIT_RXDESC_BASE)(unsigned int interfaceID, npu_info_t *pnpuInfo);
+-		int (*wifi_get_rxdesc_base)(unsigned int interfaceID, npu_info_t *pnpuInfo);
+-		//int (*WIFI_MAIL_API_SET_WAIT_TX_BUF_SPACE_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		int (*wifi_set_tx_buf_space_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		//int (*WIFI_MAIL_API_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		int (*wifi_set_rx_ring_for_txdone_hw_base)(unsigned int interfaceID, unsigned int phy_base_addr) ;
+-		int (*wifi_get_npu_support_map)(unsigned int interfaceID, unsigned int npu_support_map);
++		int (*wlan_set_txrx_reg_addr)(struct airoha_npu *npu, int interfaceID, u32 dir, u32 inCounterAddress,u32 outStatusAddress,u32 outCounterAddress);
++		int (*wlan_set_pcie_port_type)(struct airoha_npu *npu, int interfaceID, u32 PciePortType);
++		int (*wlan_set_dram_ba_node_addr)(struct airoha_npu *npu, int interfaceID, u32 dramBaNode_pa);
++		int (*wlan_set_pcie_addr)(struct airoha_npu *npu, int interfaceID, u32 PCIEAddr) ;
++		int (*wlan_set_desc)(struct airoha_npu *npu, int interfaceID, u32 desc) ;
++		int (*wlan_set_tx_ring_pcie_addr)(struct airoha_npu *npu, int interfaceID, u32 PCIEAddr) ;
++		int (*wlan_get_rx_desc_base)(struct airoha_npu *npu, int interfaceID, u32 *pnpuInfo);
++		int (*wlan_set_tx_buf_space_base)(struct airoha_npu *npu, int interfaceID, u32 phy_base_addr) ;
++		int (*wlan_set_rx_ring_for_txdone)(struct airoha_npu *npu, int interfaceID, u32 phy_base_addr) ;
++		int (*wlan_get_npu_support_map)(struct airoha_npu *npu, int interfaceID, u32 *npu_support_map);
+ 		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ 		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+ 		void (*hostdapt_enable_interrupt_ops)(unsigned int ringIdx);
