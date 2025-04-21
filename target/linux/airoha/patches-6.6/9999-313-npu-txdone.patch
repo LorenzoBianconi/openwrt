@@ -1,0 +1,74 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -262,7 +262,7 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 	if(1)
+ 	{
+ 		if(pHostadptRX->pkt_ctrl.len != pHostadptRX->pkt_ctrl.cur_len)
+-		{			
++		{
+ 			cpu_idx_tmp = hostadpt_rx_cpu_idx[ring_idx];
+ 			pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
+ 			scatter_pkt_len = pHostadptRX->pkt_ctrl.len;
+@@ -547,7 +547,7 @@ irqreturn_t rxdone1_isr(int irq, void *d
+ 	}	
+     return IRQ_HANDLED;
+ }
+-EXPORT_SYMBOL(rxdone1_isr);
++
+ void hostadpt_regiter_interrupt(u32 irq_num, irqreturn_t (*int_isr)(int, void*), char *irq_name)
+ {
+ 	if(irq_num > 5)
+@@ -562,7 +562,6 @@ void hostadpt_regiter_interrupt(u32 irq_
+ 	HOSTADPT_MSG(DBG_LOG, "interrupt register!\n");
+ 	return ;
+ }
+-EXPORT_SYMBOL(hostadpt_regiter_interrupt);
+ 
+ void hostadpt_free_interrupt(u32 irq_num)
+ {
+@@ -665,6 +664,7 @@ int hostadpt_tx_handler(unsigned char ba
+ 	unsigned int wcidx;	
+ 	npu_hif_v2_info npu_txp_info;
+ 	__le32 *_txd = (__le32 *)vnd;
++	unsigned int token;
+ 	
+ 	memset(&wifi_info, 0 , sizeof(struct port_info));
+ 	
+@@ -678,6 +678,7 @@ int hostadpt_tx_handler(unsigned char ba
+ 	}
+ 
+ 	qos_tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
++	token = (_txd[8] >> 16) & 0xffff;
+ 
+ 	npu_txp_info._detail.ring_num = band;
+ 	npu_txp_info._detail.qos_tid	=	qos_tid;
+@@ -716,10 +717,10 @@ int hostadpt_tx_handler(unsigned char ba
+ 		while(hostadpt_tx_cpu_idx[0] != cpuIdx0){
+ 			pHostadptTX0 = pHostadptTX_BASE[0] + hostadpt_tx_cpu_idx[0];
+ 			if(pHostadptTX0->skb_p){
+-				if(pHostadptTX0->pkt_addr) {
+-					dma_unmap_single(dev, pHostadptTX0->pkt_addr, pHostadptTX0->pkt_ctrl.len, DMA_TO_DEVICE);
+-				}
+-				dev_kfree_skb_any((struct sk_buff *)pHostadptTX0->skb_p);
++				//if(pHostadptTX0->pkt_addr) {
++				//	dma_unmap_single(dev, pHostadptTX0->pkt_addr, pHostadptTX0->pkt_ctrl.len, DMA_TO_DEVICE);
++				//}
++				//dev_kfree_skb_any((struct sk_buff *)pHostadptTX0->skb_p);
+ 				hostadpt_tx_skbfree_cnt[0]++;
+ 				pHostadptTX0->skb_p = 0;//NULL;
+ 			}
+@@ -761,10 +762,10 @@ int hostadpt_tx_handler(unsigned char ba
+ 			
+ 			pHostadptTX1 = pHostadptTX_BASE[1] + hostadpt_tx_cpu_idx[1];
+ 			if(pHostadptTX1->skb_p){
+-				if(pHostadptTX1->pkt_addr) {
+-					dma_unmap_single(dev, pHostadptTX1->pkt_addr, pHostadptTX1->pkt_ctrl.len, DMA_TO_DEVICE);
+-				}
+-				dev_kfree_skb_any((struct sk_buff *)pHostadptTX1->skb_p);
++				//if(pHostadptTX1->pkt_addr) {
++				//	dma_unmap_single(dev, pHostadptTX1->pkt_addr, pHostadptTX1->pkt_ctrl.len, DMA_TO_DEVICE);
++				//}
++				//dev_kfree_skb_any((struct sk_buff *)pHostadptTX1->skb_p);
+ 				hostadpt_tx_skbfree_cnt[1]++;
+ 				pHostadptTX1->skb_p = 0;//NULL;
+ 			}

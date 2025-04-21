@@ -1,0 +1,79 @@
+diff -Nru old/npu.c new/npu.c
+--- old/npu.c	2025-04-18 23:06:15.933401000 +0800
++++ new/npu.c	2025-04-18 23:03:15.861466000 +0800
+@@ -379,7 +379,7 @@
+ void npu_mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_dev *dev, struct mt76_txwi_cache *t, 
+ 	struct sk_buff *skb, void *txwi_ptr, struct mt76_wcid *wcid, struct ieee80211_sta *sta)
+ {
+-	struct sk_buff *n_skb = NULL;
++	//struct sk_buff *n_skb = NULL;
+ 	unsigned short vnd_len;
+ 	__le32 *_txd;
+ 	unsigned char hostadpt_ring_num = 0, band_idx;
+@@ -389,12 +389,12 @@
+ 	//struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+ 	_txd = (__le32 *)txwi_ptr;
+ 
+-	n_skb = skb_clone(skb, GFP_ATOMIC);	
++	//n_skb = skb_clone(skb, GFP_ATOMIC);	
+ 
+-	if (!n_skb) {
+-		dev_kfree_skb(skb);
+-		return;
+-	}
++	//if (!n_skb) {
++	//	dev_kfree_skb(skb);
++	//	return;
++	//}
+ 	
+ 	if(phy == dev->phys[1])		
+ 		band_idx = MT_BAND1;
+@@ -446,17 +446,17 @@
+ 	
+ 	memcpy(txp_temp, txwi_ptr, vnd_len);
+ 	
+-	if(!(IS_ERR(npu_glb)) && n_skb)	{
+-		ret = npu_glb->ops.hostadpt_tx_handler_ops(hostadpt_ring_num, n_skb, txp_temp, vnd_len);
++	if(!(IS_ERR(npu_glb)) && skb)	{
++		ret = npu_glb->ops.hostadpt_tx_handler_ops(hostadpt_ring_num, skb, txp_temp, vnd_len);
+ 	}
+ 	
+ 	//handle token/txwi free
+ 	if(ret == -2)  //tx hook
+-		dev_kfree_skb(n_skb);
++		dev_kfree_skb(skb);
+ 	
+-	if(npu_mt76_token_release(dev, token, wcid, sta)){
+-		printk("npu_mt76_token_release fail\n");
+-	}
++	//if(npu_mt76_token_release(dev, token, wcid, sta)){
++	//	printk("npu_mt76_token_release fail\n");
++	//}
+ 	
+ 	return;
+ }
+diff -Nru old/npu.h new/npu.h
+--- old/npu.h	2025-04-18 23:06:27.760664000 +0800
++++ new/npu.h	2025-04-18 23:03:15.871547000 +0800
+@@ -18,7 +18,7 @@
+ #define BAND5G_IDX			1
+ #define BAND2G_IDX			0
+ #define MT76_RROV31 1
+-
++#define NPU_TX_TOKEN_CNT	16384
+ 
+ #define HOST_COUNTER_SIZE 5
+ #define NPU_MAX_TYPE 3
+diff -Nru old/tx.c new/tx.c
+--- old/tx.c	2025-04-18 23:06:37.352574000 +0800
++++ new/tx.c	2025-04-18 23:03:16.563564000 +0800
+@@ -868,6 +868,9 @@
+ 	if (mtk_wed_device_active(&dev->mmio.wed))
+ 		start = dev->mmio.wed.wlan.nbuf;
+ 	#endif
++	#ifdef CONFIG_NET_AIROHA_SOC_NPU
++		start = 16384;//NPU_TX_TOKEN_CNT;
++	#endif
+ 	spin_lock_bh(&dev->token_lock);
+ 
+ 	if (phy->tokens >= dev->token_threshold)

@@ -1,0 +1,40 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -218,27 +218,6 @@ static int hostadpt_rxdscp_init(void)
+ 
+ }
+ 
+-
+-int rxdone_cb(struct sk_buff *skb)
+-{
+-	u32 j = 0, len = skb->len;
+-	u32 *data = (u32 *)skb->data;
+-	printk("host adaptor received data:\n");
+-	for(j = 0; j < len; j++, data++)
+-	{
+-		if(j % 20 == 0) printk("\n");
+-		printk("%d\t", *data);			
+-	}
+-	printk("\n");
+-	//free 
+-	kfree_skb(skb);
+-	return 0;
+-}
+-extern int wifiqueue_start_idx;
+-extern int (*getWifiQueueIndex_hook)(struct net_device *dev,unsigned char direction);
+-extern int (*soft_ratelimit_check_queue_hook)(unsigned int queue_idx);
+-#define WIFI_RATELIMIT_RX 0
+-
+ struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec)
+ {	
+ 	HOSTADPT_DMA_DSCP_T *pHostadptRX = NULL, *pHostadptRX_tmp= NULL;  //*pHostadptRX_tmp2=NULL;
+@@ -642,9 +621,6 @@ void enque_to_hostapdt_tx(struct device
+ 
+ HOSTADPT_DMA_TX_DSCP_T *pHostadptTX_BASE[HOSTADPT_TX_RING_NUM] = {NULL};
+ 
+-#define SHOW_18BYTES " %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x "
+-#define PRINT_18BYTES(a) a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12],a[13],a[14],a[15],a[16],a[17]
+-
+ static unsigned char hostadpt_is_ring_available(u32 dma_idx, u32 cpu_idx, u32 ring_size)
+ {
+ 	unsigned short res;
