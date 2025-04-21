@@ -1,0 +1,511 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -11,12 +11,9 @@
+ #include <linux/of_platform.h>
+ #include <linux/of_reserved_mem.h>
+ #include <linux/regmap.h>
+-#include <linux/memblock.h>
+-#include <linux/init.h>
+-#include <linux/kernel.h>
++#include <linux/soc/airoha/airoha_npu.h>
+ 
+ #include "airoha_eth.h"
+-#include "airoha_npu.h"
+ #include "hostadpt.h"
+ 
+ #define NPU_EN7581_FIRMWARE_DATA		"airoha/en7581_npu_data.bin"
+@@ -216,6 +213,8 @@ struct wlan_mbox_data {
+ 	};
+ };
+ 
++static struct airoha_npu __rcu *npu_ptr;
++
+ static int airoha_npu_send_msg(struct airoha_npu *npu, int func_id,
+ 			       void *p, int size)
+ {
+@@ -297,7 +296,6 @@ out:
+ 	return ret;
+ }
+ 
+-
+ static irqreturn_t airoha_npu_mbox_handler(int irq, void *npu_instance)
+ {
+ 	struct airoha_npu *npu = npu_instance;
+@@ -685,6 +683,19 @@ static int airoha_npu_wlan_init(struct a
+ 					0);
+ }
+ 
++int airoha_npu_device_attach(struct airoha_npu **npu)
++{
++	if (!try_module_get(THIS_MODULE))
++		return -ENODEV;
++
++	rcu_read_lock();
++	*npu = rcu_dereference(npu_ptr);
++	rcu_read_unlock();
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(airoha_npu_device_attach);
++
+ static void airoha_npu_wlan_set_irq_mask(struct airoha_npu *npu, int q)
+ {
+ 	/* FIXME */
+@@ -788,66 +799,62 @@ static const struct regmap_config regmap
+ 	.reg_stride		= 4,
+ 	.disable_locking	= true,
+ };
++
+ extern struct airoha_npu *npu_glb;
+ static int airoha_npu_probe(struct platform_device *pdev)
+ {
+ 	struct device *dev = &pdev->dev;
+ 	struct reserved_mem *rmem;
++	struct airoha_npu *npu;
+ 	struct device_node *np;
+ 	void __iomem *base;
+ 	int i, irq, err;
+-	int index;
+ 
+ 	base = devm_platform_ioremap_resource(pdev, 0);
+ 	if (IS_ERR(base))
+ 		return PTR_ERR(base);
+ 
+-	npu_glb= devm_kzalloc(dev, sizeof(*npu_glb), GFP_KERNEL);
+-	if (!npu_glb)
++	npu = devm_kzalloc(dev, sizeof(*npu), GFP_KERNEL);
++	if (!npu)
+ 		return -ENOMEM;
+ 
+-	npu_glb->dev = dev;
+-	npu_glb->ops.ppe_init = airoha_npu_ppe_init;
+-	npu_glb->ops.ppe_deinit = airoha_npu_ppe_deinit;
+-	npu_glb->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
+-	npu_glb->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
+-	/* wlan */
+-	npu_glb->ops.wlan_set_txrx_reg_addr = airoha_npu_wlan_set_txrx_reg_addr;
+-	npu_glb->ops.wlan_set_pcie_port_type = airoha_npu_wlan_set_pcie_port_type;
+-	npu_glb->ops.wlan_set_dram_ba_node_addr =
++	npu->dev = dev;
++	npu->ops.ppe_init = airoha_npu_ppe_init;
++	npu->ops.ppe_deinit = airoha_npu_ppe_deinit;
++	npu->ops.ppe_flush_sram_entries = airoha_npu_ppe_flush_sram_entries;
++	npu->ops.ppe_foe_commit_entry = airoha_npu_foe_commit_entry;
++	npu->ops.wlan_set_txrx_reg_addr = airoha_npu_wlan_set_txrx_reg_addr;
++	npu->ops.wlan_set_pcie_port_type = airoha_npu_wlan_set_pcie_port_type;
++	npu->ops.wlan_set_dram_ba_node_addr =
+ 		airoha_npu_wlan_set_dram_ba_node_addr;
+-	npu_glb->ops.wlan_set_pcie_addr = airoha_npu_wlan_set_pcie_addr;
+-	npu_glb->ops.wlan_set_desc = airoha_npu_wlan_set_desc;
+-	npu_glb->ops.wlan_set_tx_ring_pcie_addr =
++	npu->ops.wlan_set_pcie_addr = airoha_npu_wlan_set_pcie_addr;
++	npu->ops.wlan_set_desc = airoha_npu_wlan_set_desc;
++	npu->ops.wlan_set_tx_ring_pcie_addr =
+ 		airoha_npu_wlan_set_tx_ring_pcie_addr;
+-	npu_glb->ops.wlan_get_rx_desc_base = airoha_npu_wlan_get_rx_desc_base;
+-	npu_glb->ops.wlan_set_tx_buf_space_base =
++	npu->ops.wlan_get_rx_desc_base = airoha_npu_wlan_get_rx_desc_base;
++	npu->ops.wlan_set_tx_buf_space_base =
+ 		airoha_npu_wlan_set_tx_buf_space_base;
+-	npu_glb->ops.wlan_set_rx_ring_for_txdone =
++	npu->ops.wlan_set_rx_ring_for_txdone =
+ 		airoha_npu_wlan_set_rx_ring_for_txdone;
+-	npu_glb->ops.wlan_get_npu_support_map =
++	npu->ops.wlan_get_npu_support_map =
+ 		airoha_npu_wlan_get_npu_support_map;
+-	npu_glb->ops.wlan_set_irq_mask = airoha_npu_wlan_set_irq_mask;
+-	npu_glb->ops.wlan_get_irq = airoha_npu_wlan_get_irq;
+-	npu_glb->ops.wlan_irq_enable = airoha_npu_wlan_irq_enable;
+-	npu_glb->ops.wlan_irq_disable = airoha_npu_wlan_irq_disable;
+-
+-	npu_glb->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+-	npu_glb->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+-	npu_glb->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
++	npu->ops.wlan_set_irq_mask = airoha_npu_wlan_set_irq_mask;
++	npu->ops.wlan_get_irq = airoha_npu_wlan_get_irq;
++	npu->ops.wlan_irq_enable = airoha_npu_wlan_irq_enable;
++	npu->ops.wlan_irq_disable = airoha_npu_wlan_irq_disable;
++
++	npu->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
++	npu->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
++	npu->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+-	npu_glb->Regbase = base;
++	npu->Regbase = base;
+ #endif
+-	npu_glb->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
+-	if (IS_ERR(npu_glb->regmap))
+-		return PTR_ERR(npu_glb->regmap);
+-
+-	index = of_property_match_string(dev->of_node,  "memory-region-names", "binary");
+-	if (index < 0)
+-		return index;
++	npu->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
++	if (IS_ERR(npu->regmap))
++		return PTR_ERR(npu->regmap);
+ 
+-	np = of_parse_phandle(dev->of_node, "memory-region", index);
++	np = of_parse_phandle(dev->of_node, "memory-region", 0);
+ 	if (!np)
+ 		return -ENODEV;
+ 
+@@ -862,19 +869,20 @@ static int airoha_npu_probe(struct platf
+ 		return irq;
+ 
+ 	err = devm_request_irq(dev, irq, airoha_npu_mbox_handler,
+-			       IRQF_SHARED, "airoha-npu-mbox", npu_glb);
++			       IRQF_SHARED, "airoha-npu-mbox", npu);
+ 	if (err)
+ 		return err;
+ 
+-	for (i = 0; i < ARRAY_SIZE(npu_glb->cores); i++) {
+-		struct airoha_npu_core *core = &npu_glb->cores[i];
++	for (i = 0; i < ARRAY_SIZE(npu->cores); i++) {
++		struct airoha_npu_core *core = &npu->cores[i];
+ 
+ 		spin_lock_init(&core->lock);
+-		core->npu = npu_glb;
++		core->npu = npu;
+ 
+ 		irq = platform_get_irq(pdev, i + 1);
+ 		if (irq < 0)
+ 			return irq;
++
+ 		err = devm_request_irq(dev, irq, airoha_npu_wdt_handler,
+ 				       IRQF_SHARED, "airoha-npu-wdt", core);
+ 		if (err)
+@@ -883,12 +891,12 @@ static int airoha_npu_probe(struct platf
+ 		INIT_WORK(&core->wdt_work, airoha_npu_wdt_work);
+ 	}
+ 
+-	for (i = 0; i < ARRAY_SIZE(npu_glb->irqs); i++) {
+-		irq = platform_get_irq(pdev, i + ARRAY_SIZE(npu_glb->cores) + 1);
++	for (i = 0; i < ARRAY_SIZE(npu->irqs); i++) {
++		irq = platform_get_irq(pdev, i + ARRAY_SIZE(npu->cores) + 1);
+ 		if (irq < 0)
+ 			return irq;
+ 
+-		npu_glb->irqs[i] = irq;
++		npu->irqs[i] = irq;
+ 	}
+ 
+ 	err = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+@@ -899,33 +907,30 @@ static int airoha_npu_probe(struct platf
+ 	if (err)
+ 		return dev_err_probe(dev, err, "failed to run npu firmware\n");
+ 
+-	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(10),
++	regmap_write(npu->regmap, REG_CR_NPU_MIB(10),
+ 		     rmem->base + NPU_EN7581_FIRMWARE_RV32_MAX_SIZE);
+-	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(11), 0x40000); /* SRAM 256K */
+-	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(12), 0);
+-	regmap_write(npu_glb->regmap, REG_CR_NPU_MIB(21), 0);
++	regmap_write(npu->regmap, REG_CR_NPU_MIB(11), 0x40000); /* SRAM 256K */
++	regmap_write(npu->regmap, REG_CR_NPU_MIB(12), 0);
++	regmap_write(npu->regmap, REG_CR_NPU_MIB(21), 0);
+ 	msleep(100);
+ 
+ 	/* setting booting address */
+ 	for (i = 0; i < NPU_NUM_CORES; i++)
+-		regmap_write(npu_glb->regmap, REG_CR_BOOT_BASE(i), rmem->base);
++		regmap_write(npu->regmap, REG_CR_BOOT_BASE(i), rmem->base);
+ 	usleep_range(1000, 2000);
+ 
+ 	/* enable NPU cores */
+-	/* do not start core3 since it is used for WiFi offloading */
+-
+-	//regmap_write(npu->regmap, REG_CR_BOOT_CONFIG, 0xf7);
+-	/* enable all NPU cores */
+-	regmap_write(npu_glb->regmap, REG_CR_BOOT_CONFIG, 0xff);
+-	regmap_write(npu_glb->regmap, REG_CR_BOOT_TRIGGER, 0x1);
+-
++	regmap_write(npu->regmap, REG_CR_BOOT_CONFIG, 0xff);
++	regmap_write(npu->regmap, REG_CR_BOOT_TRIGGER, 0x1);
+ 	msleep(100);
+ 
+-	err = airoha_npu_wlan_init(npu_glb);
++	rcu_assign_pointer(npu_ptr, npu);
++	err = airoha_npu_wlan_init(npu);
+ 	if (err)
+ 		return err;
+ 
+-	platform_set_drvdata(pdev, npu_glb);
++	npu_glb = npu;
++	platform_set_drvdata(pdev, npu);
+ 
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ 	hostadpInit();	
+@@ -941,6 +946,9 @@ static void airoha_npu_remove(struct pla
+ 	for (i = 0; i < ARRAY_SIZE(npu->cores); i++)
+ 		cancel_work_sync(&npu->cores[i].wdt_work);
+ 
++	rcu_assign_pointer(npu_ptr, NULL);
++	synchronize_rcu();
++
+ #ifdef CONFIG_NET_AIROHA_SOC_NPU
+ 	hostadpExit();
+ #endif	
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -7,10 +7,10 @@
+ #include <linux/ip.h>
+ #include <linux/ipv6.h>
+ #include <linux/rhashtable.h>
++#include <linux/soc/airoha/airoha_npu.h>
+ #include <net/ipv6.h>
+ #include <net/pkt_cls.h>
+ 
+-#include "airoha_npu.h"
+ #include "airoha_regs.h"
+ #include "airoha_eth.h"
+ 
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -1,5 +1,5 @@
+ #include <linux/proc_fs.h>
+-#include "airoha_npu.h"
++#include <linux/soc/airoha/airoha_npu.h>
+ #include "hostadpt.h"
+ 
+ #define NPU_384K_SRAM_BASE      (0x000000)  /*phys:0x1e800000*/
+@@ -142,9 +142,6 @@ static int hostadpt_rxdscp_init(void)
+ 	unsigned long dscpBaseAddr=0 ;
+ 	HOSTADPT_DMA_DSCP_T *dscp = NULL;
+ 	struct sk_buff *skb = NULL;
+-	//struct proc_dir_entry *entry, *dbg_entry;
+-	//struct proc_dir_entry *entry_debug;
+-	unsigned long int hostadpt_cnt_pa, hostadpt_cnt_pa2;
+ 
+ 	/******************************************
+ 	* Allocate descriptor DMA memory		  *
+--- /dev/null
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -0,0 +1,115 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Copyright (c) 2025 AIROHA Inc
++ * Author: Lorenzo Bianconi <lorenzo@kernel.org>
++ */
++#ifndef AIROHA_NPU_H
++#define AIROHA_NPU_H
++
++#include <linux/soc/airoha/wifi_mail.h>
++#include <linux/soc/airoha/npuMboxAPI.h>
++#include <linux/soc/airoha/wifi_mail_type.h>
++
++#ifndef TCSUPPORT_CPU_EN7581
++#define TCSUPPORT_CPU_EN7581
++#endif
++#ifndef TCSUPPORT_CPU_ARMV8_64
++#define TCSUPPORT_CPU_ARMV8_64
++#endif
++#ifndef TCSUPPORT_NPU_V2
++#define TCSUPPORT_NPU_V2
++#endif
++#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_TX
++#define TCSUPPORT_NPU_WIFI_TX
++#endif
++#ifndef TCSUPPORT_WLAN_MT7992
++#define TCSUPPORT_WLAN_MT7992
++#endif
++#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
++#define TCSUPPORT_TR471_NPU_OFFLOAD
++#endif
++#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
++#define TCSUPPORT_NPU_WIFI_OFFLOAD
++#endif
++
++
++#define NPU_NUM_CORES		8
++#define NPU_NUM_IRQ		6
++
++struct airoha_npu {
++#if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
++	struct device *dev;
++	struct regmap *regmap;
++	void __iomem *Regbase;
++
++	struct airoha_npu_core {
++		struct airoha_npu *npu;
++		/* protect concurrent npu memory accesses */
++		spinlock_t lock;
++		struct work_struct wdt_work;
++	} cores[NPU_NUM_CORES];
++
++	int irqs[NPU_NUM_IRQ];
++
++	struct airoha_foe_stats *stats;
++
++	struct {
++		int (*ppe_init)(struct airoha_npu *npu);
++		int (*ppe_deinit)(struct airoha_npu *npu);
++		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
++					      dma_addr_t foe_addr,
++					      int sram_num_entries);
++		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
++					    dma_addr_t foe_addr,
++					    u32 entry_size, u32 hash,
++					    bool ppe2);
++		int (*wlan_set_txrx_reg_addr)(struct airoha_npu *npu,
++					      int index, u32 dir,
++					      u32 in_counter_addr,
++					      u32 out_status_addr,
++					      u32 out_counter_addr);
++		int (*wlan_set_pcie_port_type)(struct airoha_npu *npu,
++					       int index, u32 port_type);
++		int (*wlan_set_dram_ba_node_addr)(struct airoha_npu *npu,
++						  int index, u32 addr);
++		int (*wlan_set_pcie_addr)(struct airoha_npu *npu, int index,
++					  u32 addr);
++		int (*wlan_set_desc)(struct airoha_npu *npu, int index,
++				     u32 desc);
++		int (*wlan_set_tx_ring_pcie_addr)(struct airoha_npu *npu,
++						  int index, u32 addr);
++		int (*wlan_get_rx_desc_base)(struct airoha_npu *npu,
++					     int index, u32 *data);
++		int (*wlan_set_tx_buf_space_base)(struct airoha_npu *npu,
++						  int index, u32 addr);
++		int (*wlan_set_rx_ring_for_txdone)(struct airoha_npu *npu,
++						   int index, u32 addr);
++		int (*wlan_get_npu_support_map)(struct airoha_npu *npu,
++						int index, u32 *map);
++		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
++		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
++		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
++		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);
++		void (*wlan_irq_enable)(struct airoha_npu *npu, int q);
++		void (*wlan_irq_disable)(struct airoha_npu *npu, int q);
++		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
++	} ops;
++#endif
++};
++
++#if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
++int airoha_npu_device_attach(struct airoha_npu **npu);
++#else
++static inline int airoha_npu_device_attach(struct airoha_npu **npu)
++{
++	return -ENODEV;
++}
++#endif
++
++struct airoha_npu *airoha_npu_get(struct device *dev,
++				  dma_addr_t foe_stats_addr);
++void airoha_npu_put(struct airoha_npu *npu);
++#endif /* AIROHA_NPU_H */
+--- a/include/linux/soc/airoha/airoha_npu_g.h
++++ /dev/null
+@@ -1,93 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/*
+- * Copyright (c) 2025 AIROHA Inc
+- * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+- */
+-#ifndef AIROHA_NPU_H_G
+-#define AIROHA_NPU_H_G	 
+-
+-#include <linux/soc/airoha/wifi_mail.h>
+-#include <linux/soc/airoha/npuMboxAPI.h>
+-#include <linux/soc/airoha/wifi_mail_type.h>
+-
+-#ifndef TCSUPPORT_CPU_EN7581
+-#define TCSUPPORT_CPU_EN7581
+-#endif
+-#ifndef TCSUPPORT_CPU_ARMV8_64
+-#define TCSUPPORT_CPU_ARMV8_64
+-#endif
+-#ifndef TCSUPPORT_NPU_V2
+-#define TCSUPPORT_NPU_V2
+-#endif
+-#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_TX
+-#define TCSUPPORT_NPU_WIFI_TX
+-#endif
+-#ifndef TCSUPPORT_WLAN_MT7992
+-#define TCSUPPORT_WLAN_MT7992
+-#endif
+-#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
+-#define TCSUPPORT_TR471_NPU_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
+-#define TCSUPPORT_NPU_WIFI_OFFLOAD
+-#endif
+-
+-
+-#define NPU_NUM_CORES		8
+-//#define MAX_CORE_NUM		8
+-#define NPU_INT_MAX_NUM         (6)
+-
+-struct airoha_npu {
+-	struct device *dev;
+-	struct regmap *regmap;
+-	void __iomem *Regbase;
+-
+-	struct airoha_npu_core {
+-		struct airoha_npu *npu;
+-		/* protect concurrent npu memory accesses */
+-		spinlock_t lock;
+-		struct work_struct wdt_work;
+-	} cores[NPU_NUM_CORES];
+-
+-	int irqs[NPU_INT_MAX_NUM];
+-
+-	struct airoha_foe_stats *stats;
+-
+-	struct {
+-		int (*ppe_init)(struct airoha_npu *npu);
+-		int (*ppe_deinit)(struct airoha_npu *npu);
+-		int (*ppe_flush_sram_entries)(struct airoha_npu *npu,
+-					      dma_addr_t foe_addr,
+-					      int sram_num_entries);
+-		int (*ppe_foe_commit_entry)(struct airoha_npu *npu,
+-					    dma_addr_t foe_addr,
+-					    u32 entry_size, u32 hash,
+-					    bool ppe2);
+-		
+-		/*mailbox api called by wifi*/
+-		int (*wlan_set_txrx_reg_addr)(struct airoha_npu *npu, int interfaceID, u32 dir, u32 inCounterAddress,u32 outStatusAddress,u32 outCounterAddress);
+-		int (*wlan_set_pcie_port_type)(struct airoha_npu *npu, int interfaceID, u32 PciePortType);
+-		int (*wlan_set_dram_ba_node_addr)(struct airoha_npu *npu, int interfaceID, u32 dramBaNode_pa);
+-		int (*wlan_set_pcie_addr)(struct airoha_npu *npu, int interfaceID, u32 PCIEAddr) ;
+-		int (*wlan_set_desc)(struct airoha_npu *npu, int interfaceID, u32 desc) ;
+-		int (*wlan_set_tx_ring_pcie_addr)(struct airoha_npu *npu, int interfaceID, u32 PCIEAddr) ;
+-		int (*wlan_get_rx_desc_base)(struct airoha_npu *npu, int interfaceID, u32 *pnpuInfo);
+-		int (*wlan_set_tx_buf_space_base)(struct airoha_npu *npu, int interfaceID, u32 phy_base_addr) ;
+-		int (*wlan_set_rx_ring_for_txdone)(struct airoha_npu *npu, int interfaceID, u32 phy_base_addr) ;
+-		int (*wlan_get_npu_support_map)(struct airoha_npu *npu, int interfaceID, u32 *npu_support_map);
+-		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+-		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
+-		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);
+-		void (*wlan_irq_enable)(struct airoha_npu *npu, int q);
+-		void (*wlan_irq_disable)(struct airoha_npu *npu, int q);
+-		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+-	} ops;
+-};
+-
+-extern struct airoha_npu *npu_glb;
+-extern struct airoha_npu *mt76_get_npu(void);
+-#endif
+--- a/drivers/net/ethernet/airoha/airoha_npu.h
++++ /dev/null
+@@ -1,13 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/*
+- * Copyright (c) 2025 AIROHA Inc
+- * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+- */
+-#ifndef AIROHA_NPU_H
+-#define AIROHA_NPU_H	 
+-#include <linux/soc/airoha/airoha_npu_g.h>
+-
+-struct airoha_npu *airoha_npu_get(struct device *dev,
+-				  dma_addr_t foe_stats_addr);
+-void airoha_npu_put(struct airoha_npu *npu);
+-#endif
