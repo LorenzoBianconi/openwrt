@@ -1,0 +1,146 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -457,75 +457,6 @@ error:
+ 	return skb;
+ }
+ 
+-
+-void (*tasklet_schedule_WIFI2G)(void);
+-void (*tasklet_schedule_WIFI5G)(void);
+-irqreturn_t rxdone0_isr(int irq, void *dev_id)
+-{
+-	unsigned long int status;
+-	//HOSTADPT_MSG(DBG_LOG, "rxdone0 interrput......\n"); 
+-	status = npu->ops.wlan_get_irq(npu, 0);
+-	//printk("host apd 0 interrput status: %x\n",status);
+-	npu->ops.wlan_set_irq_mask(npu, 0);
+-	if(tasklet_schedule_WIFI2G){
+-		//printk("host apd 0 tasklet_schedule_WIFI2G: %x\n",tasklet_schedule_WIFI2G);
+-		tasklet_schedule_WIFI2G();
+-		npu->ops.wlan_irq_disable(npu, 0);
+-	}	
+-    return IRQ_HANDLED;
+-}
+-EXPORT_SYMBOL(rxdone0_isr);
+-
+-irqreturn_t rxdone1_isr(int irq, void *dev_id)
+-{
+-	//printk("Hostadp : rxdone1_isr interrput status: %x\n",status);
+-	npu->ops.wlan_set_irq_mask(npu, 1);
+-	if(tasklet_schedule_WIFI5G){
+-		//printk("Hostadp : rxdone1_isr tasklet_schedule_WIFI5G: %x\n",tasklet_schedule_WIFI5G);
+-		tasklet_schedule_WIFI5G();
+-		npu->ops.wlan_irq_disable(npu, 1);
+-
+-	}	
+-    return IRQ_HANDLED;
+-}
+-
+-void hostadpt_regiter_interrupt(u32 irq_num, irqreturn_t (*int_isr)(int, void*), char *irq_name)
+-{
+-	if(irq_num > 5)
+-	{
+-		HOSTADPT_MSG(DBG_ERR, "irq num error, valid irq num : 0 - 5 \n");
+-		return ;
+-	}
+-	if(request_irq(npu->irqs[irq_num], int_isr, 0, irq_name, NULL)!=0)
+-	{
+-		printk("request_irq failed.\n");
+-	}
+-	HOSTADPT_MSG(DBG_LOG, "interrupt register!\n");
+-	return ;
+-}
+-
+-void hostadpt_free_interrupt(u32 irq_num)
+-{
+-	if(irq_num > 5)
+-	{
+-		HOSTADPT_MSG(DBG_ERR, "irq num error, valid irq num : 0 - 5 \n");
+-		return ;
+-	}
+-	free_irq(npu->irqs[irq_num], NULL);
+-	return ;
+-}
+-
+-void hostdapt_registe_wifitask(unsigned int ringIdx, void *func)
+-{
+-	printk("hostdapt_registe_wifitask %d\n", ringIdx);
+-	if(ringIdx == 0){
+-		tasklet_schedule_WIFI2G = func;
+-	}else{
+-		tasklet_schedule_WIFI5G = func;
+-	}
+-}
+-
+-
+ /********* wifi tx part  *************/
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ void enque_to_hostapdt_tx(struct device *dev, HOSTADPT_DMA_TX_DSCP_T *pHostadptTX,
+@@ -797,12 +728,6 @@ int hostadpInit(struct airoha_npu *_npu)
+ 		return -ENODEV;
+ 	}
+ 	
+-	hostadpt_regiter_interrupt(0, rxdone0_isr, "rxdone0");
+-	npu->ops.wlan_irq_enable(npu, 0);
+-
+-	hostadpt_regiter_interrupt(1, rxdone1_isr, "rxdone1");
+-	npu->ops.wlan_irq_enable(npu, 1);
+-
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ 	if(hostadpt_txdscp_init())
+ 	{
+@@ -812,11 +737,3 @@ int hostadpInit(struct airoha_npu *_npu)
+ 	return 0;
+ }
+ EXPORT_SYMBOL(hostadpInit);
+-void hostadpExit(void)
+-{
+-	hostadpt_free_interrupt(0);
+-	hostadpt_free_interrupt(1);
+-
+-	HOSTADPT_MSG(DBG_LOG, "host adaptor exit .\n");
+-}
+-EXPORT_SYMBOL(hostadpExit);
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -844,7 +844,6 @@ static int airoha_npu_probe(struct platf
+ 
+ 	npu->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+ 	npu->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+-	npu->ops.hostdapt_registe_wifitask_ops = hostdapt_registe_wifitask;
+ 
+ 	npu->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
+ 	if (IS_ERR(npu->regmap))
+@@ -943,10 +942,6 @@ static void airoha_npu_remove(struct pla
+ 
+ 	rcu_assign_pointer(npu_ptr, NULL);
+ 	synchronize_rcu();
+-
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-	hostadpExit();
+-#endif	
+ }
+ 
+ static struct platform_driver airoha_npu_driver = {
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -152,9 +152,7 @@ typedef union {
+ 
+ int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
+-void hostdapt_registe_wifitask(unsigned int ringIdx, void *func);
+ int hostadpInit(struct airoha_npu *_npu);
+-void hostadpExit(void);
+ 
+ struct device* get_ecnt_npu_dev(void);
+ 
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -92,7 +92,6 @@ struct airoha_npu {
+ 		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);
+ 		void (*wlan_irq_enable)(struct airoha_npu *npu, int q);
+ 		void (*wlan_irq_disable)(struct airoha_npu *npu, int q);
+-		void (*hostdapt_registe_wifitask_ops)(unsigned int ringIdx, void *func);
+ 	} ops;
+ #endif
+ };
