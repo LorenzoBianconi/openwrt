@@ -36,26 +36,26 @@
  	//write rx0/rx1 num to reg
 -	set_npu_hostadpt_reg(HOSTADPT_RX0_MAX_CNT, HOSTADPT_RX0_DSCP_NUM);
 -	set_npu_hostadpt_reg(HOSTADPT_RX1_MAX_CNT, HOSTADPT_RX1_DSCP_NUM);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_MAX_CNT, HOSTADPT_RX0_DSCP_NUM);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_MAX_CNT, HOSTADPT_RX1_DSCP_NUM);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_MAX_CNT, HOSTADPT_RX0_DSCP_NUM);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_MAX_CNT, HOSTADPT_RX1_DSCP_NUM);
  	
  	//set rx0/rx1 hostadpt_rx_cpu_idx/hostadpt_rx_dma_idx 
 -	set_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX, 0);
 -	set_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX, 0);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, 0);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, 0);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, 0);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, 0);
  	
 -	set_npu_hostadpt_reg(HOSTADPT_RX0_DMA_IDX, 0);
 -	set_npu_hostadpt_reg(HOSTADPT_RX1_DMA_IDX, 0);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_DMA_IDX, 0);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_DMA_IDX, 0);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_DMA_IDX, 0);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_DMA_IDX, 0);
  	
  	//write rx0/rx1 base to reg
  	//Please add other code before this line which is about initialization. 
 -	set_npu_hostadpt_reg(HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
 -	set_npu_hostadpt_reg(HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
-+	regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
++	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
  
  	return 0;
  
@@ -64,10 +64,10 @@
  	}
  	if(ring_idx == 0)
 -		set_npu_hostadpt_reg(HOSTADPT_RX0_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
-+		regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
++		regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
  	else if(ring_idx == 1)
 -		set_npu_hostadpt_reg(HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
-+		regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
++		regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
  		
  	if(skb != NULL){	
  		skb_reset_mac_header(skb);
@@ -85,7 +85,7 @@
  			if(hostadpt_tx_dma_idx[0] >= HOSTADPT_TX0_DSCP_NUM)
  				hostadpt_tx_dma_idx[0] = 0;
 -			set_npu_hostadpt_reg(HOSTADPT_TX2_DMA_IDX, hostadpt_tx_dma_idx[0]);
-+			regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_DMA_IDX, hostadpt_tx_dma_idx[0]);
++			regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_DMA_IDX, hostadpt_tx_dma_idx[0]);
  		}
  		else
  		{
@@ -103,7 +103,7 @@
  			if(hostadpt_tx_dma_idx[1] >= HOSTADPT_TX1_DSCP_NUM)
  				hostadpt_tx_dma_idx[1] = 0;
 -			set_npu_hostadpt_reg(HOSTADPT_TX3_DMA_IDX, hostadpt_tx_dma_idx[1]);
-+			regmap_write(npu->regmap + NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_DMA_IDX, hostadpt_tx_dma_idx[1]);
++			regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_DMA_IDX, hostadpt_tx_dma_idx[1]);
  		}
  		else 
  		{
