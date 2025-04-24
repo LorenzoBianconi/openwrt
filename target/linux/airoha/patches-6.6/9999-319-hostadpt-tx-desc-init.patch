@@ -1,0 +1,218 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -49,6 +49,11 @@
+ #define REG_IRQ_RXDONE(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 2) + 0x034)
+ #define NPU_IRQ_RX_MASK(_n)		((_n) == 1 ? BIT(17) : BIT(16))
+ 
++#define REG_TX_BASE(_n)			(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x080)
++#define REG_TX_DSCP_NUM(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x084)
++#define REG_TX_DMA_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x088)
++#define REG_TX_CPU_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x08c)
++
+ #define NPU_TIMER_BASE_ADDR		0x310100
+ #define REG_WDT_TIMER_CTRL(_n)		(NPU_TIMER_BASE_ADDR + ((_n) * 0x100))
+ #define WDT_EN_MASK			BIT(25)
+@@ -213,6 +218,13 @@ struct wlan_mbox_data {
+ 	};
+ };
+ 
++struct npu_tx_dma_desc {
++	__le32 ctrl;
++	__le32 addr;
++	__le64 rsv;
++	u8 data[192];
++} __packed;
++
+ static struct airoha_npu __rcu *npu_ptr;
+ 
+ static int airoha_npu_send_msg(struct airoha_npu *npu, int func_id,
+@@ -654,10 +666,43 @@ static int airoha_npu_wlan_get_npu_suppo
+ 				       map);
+ }
+ 
++static int airoha_npu_wlan_init_txrx_rings(struct airoha_npu *npu)
++{
++	struct npu_tx_dma_desc *tx_desc;
++	dma_addr_t dma_addr;
++
++	tx_desc = dmam_alloc_coherent(npu->dev,
++				      NPU_TX_DESC_NUM * sizeof(*tx_desc),
++				      &dma_addr, GFP_KERNEL);
++	if (!tx_desc)
++		return -ENOMEM;
++
++	npu->tx_desc = tx_desc;
++
++	regmap_write(npu->regmap, REG_TX_DSCP_NUM(2), NPU_TX0_DESC_NUM);
++	regmap_write(npu->regmap, REG_TX_DSCP_NUM(3), NPU_TX1_DESC_NUM);
++
++	regmap_write(npu->regmap, REG_TX_CPU_IDX(2), 0);
++	regmap_write(npu->regmap, REG_TX_CPU_IDX(3), 0);
++
++	regmap_write(npu->regmap, REG_TX_DMA_IDX(2), 0);
++	regmap_write(npu->regmap, REG_TX_DMA_IDX(3), 0);
++
++	regmap_write(npu->regmap, REG_TX_BASE(2), dma_addr);
++	regmap_write(npu->regmap, REG_TX_BASE(3),
++		     dma_addr + NPU_TX0_DESC_NUM * sizeof(*tx_desc));
++
++	return 0;
++}
++
+ static int airoha_npu_wlan_init(struct airoha_npu *npu)
+ {
+ 	int err;
+ 
++	err = airoha_npu_wlan_init_txrx_rings(npu);
++	if (err)
++		return err;
++
+ 	err = airoha_npu_wlan_send_msg(npu, 1,
+ 				       WLAN_FUNC_SET_WAIT_NPU_BAND0_ONCPU, 0);
+ 	if (err)
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -37,6 +37,10 @@
+ #define NPU_NUM_CORES		8
+ #define NPU_NUM_IRQ		6
+ 
++#define NPU_TX0_DESC_NUM	1024
++#define NPU_TX1_DESC_NUM	1024
++#define NPU_TX_DESC_NUM		(NPU_TX0_DESC_NUM + NPU_TX1_DESC_NUM)
++
+ struct airoha_npu {
+ #if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
+ 	struct device *dev;
+@@ -53,6 +57,8 @@ struct airoha_npu {
+ 
+ 	struct airoha_foe_stats *stats;
+ 
++	void *tx_desc;
++
+ 	struct {
+ 		int (*ppe_init)(struct airoha_npu *npu);
+ 		int (*ppe_deinit)(struct airoha_npu *npu);
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -657,66 +657,6 @@ int hostadpt_tx_handler(unsigned char ba
+ }
+ #endif
+ 
+-#if defined(TCSUPPORT_WLAN_INODE) || defined(TCSUPPORT_NPU_WIFI_TX)
+-static int hostadpt_txdscp_init(void)
+-{
+-	dma_addr_t dscpDmaAddr=0;
+-	int i;
+-	//u32 dmaIdx = 0;
+-	struct device *dev = NULL ;
+-	unsigned long dscpBaseAddr=0 ;
+-	HOSTADPT_DMA_TX_DSCP_T *dscp = NULL;
+-
+-	//struct sk_buff *skb = NULL;
+-	//printk("host adaptor init:L%d", __LINE__);
+-	/******************************************
+-	* Allocate descriptor DMA memory		  *
+-	*******************************************/
+-	dev = npu->dev;
+-
+-	//printk("test alloc size:%d*%d \n", sizeof(HOSTADPT_DMA_TX_DSCP_T), HOSTADPT_TX_TOTAL_DSCP_NUM);
+-	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev,
+-		sizeof(HOSTADPT_DMA_TX_DSCP_T)*HOSTADPT_TX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, GFP_KERNEL);
+-
+-	if(!dscpBaseAddr) {
+-		HOSTADPT_MSG(DBG_ERR, "Allocate memory for TX/RX DSCP failed.\n") ; 
+-		return -ENOMEM ;
+-	}
+-
+-	pHostadptTX_BASE[0] = (HOSTADPT_DMA_TX_DSCP_T *)dscpBaseAddr;
+-	pHostadptTX_BASE[1] = pHostadptTX_BASE[0] + HOSTADPT_TX0_DSCP_NUM;
+-
+-	HOSTADPT_MSG(DBG_LOG, "dscpDmaAddr = %llx [0]%lx [1]%lx\n",dscpDmaAddr, (unsigned long int)pHostadptTX_BASE[0], (unsigned long int)pHostadptTX_BASE[1]) ; 
+-	printk("dscpDmaAddr =%llx pHostadptTX_BASE[0]%lx pHostadptTX_BASE[1]%lx %ld\n",
+-		dscpDmaAddr, (unsigned long int)pHostadptTX_BASE[0],(unsigned long int)pHostadptTX_BASE[1], sizeof(HOSTADPT_DMA_TX_DSCP_T));
+-
+-	/***************************************************
+-	* Initialization first DSCP for Rx DMA			  *
+-	****************************************************/
+-	dscp = pHostadptTX_BASE[0];
+-	for(i = 0; i < HOSTADPT_TX_TOTAL_DSCP_NUM; i++) {
+-	//init at npu
+-		dscp->pkt_ctrl.done = 0;
+-		dscp++;	
+-	}
+-	//write rx0/rx1 num to reg
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_MAX_CNT, HOSTADPT_TX0_DSCP_NUM);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_MAX_CNT, HOSTADPT_TX1_DSCP_NUM);
+-	
+-	//set rx0/rx1 hostadpt_rx_cpu_idx/hostadpt_rx_dma_idx 
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_CPU_IDX, 0);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_CPU_IDX, 0);
+-	
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_DMA_IDX, 0);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_DMA_IDX, 0);
+-
+-	//write rx0/rx1 base to reg
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_BASE_PTR, dscpDmaAddr);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_TX_DSCP_T)*HOSTADPT_TX0_DSCP_NUM);
+-	
+-	return 0;
+-}
+-#endif
+ int hostadpInit(struct airoha_npu *_npu)
+ {
+ 	npu = _npu;
+@@ -727,10 +667,9 @@ int hostadpInit(struct airoha_npu *_npu)
+ 	}
+ 	
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-	if(hostadpt_txdscp_init())
+-	{
+-		return -ENODEV;
+-	}
++	pHostadptTX_BASE[0] = (HOSTADPT_DMA_TX_DSCP_T *)npu->tx_desc;
++	pHostadptTX_BASE[1] = pHostadptTX_BASE[0] + HOSTADPT_TX0_DSCP_NUM;
++
+ #endif
+ 	return 0;
+ }
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -60,22 +60,22 @@
+ #define HOSTADPT_RX1_DMA_IDX    (0x198)
+ #define HOSTADPT_RX1_CPU_IDX    (0x19C)
+ 
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-#define HOSTADPT_TX2_BASE_PTR	(0xA0)     /*RX Ring 2 Base pointer*/
+-#define HOSTADPT_TX2_MAX_CNT	(0xA4)
+-#define HOSTADPT_TX2_DMA_IDX	(0xA8)
+-#define HOSTADPT_TX2_CPU_IDX	(0xAC)
+-
+-#define HOSTADPT_TX3_BASE_PTR	(0xB0)     /*RX Ring 3 Base pointer*/
+-#define HOSTADPT_TX3_MAX_CNT	(0xB4)
+-#define HOSTADPT_TX3_DMA_IDX	(0xB8)
+-#define HOSTADPT_TX3_CPU_IDX	(0xBC)
+-
+-#define HOST_TX_EVT_INT_MASK2	(0x4C) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-#define HOST_TX_EVT_INT_MASK3	(0x50) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-//extern int (*toHostadptPktHandle_hook)(unsigned char band,
+-	//struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-#endif
++#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
++#define HOSTADPT_TX2_BASE_PTR	(0xA0)     /*RX Ring 2 Base pointer*/
++#define HOSTADPT_TX2_MAX_CNT	(0xA4)
++#define HOSTADPT_TX2_DMA_IDX	(0xA8)
++#define HOSTADPT_TX2_CPU_IDX	(0xAC)
++
++#define HOSTADPT_TX3_BASE_PTR	(0xB0)     /*RX Ring 3 Base pointer*/
++#define HOSTADPT_TX3_MAX_CNT	(0xB4)
++#define HOSTADPT_TX3_DMA_IDX	(0xB8)
++#define HOSTADPT_TX3_CPU_IDX	(0xBC)
++
++#define HOST_TX_EVT_INT_MASK2	(0x4C) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++#define HOST_TX_EVT_INT_MASK3	(0x50) /*32bit: Tx0---Tx15,Rx0---Rx15*/
++//extern int (*toHostadptPktHandle_hook)(unsigned char band,
++	//struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
++#endif
+ 
+ /* interrupt */
+ #define HOSTADPT_TXRXDONE0_INT_MASK       (0x34) /*32bit: Tx0---Tx15,Rx0---Rx15*/
