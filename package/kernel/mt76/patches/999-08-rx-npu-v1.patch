@@ -1,0 +1,143 @@
+--- a/dma.c
++++ b/dma.c
+@@ -1107,69 +1107,6 @@ free_frag:
+ 	return done;
+ }
+ 
+-#ifdef CONFIG_NET_AIROHA_SOC_NPU
+-int mt76_dma_rx_poll(struct napi_struct *napi, int budget)
+-{
+-	struct mt76_dev *dev;
+-	int qid, done = 0, cur;
+-	
+-	void * pkt=NULL;
+-	unsigned char bReschedule=0;
+-	struct sk_buff *skb;
+-	int npu_done=0;
+-	unsigned int vend_spec = 0;
+-	struct airoha_npu *npu;
+-	//struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+-	dev = container_of(napi->dev, struct mt76_dev, napi_dev);
+-	npu = dev->mmio.npu;
+-	qid = napi - dev->napi;
+-
+-	rcu_read_lock();
+-
+-#if MT76_RROV31
+-	if(qid != MT_RXQ_RRO_RXDMAD_C)
+-#else
+-	if(qid != MT_RXQ_RRO_IND)
+-#endif
+-
+-	{
+-		do {
+-				cur = mt76_dma_rx_process(dev, &dev->q_rx[qid], budget - done);
+-				mt76_rx_poll_complete(dev, qid, napi);
+-				done += cur;
+-		} while (cur && done < budget);
+-	}
+-	else{
+-		while (npu_done < budget)
+-		{		
+-			if(!(IS_ERR(npu)))
+-				pkt = npu->ops.hostadpt_rx_handler_ops(0, &bReschedule, &vend_spec);
+-		
+-			if(pkt)	{	
+-				npu_done++;
+-				skb=(struct sk_buff *)pkt;
+-				dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
+-			}
+-			else
+-				break;
+-		
+-			mt76_rx_poll_complete(dev, qid, napi);	
+-		}	
+-		rcu_read_unlock();
+-		if(npu_done < budget && napi_complete(napi))
+-			dev->drv->rx_poll_complete(dev, qid);
+-		return npu_done;
+-	}
+-
+-	rcu_read_unlock();
+-
+-	if (done < budget && napi_complete(napi))
+-		dev->drv->rx_poll_complete(dev, qid);
+-
+-	return done;
+-}
+-#else
+-
+ int mt76_dma_rx_poll(struct napi_struct *napi, int budget)
+ {
+ 	struct mt76_dev *dev;
+@@ -1194,7 +1131,6 @@ int mt76_dma_rx_poll(struct napi_struct
+ 	return done;
+ }
+ 
+-#endif
+ EXPORT_SYMBOL_GPL(mt76_dma_rx_poll);
+ 
+ static int
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -630,6 +630,9 @@ start_hw_rro:
+ 		if (mt7996_band_valid(dev, MT_BAND2))
+ 			mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND2, mt76_dma_rx_poll);
+ 		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
++			if (airoha_npu_device_active(dev->mt76.mmio.npu))
++				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_npu_rx_poll);
++			else
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_dma_rx_poll);
+ 		} else {
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
+--- a/npu.c
++++ b/npu.c
+@@ -510,6 +510,37 @@ void set_npu_enable(int enable)
+ EXPORT_SYMBOL_GPL(npu_enable);
+ EXPORT_SYMBOL_GPL(set_npu_enable);
+ 
++int mt76_npu_rx_poll(struct napi_struct *napi, int budget)
++{
++	struct airoha_npu *npu;
++	struct mt76_dev *dev;
++	int i, qid;
++
++	dev = container_of(napi->dev, struct mt76_dev, napi_dev);
++	npu = dev->mmio.npu;
++	qid = napi - dev->napi;
++
++	rcu_read_lock();
++
++	for (i = 0; i < budget; i++) {
++		struct sk_buff *skb;
++
++		skb = npu->ops.wlan_rx_handler(npu, 0);
++		if (skb)
++			dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx,
++					 skb, 0);
++		mt76_rx_poll_complete(dev, qid, napi);
++	}
++
++	rcu_read_unlock();
++
++	if (i < budget && napi_complete(napi))
++		dev->drv->rx_poll_complete(dev, qid);
++
++	return i;
++}
++EXPORT_SYMBOL_GPL(mt76_npu_rx_poll);
++
+ static irqreturn_t mt76_npu_irq_handler(int irq, void *dev_instance)
+ {
+ 	struct mt76_dev *dev = dev_instance;
+--- a/npu.h
++++ b/npu.h
+@@ -203,6 +203,8 @@ struct airoha_eth {
+ extern struct airoha_eth *glb_eth;
+ 
+ extern struct airoha_npu *airoha_npu_get(struct device *dev, dma_addr_t foe_stats_addr);
++
++int mt76_npu_rx_poll(struct napi_struct *napi, int budget);
+ int mt76_npu_init(struct mt76_dev *dev);
+ //extern bool arht_wifi_npu_tx_active(void);
+ #endif

@@ -1,0 +1,74 @@
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -169,7 +169,7 @@ static int hostadpt_rxdscp_init(void)
+ 
+ }
+ 
+-struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec)
++struct sk_buff *hostadpt_rx_handler(struct airoha_npu *npu, int ring_idx)
+ {	
+ 	HOSTADPT_DMA_DSCP_T *pHostadptRX = NULL, *pHostadptRX_tmp= NULL;  //*pHostadptRX_tmp2=NULL;
+ 	struct sk_buff *skb = NULL;
+@@ -209,7 +209,6 @@ struct sk_buff *hostadpt_rx_handler(u32
+ 	HOSTADPT_MSG(DBG_LOG, "foe_number: %d\n",pHostadptRX->pkt_info.foe_number);
+ 	HOSTADPT_MSG(DBG_LOG, "crsn: %d\n",pHostadptRX->pkt_info.crsn);
+ 
+-	*vnd_spec = pHostadptRX->vend_specific;
+ 	if(1)
+ 	{
+ 		if(pHostadptRX->pkt_ctrl.len != pHostadptRX->pkt_ctrl.cur_len)
+@@ -335,7 +334,6 @@ error:
+ 							skb_all = alloc_skb(single_total_len+1, GFP_KERNEL); 
+ 							total_pktSize = single_total_len;
+ 							cur_pktSize = 0;
+-							*vnd_spec = pHostadptRX->vend_specific;
+ 						}
+ 						if(skb_all)
+ 						{
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ b/drivers/net/ethernet/airoha/hostadpt.h
+@@ -151,7 +151,7 @@ typedef union {
+ } npu_hif_v2_info;
+ 
+ int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-struct sk_buff *hostadpt_rx_handler(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
++struct sk_buff *hostadpt_rx_handler(struct airoha_npu *npu, int ring_idx);
+ int hostadpInit(struct airoha_npu *_npu);
+ 
+ struct device* get_ecnt_npu_dev(void);
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -86,12 +86,14 @@ struct airoha_npu {
+ 						   int index, u32 addr);
+ 		int (*wlan_get_npu_support_map)(struct airoha_npu *npu,
+ 						int index, u32 *map);
+-		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-		struct sk_buff *(*hostadpt_rx_handler_ops)(u32 ring_idx, unsigned char* preschedule, unsigned int* vnd_spec);
++		struct sk_buff *(*wlan_rx_handler)(struct airoha_npu *npu,
++						   int index);
+ 		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
+ 		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);
+ 		void (*wlan_irq_enable)(struct airoha_npu *npu, int q);
+ 		void (*wlan_irq_disable)(struct airoha_npu *npu, int q);
++
++		int (*hostadpt_tx_handler_ops)(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+ 	} ops;
+ #endif
+ };
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -837,13 +837,13 @@ static int airoha_npu_probe(struct platf
+ 		airoha_npu_wlan_set_rx_ring_for_txdone;
+ 	npu->ops.wlan_get_npu_support_map =
+ 		airoha_npu_wlan_get_npu_support_map;
++	npu->ops.wlan_rx_handler = hostadpt_rx_handler;
+ 	npu->ops.wlan_set_irq_mask = airoha_npu_wlan_set_irq_mask;
+ 	npu->ops.wlan_get_irq = airoha_npu_wlan_get_irq;
+ 	npu->ops.wlan_irq_enable = airoha_npu_wlan_irq_enable;
+ 	npu->ops.wlan_irq_disable = airoha_npu_wlan_irq_disable;
+ 
+ 	npu->ops.hostadpt_tx_handler_ops = hostadpt_tx_handler;
+-	npu->ops.hostadpt_rx_handler_ops = hostadpt_rx_handler;
+ 
+ 	npu->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
+ 	if (IS_ERR(npu->regmap))
