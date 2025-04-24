@@ -17,9 +17,9 @@
  };
  
 +struct npu_tx_dma_desc {
-+	__le32 ctrl;
-+	__le32 addr;
-+	__le64 rsv;
++	u32 ctrl;
++	u32 addr;
++	u64 rsv;
 +	u8 data[192];
 +} __packed;
 +
