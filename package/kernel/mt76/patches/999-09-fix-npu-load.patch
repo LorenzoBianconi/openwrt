@@ -1,0 +1,112 @@
+--- a/mac80211.c
++++ b/mac80211.c
+@@ -755,6 +755,7 @@ void mt76_free_device(struct mt76_dev *d
+ 		destroy_workqueue(dev->wq);
+ 		dev->wq = NULL;
+ 	}
++	mt76_npu_deinit(dev);
+ 	ieee80211_free_hw(dev->hw);
+ }
+ EXPORT_SYMBOL_GPL(mt76_free_device);
+--- a/mt76.h
++++ b/mt76.h
+@@ -811,7 +811,7 @@ struct mt76_mmio {
+ 	struct completion wed_reset;
+ 	struct completion wed_reset_complete;
+ 
+-	struct airoha_npu *npu;
++	struct airoha_npu __rcu *npu;
+ };
+ 
+ struct mt76_rx_status {
+@@ -1770,6 +1770,10 @@ int mt76_testmode_dump(struct ieee80211_
+ int mt76_testmode_set_state(struct mt76_phy *phy, enum mt76_testmode_state state);
+ int mt76_testmode_alloc_skb(struct mt76_phy *phy, u32 len);
+ 
++int mt76_npu_rx_poll(struct napi_struct *napi, int budget);
++int mt76_npu_init(struct mt76_dev *dev);
++void mt76_npu_deinit(struct mt76_dev *dev);
++
+ static inline void
+ mt76_testmode_param_set(struct mt76_testmode_data *td, u16 idx)
+ {
+--- a/npu.h
++++ b/npu.h
+@@ -201,12 +201,6 @@ struct airoha_eth {
+ #endif
+ 
+ extern struct airoha_eth *glb_eth;
+-
+-extern struct airoha_npu *airoha_npu_get(struct device *dev, dma_addr_t foe_stats_addr);
+-
+-int mt76_npu_rx_poll(struct napi_struct *napi, int budget);
+-int mt76_npu_init(struct mt76_dev *dev);
+-//extern bool arht_wifi_npu_tx_active(void);
+ #endif
+ 
+ #endif
+--- a/npu.c
++++ b/npu.c
+@@ -559,24 +559,48 @@ static irqreturn_t mt76_npu_irq_handler(
+ 
+ int mt76_npu_init(struct mt76_dev *dev)
+ {
+-#if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
+-	int err;
++	struct airoha_npu *npu;
++	int err = 0;
+ 
+-	err = airoha_npu_device_attach(&dev->mmio.npu);
+-	if (err)
+-		return err;
+-
+-	err = devm_request_irq(dev->mmio.npu->dev, dev->mmio.npu->irqs[0],
+-			       mt76_npu_irq_handler, IRQF_SHARED, "mt76-npu",
+-			       dev);
+-	if (err)
+-		return err;
++	mutex_lock(&dev->mutex);
+ 
+-	dev->mmio.npu->ops.wlan_irq_enable(dev->mmio.npu, 0);
+-#endif
+-	return 0;
++	npu = airoha_npu_get(dev->dev, NULL);
++	if (IS_ERR(npu)) {
++		request_module("airoha-npu");
++		npu = airoha_npu_get(dev->dev, NULL);
++	}
++
++	if (!IS_ERR_OR_NULL(npu)) {
++		err = devm_request_irq(npu->dev, npu->irqs[0],
++				       mt76_npu_irq_handler, IRQF_SHARED,
++				       "mt76-npu", dev);
++	}
++
++	rcu_assign_pointer(dev->mmio.npu, npu);
++	synchronize_rcu();
++
++	npu->ops.wlan_irq_enable(dev->mmio.npu, 0);
++
++	mutex_unlock(&dev->mutex);
++
++	return err;
+ 
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_init);
++
++void mt76_npu_deinit(struct mt76_dev *dev)
++{
++	struct airoha_npu *npu;
++
++	mutex_lock(&dev->mutex);
++
++	npu = rcu_replace_pointer(dev->mmio.npu, NULL,
++				  lockdep_is_held(&dev->mutex));
++	if (npu)
++		airoha_npu_put(npu);
++
++	mutex_unlock(&dev->mutex);
++}
++EXPORT_SYMBOL_GPL(mt76_npu_deinit);
+ #endif
+ 

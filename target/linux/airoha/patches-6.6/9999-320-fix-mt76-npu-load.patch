@@ -1,0 +1,130 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -225,8 +225,6 @@ struct npu_tx_dma_desc {
+ 	u8 data[192];
+ } __packed;
+ 
+-static struct airoha_npu __rcu *npu_ptr;
+-
+ static int airoha_npu_send_msg(struct airoha_npu *npu, int func_id,
+ 			       void *p, int size)
+ {
+@@ -728,19 +726,6 @@ static int airoha_npu_wlan_init(struct a
+ 					0);
+ }
+ 
+-int airoha_npu_device_attach(struct airoha_npu **npu)
+-{
+-	if (!try_module_get(THIS_MODULE))
+-		return -ENODEV;
+-
+-	rcu_read_lock();
+-	*npu = rcu_dereference(npu_ptr);
+-	rcu_read_unlock();
+-
+-	return 0;
+-}
+-EXPORT_SYMBOL_GPL(airoha_npu_device_attach);
+-
+ static void airoha_npu_wlan_set_irq_mask(struct airoha_npu *npu, int q)
+ {
+ 	/* FIXME */
+@@ -767,7 +752,7 @@ static void airoha_npu_wlan_irq_disable(
+ }
+ 
+ struct airoha_npu *airoha_npu_get(struct device *dev,
+-				  dma_addr_t foe_stats_addr)
++				  dma_addr_t *foe_stats_addr)
+ {
+ 	struct platform_device *pdev;
+ 	struct device_node *np;
+@@ -806,11 +791,13 @@ struct airoha_npu *airoha_npu_get(struct
+ 		goto error_module_put;
+ 	}
+ 
+-	err = airoha_npu_stats_setup(npu, foe_stats_addr);
+-	if (err) {
+-		dev_err(dev, "failed to allocate npu stats buffer\n");
+-		npu = ERR_PTR(err);
+-		goto error_module_put;
++	if (foe_stats_addr) {
++		err = airoha_npu_stats_setup(npu, *foe_stats_addr);
++		if (err) {
++			dev_err(dev, "failed to allocate npu stats buffer\n");
++			npu = ERR_PTR(err);
++			goto error_module_put;
++		}
+ 	}
+ 
+ 	return npu;
+@@ -964,7 +951,6 @@ static int airoha_npu_probe(struct platf
+ 	regmap_write(npu->regmap, REG_CR_BOOT_TRIGGER, 0x1);
+ 	msleep(100);
+ 
+-	rcu_assign_pointer(npu_ptr, npu);
+ 	err = airoha_npu_wlan_init(npu);
+ 	if (err)
+ 		return err;
+@@ -984,9 +970,6 @@ static void airoha_npu_remove(struct pla
+ 
+ 	for (i = 0; i < ARRAY_SIZE(npu->cores); i++)
+ 		cancel_work_sync(&npu->cores[i].wdt_work);
+-
+-	rcu_assign_pointer(npu_ptr, NULL);
+-	synchronize_rcu();
+ }
+ 
+ static struct platform_driver airoha_npu_driver = {
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -104,22 +104,25 @@ struct airoha_npu {
+ #endif
+ };
+ 
++static inline bool airoha_npu_device_active(struct airoha_npu *npu)
++{
++	return !!npu;
++}
++
+ #if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
+-int airoha_npu_device_attach(struct airoha_npu **npu);
+-#define airoha_npu_device_active(_dev) !!(_dev)
++struct airoha_npu *airoha_npu_get(struct device *dev,
++				  dma_addr_t *foe_stats_addr);
++void airoha_npu_put(struct airoha_npu *npu);
+ #else
+-static inline int airoha_npu_device_attach(struct airoha_npu **npu)
++static inline struct airoha_npu *airoha_npu_get(struct device *dev,
++						dma_addr_t *foe_stats_addr)
+ {
+-	return 0;
++	return NULL;
+ }
+ 
+-static inline bool airoha_npu_device_active(struct airoha_npu *npu)
++static inline void airoha_npu_put(struct airoha_npu *npu)
+ {
+-	return false;
+ }
+ #endif
+ 
+-struct airoha_npu *airoha_npu_get(struct device *dev,
+-				  dma_addr_t foe_stats_addr);
+-void airoha_npu_put(struct airoha_npu *npu);
+ #endif /* AIROHA_NPU_H */
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -1352,11 +1352,11 @@ static int airoha_ppe_flush_sram_entries
+ static struct airoha_npu *airoha_ppe_npu_get(struct airoha_eth *eth)
+ {
+ 	struct airoha_npu *npu = airoha_npu_get(eth->dev,
+-						eth->ppe->foe_stats_dma);
++						&eth->ppe->foe_stats_dma);
+ 
+ 	if (IS_ERR(npu)) {
+ 		request_module("airoha-npu");
+-		npu = airoha_npu_get(eth->dev, eth->ppe->foe_stats_dma);
++		npu = airoha_npu_get(eth->dev, &eth->ppe->foe_stats_dma);
+ 	}
+ 
+ 	return npu;
