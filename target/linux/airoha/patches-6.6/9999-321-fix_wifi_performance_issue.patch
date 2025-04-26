@@ -1,0 +1,38 @@
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -263,7 +263,7 @@ static int airoha_ppe_foe_entry_prepare(
+ 		struct airoha_gdm_port *port = netdev_priv(dev);
+ 		u8 pse_port;
+ 
+-		if(airoha_ppe_is_wifi_dev(dev) || airoha_ppe_is_br_dev(dev)) {
++		if(airoha_ppe_is_wifi_dev(dev)) {
+ 			pse_port = FE_PSE_PORT_CDM4;
+ 		} else {
+ 			if (!airoha_is_valid_gdm_port(eth, port))
+@@ -573,7 +573,7 @@ static int airoha_ppe_foe_commit_entry(s
+ 	struct airoha_eth *eth = ppe->eth;
+ 	struct airoha_npu *npu;
+ 	int err = 0;
+-
++	int pse_port = 0;
+ 	memcpy(&hwe->d, &e->d, sizeof(*hwe) - sizeof(hwe->ib1));
+ 	wmb();
+ 
+@@ -587,10 +587,13 @@ static int airoha_ppe_foe_commit_entry(s
+ 	if (!npu)
+ 		return -ENODEV;
+ 
+-	index = airoha_ppe_foe_get_flow_stats_index(ppe, hash);
+-	if (index < PPE_STATS_NUM_ENTRIES) {
+-		airoha_ppe_foe_flow_stat_entry_reset(ppe, npu, index);
+-		airoha_ppe_foe_flow_stats_update(hwe);
++	pse_port = FIELD_GET(AIROHA_FOE_IB2_PSE_PORT, e->ipv4.ib2);
++	if(pse_port != FE_PSE_PORT_CDM4){
++		index = airoha_ppe_foe_get_flow_stats_index(ppe, hash);
++		if (index < PPE_STATS_NUM_ENTRIES) {
++			airoha_ppe_foe_flow_stat_entry_reset(ppe, npu, index);
++			airoha_ppe_foe_flow_stats_update(hwe);
++		}
+ 	}
+ 
+ 	if (hash < PPE_SRAM_NUM_ENTRIES) {
