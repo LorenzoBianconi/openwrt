@@ -1,0 +1,22 @@
+--- a/npu.c
++++ b/npu.c
+@@ -484,12 +484,13 @@ int mt76_npu_rx_poll(struct napi_struct
+ 	for (i = 0; i < budget; i++) {
+ 		struct sk_buff *skb;
+ 
+-		skb = npu->ops.wlan_rx_handler(npu, 0);
+-		if (skb)
+-			dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx,
+-					 skb, 0);
+-		mt76_rx_poll_complete(dev, qid, napi);
+-	}
++		skb = npu->ops.wlan_rx_dequeue(npu, 0);
++		if (!skb)
++			break;
++
++		dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
++		mt76_rx_poll_complete(dev, qid, napi);
++	}
+ 
+ 	rcu_read_unlock();
+ 

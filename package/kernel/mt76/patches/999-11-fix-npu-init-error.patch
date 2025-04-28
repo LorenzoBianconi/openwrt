@@ -1,0 +1,46 @@
+--- a/npu.c
++++ b/npu.c
+@@ -528,18 +528,22 @@ int mt76_npu_init(struct mt76_dev *dev)
+ 		request_module("airoha-npu");
+ 		npu = airoha_npu_get(dev->dev, NULL);
+ 	}
+-
+-	if (!IS_ERR_OR_NULL(npu)) {
+-		err = devm_request_irq(npu->dev, npu->irqs[0],
+-				       mt76_npu_irq_handler, IRQF_SHARED,
+-				       "mt76-npu", dev);
+-	}
++
++	if (IS_ERR(npu)) {
++		err = PTR_ERR(npu);
++		goto unlock;
++	}
++
++	err = devm_request_irq(npu->dev, npu->irqs[0], mt76_npu_irq_handler,
++			       IRQF_SHARED, "mt76-npu", dev);
++	if (err)
++		goto unlock;
+ 
+ 	rcu_assign_pointer(dev->mmio.npu, npu);
+ 	synchronize_rcu();
+ 
+ 	npu->ops.wlan_irq_enable(dev->mmio.npu, 0);
+-
++unlock:
+ 	mutex_unlock(&dev->mutex);
+ 
+ 	return err;
+--- a/mt7996/pci.c
++++ b/mt7996/pci.c
+@@ -172,9 +172,8 @@ static int mt7996_pci_probe(struct pci_d
+ 	if (hif2)
+ 		dev->hif2 = hif2;
+ 
+-	ret = mt76_npu_init(mdev);
+-	if (ret)
+-		goto free_device;
++	if (mt76_npu_init(mdev))
++		dev_warn(mdev->dev, "failed loading npu\n");
+ 
+ 	ret = mt7996_mmio_wed_init(dev, pdev, false, &irq);
+ 	if (ret < 0)

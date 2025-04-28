@@ -1,0 +1,21 @@
+diff -uNr old/net/mac80211/iface.c new/net/mac80211/iface.c
+--- old/net/mac80211/iface.c	2025-04-24 14:26:37.939030000 +0800
++++ new/net/mac80211/iface.c	2025-04-24 16:03:48.511645000 +0800
+@@ -896,7 +896,7 @@
+ 	.ndo_set_mac_address 	= ieee80211_change_mac,
+ 	.ndo_select_queue	= ieee80211_monitor_select_queue,
+ };
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ static int ieee80211_netdev_fill_forward_path(struct net_device_path_ctx *ctx,
+ 					      struct net_device_path *path)
+ {
+@@ -957,6 +957,8 @@
+ 
+ 	return ret;
+ }
++#endif
++
+ #if LINUX_VERSION_IS_LESS(6,6,0)
+ static int ieee80211_netdev_fill_receive_path(struct net_device_path_ctx *ctx,
+ 					      struct net_device_path *path)
