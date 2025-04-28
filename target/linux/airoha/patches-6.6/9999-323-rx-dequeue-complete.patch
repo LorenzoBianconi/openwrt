@@ -1,0 +1,658 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -224,45 +224,6 @@ struct wlan_mbox_data {
+ 	};
+ };
+ 
+-/* CTRL */
+-#define NPU_RX_DMA_DESC_LAST_MASK	BIT(29)
+-#define NPU_RX_DMA_DESC_LEN_MASK	GENMASK(28, 15)
+-#define NPU_RX_DMA_DESC_CUR_LEN_MASK	GENMASK(14, 1)
+-#define NPU_RX_DMA_DESC_DONE_MASK	BIT(0)
+-/* INFO */
+-#define NPU_RX_DMA_PKT_ID_MASK		GENMASK(31, 26)
+-#define NPU_RX_DMA_SRC_PORT_MASK	GENMASK(25, 21)
+-#define NPU_RX_DMA_CRSN_MASK		GENMASK(20, 16)
+-#define NPU_RX_DMA_FOE_ID_MASK		GENMASK(15, 0)
+-/* DATA */
+-#define NPU_RX_DMA_SID_MASK		GENMASK(31, 16)
+-#define NPU_RX_DMA_FRAG_TYPE_MASK	GENMASK(15, 14)
+-#define NPU_RX_DMA_PRIORITY_MASK	GENMASK(13, 10)
+-#define NPU_RX_DMA_RADIO_ID_MASK	GENMASK(9, 6)
+-#define NPU_RX_DMA_VAP_ID_MASK		GENMASK(5, 2)
+-#define NPU_RX_DMA_FRAME_TYPE_MASK	GENMASK(1, 0)
+-
+-struct airoha_npu_rx_dma_desc {
+-	u32 ctrl;
+-	u32 info;
+-	u32 data;
+-	u32 addr;
+-	u64 rsv;
+-} __packed;
+-
+-struct airoha_npu_queue_entry {
+-	void *buf;
+-	dma_addr_t dma_addr;
+-	u16 dma_len;
+-};
+-
+-struct airoha_npu_tx_dma_desc {
+-	u32 ctrl;
+-	u32 addr;
+-	u64 rsv;
+-	u8 data[192];
+-} __packed;
+-
+ static int airoha_npu_send_msg(struct airoha_npu *npu, int func_id,
+ 			       void *p, int size)
+ {
+@@ -702,23 +663,15 @@ static int airoha_npu_wlan_get_npu_suppo
+ 				       map);
+ }
+ 
+-static int airoha_npu_fill_rx_queue_entry(struct airoha_npu *npu,
+-					  struct airoha_npu_queue *q,
+-					  int index)
+-{
+-
+-	return 0;
+-}
+-
+ static int airoha_npu_fill_rx_queue(struct airoha_npu *npu,
+ 				    struct airoha_npu_queue *q)
+ {
+ 	enum dma_data_direction dir = page_pool_get_dma_dir(q->page_pool);
+-	struct airoha_npu_rx_dma_desc *desc = q->desc;
+-	struct airoha_npu_queue_entry *e = q->entry;
+ 	int nframes = 0;
+ 
+ 	while (q->queued < q->ndesc - 1) {
++		struct airoha_npu_rx_dma_desc *desc = &q->desc[q->head];
++		struct airoha_npu_queue_entry *e = &q->entry[q->head];
+ 		struct page *page;
+ 		int offset;
+ 
+@@ -727,15 +680,15 @@ static int airoha_npu_fill_rx_queue(stru
+ 		if (!page)
+ 			return -ENOMEM;
+ 
+-		e[q->head].buf = page_address(page) + offset;
+-		e[q->head].dma_addr = page_pool_get_dma_addr(page) + offset;
+-		e[q->head].dma_len = SKB_WITH_OVERHEAD(q->buf_size);
++		e->buf = page_address(page) + offset;
++		e->dma_addr = page_pool_get_dma_addr(page) + offset;
++		e->dma_len = SKB_WITH_OVERHEAD(q->buf_size);
+ 
+-		memset(&desc[q->head], 0, sizeof(*desc));
+-		desc[q->head].addr = e[q->head].dma_addr;
++		memset(desc, 0, sizeof(*desc));
++		desc->addr = e->dma_addr;
+ 
+-		dma_sync_single_for_device(npu->dev, e[q->head].dma_addr,
+-					   e[q->head].dma_len, dir);
++		dma_sync_single_for_device(npu->dev, e->dma_addr, e->dma_len,
++					   dir);
+ 
+ 		q->head = (q->head + 1) % q->ndesc;
+ 		q->queued++;
+@@ -746,35 +699,62 @@ static int airoha_npu_fill_rx_queue(stru
+ 
+ static struct sk_buff *airoha_npu_rx_dequeue(struct airoha_npu *npu, int qid)
+ {
+-	struct airoha_npu_queue *q = &npu->q_rx[qid];
+-	struct airoha_npu_rx_dma_desc *desc = q->desc;
+-	struct airoha_npu_queue_entry *e = q->entry;
+-	struct sk_buff *skb;
+-	int len;
++	struct airoha_npu_rx_dma_desc *desc;
++	struct airoha_npu_queue *q;
++	struct sk_buff *skb = NULL;
++	int i, nframes, index;
+ 
+-	if (!FIELD_GET(NPU_RX_DMA_DESC_DONE_MASK, desc[q->tail].ctrl))
++	if (qid >= ARRAY_SIZE(npu->q_rx))
+ 		return NULL;
+ 
+-	dma_sync_single_for_cpu(npu->dev, desc[q->tail].addr,
+-				SKB_WITH_OVERHEAD(q->buf_size),
+-				page_pool_get_dma_dir(q->page_pool));
+-
+-	skb = build_skb(e[q->tail].buf, q->buf_size);
+-	if (!skb)
+-		return NULL;
++	q = &npu->q_rx[qid];
++	desc = &q->desc[q->tail];
++	index = q->tail;
++
++	nframes = FIELD_GET(NPU_RX_DMA_PKT_COUNT_MASK, desc->info);
++	nframes = max_t(int, nframes, 1);
++
++	for (i = 0; i < nframes; i++) {
++		struct airoha_npu_queue_entry *e = &q->entry[index];
++		struct page *page = virt_to_head_page(e->buf);
++		int len = FIELD_GET(NPU_RX_DMA_DESC_CUR_LEN_MASK,
++				    desc->ctrl);
++
++		if (!FIELD_GET(NPU_RX_DMA_DESC_DONE_MASK, desc->ctrl)) {
++			dev_kfree_skb(skb);
++			return NULL;
++		}
+ 
+-	len = FIELD_GET(NPU_RX_DMA_DESC_CUR_LEN_MASK, desc[q->tail].ctrl);
+-	__skb_put(skb, len);
+-	skb_mark_for_recycle(skb);
+-	skb_reset_mac_header(skb);
++		dma_sync_single_for_cpu(npu->dev, desc->addr,
++					SKB_WITH_OVERHEAD(q->buf_size),
++					page_pool_get_dma_dir(q->page_pool));
+ 
+-	airoha_npu_fill_rx_queue(npu, q);
++		if (!skb) {
++			skb = build_skb(e->buf, q->buf_size);
++			if (!skb)
++				return NULL;
++
++			__skb_put(skb, len);
++			skb_mark_for_recycle(skb);
++			skb_reset_mac_header(skb);
++		} else {
++			struct skb_shared_info *shinfo = skb_shinfo(skb);
++			int nr_frags = shinfo->nr_frags;
++
++			if (nr_frags < ARRAY_SIZE(shinfo->frags))
++				skb_add_rx_frag(skb, nr_frags, page,
++						e->buf - page_address(page),
++						len, q->buf_size);
++		}
+ 
+-	q->tail = (q->tail + 1) % q->ndesc;
+-	q->queued--;
++		index = (index + 1) % q->ndesc;
++		desc = &q->desc[index];
++	}
++	q->tail = index;
++	q->queued -= i;
+ 
++	airoha_npu_fill_rx_queue(npu, q);
+ 	regmap_write(npu->regmap, REG_RX_CPU_IDX(qid), q->tail);
+-
+ 	/* FIXME */
+ 	//npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
+ 
+@@ -835,13 +815,12 @@ static void airoha_npu_cleanup_rx_queue(
+ 					struct airoha_npu_queue *q)
+ {
+ 	while (q->queued) {
+-		struct airoha_queue_entry *e = q->entry;
++		struct airoha_npu_queue_entry *e = &q->entry[q->tail];
+ 
+-		dma_sync_single_for_cpu(npu->dev, e[q->tail].dma_addr,
+-					e[q->tail].dma_len,
++		dma_sync_single_for_cpu(npu->dev, e->dma_addr, e->dma_len,
+ 					page_pool_get_dma_dir(q->page_pool));
+ 		page_pool_put_full_page(q->page_pool,
+-					virt_to_head_page(e[q->tail].buf),
++					virt_to_head_page(e->buf),
+ 					false);
+ 		q->tail = (q->tail + 1) % q->ndesc;
+ 		q->queued--;
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ b/drivers/net/ethernet/airoha/hostadpt.c
+@@ -69,11 +69,6 @@
+ volatile unsigned short int reTryTimes;
+ unsigned int hostaptDebug = DBG_OFF;
+ 
+-HOSTADPT_DMA_DSCP_T *pHostadptRX_BASE[HOSTADPT_RX_RING_NUM] = {NULL};
+-u32 hostadpt_rx_dscp_max_num[HOSTADPT_RX_RING_NUM] = {HOSTADPT_RX0_DSCP_NUM, HOSTADPT_RX1_DSCP_NUM};
+-u32 hostadpt_rx_dma_idx[HOSTADPT_RX_RING_NUM] = {0};
+-u32 hostadpt_rx_cpu_idx[HOSTADPT_RX_RING_NUM] = {0};
+-
+ extern struct airoha_eth *glb_eth;
+ static struct airoha_npu *npu;
+ 
+@@ -90,371 +85,6 @@ static DEFINE_SPINLOCK(hostadpt_lock_2G)
+ static DEFINE_SPINLOCK(hostadpt_lock_test);
+ #endif
+ 
+-static int hostadpt_rxdscp_init(void)
+-{
+-	dma_addr_t dscpDmaAddr=0;
+-	int i;
+-	//u32 dmaIdx = 0;
+-	struct device *dev = NULL ;
+-	unsigned long dscpBaseAddr=0 ;
+-	HOSTADPT_DMA_DSCP_T *dscp = NULL;
+-	struct sk_buff *skb = NULL;
+-
+-	/******************************************
+-	* Allocate descriptor DMA memory		  *
+-	*******************************************/
+-	dev = npu->dev;
+-
+-#ifdef TCSUPPORT_NPU_V2
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, (GFP_KERNEL|__GFP_NOWARN|__GFP_DMA)) ;
+-#else
+-	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (unsigned int *)&dscpDmaAddr, (GFP_KERNEL|__GFP_NOWARN|__GFP_DMA)) ;
+-#endif
+-#else
+-	dscpBaseAddr = (unsigned long)dma_alloc_coherent(dev, sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX_TOTAL_DSCP_NUM, (long long unsigned int *)&dscpDmaAddr, GFP_KERNEL) ;
+-#endif
+-	if(!dscpBaseAddr) {
+-		HOSTADPT_MSG(DBG_ERR, "Allocate memory for TX/RX DSCP failed.\n") ; 
+-		return -ENOMEM ;
+-	}
+-
+-	pHostadptRX_BASE[0] = (HOSTADPT_DMA_DSCP_T *)dscpBaseAddr ;
+-	pHostadptRX_BASE[1] = pHostadptRX_BASE[0] + HOSTADPT_RX0_DSCP_NUM;
+-
+-	HOSTADPT_MSG(DBG_LOG, "dscpDmaAddr =%llx\n",dscpDmaAddr) ; 
+-
+-	/***************************************************
+-	* Initialization first DSCP for Rx DMA			  *
+-	****************************************************/
+-	dscp = pHostadptRX_BASE[0];
+-	for(i=0; i<HOSTADPT_RX_TOTAL_DSCP_NUM; i++) {		
+-		skb = alloc_skb(HOSTAPD_BUFFER_LEN, GFP_KERNEL); 
+-		if(skb == NULL)
+-		{
+-			HOSTADPT_MSG(DBG_ERR, "alloc skb faild!");
+-			return -ENOMEM ;
+-		}
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-		dscp->skb_p = (u64)skb;
+-#else
+-		dscp->skb_p = (u32)skb;
+-#endif
+-		dscp->pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb->data), HOSTAPD_BUFFER_LEN, DMA_TO_DEVICE);
+-		dscp->pkt_info.pkt_idx = 0;
+-		dscp->pkt_ctrl.is_last = 0;
+-		dscp->pkt_ctrl.done = 0;
+-		//dma_unmap_single(dev, dscp->pkt_addr, HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
+-		dscp++;	
+-	}
+-	
+-	
+-	//write rx0/rx1 num to reg
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_MAX_CNT, HOSTADPT_RX0_DSCP_NUM);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_MAX_CNT, HOSTADPT_RX1_DSCP_NUM);
+-	
+-	//set rx0/rx1 hostadpt_rx_cpu_idx/hostadpt_rx_dma_idx 
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, 0);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, 0);
+-	
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_DMA_IDX, 0);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_DMA_IDX, 0);
+-	
+-	//write rx0/rx1 base to reg
+-	//Please add other code before this line which is about initialization. 
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_BASE_PTR, dscpDmaAddr);
+-	regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_BASE_PTR, dscpDmaAddr + sizeof(HOSTADPT_DMA_DSCP_T)*HOSTADPT_RX0_DSCP_NUM);
+-
+-	return 0;
+-
+-}
+-
+-struct sk_buff *hostadpt_rx_handler(struct airoha_npu *npu, int ring_idx)
+-{	
+-	HOSTADPT_DMA_DSCP_T *pHostadptRX = NULL, *pHostadptRX_tmp= NULL;  //*pHostadptRX_tmp2=NULL;
+-	struct sk_buff *skb = NULL;
+-	struct sk_buff *skb_tmp = NULL;
+-	struct sk_buff *skb_all = NULL;
+-	struct sk_buff *skb_new = NULL;
+-	struct device *dev = NULL ;
+-	unsigned char pkt_idx=0, pkt_cnt=0, allPkt_done=0, scatter_cnt = 0;//, last_cnt = 0;
+-	unsigned char pkt_cnt_dbg = 0;
+-	u32 cpu_idx_tmp = 0, try_times=0;// ,pkt_len;
+-	static unsigned short cur_pktSize = 0,total_pktSize = 0;
+-	
+-        unsigned char checkfail = 0;
+-	unsigned int realcopylen = 0;
+-	u32 	pkt_addr = 0;
+-	u32 	scatter_pkt_len = 0;
+-	u32 cur_len,single_total_len,all_total_len;
+-	u8 is_last,ddonebit;
+-	HOSTADPT_MSG(DBG_LOG, "RX%d enter hostadpt_rx_handler...\n", ring_idx);
+- 
+-	if(ring_idx >= HOSTADPT_RX_RING_NUM)
+-	{
+-		HOSTADPT_MSG(DBG_ERR, "ring idx error!\n");
+-		return NULL;
+-	}
+-	
+-	pHostadptRX =pHostadptRX_BASE[ring_idx] + hostadpt_rx_cpu_idx[ring_idx];
+-	
+-	if(pHostadptRX->pkt_ctrl.done == 0) 
+-	{
+-		HOSTADPT_MSG(DBG_LOG, "no data to receive!\n");
+-		return NULL;
+-	}
+-	HOSTADPT_MSG(DBG_LOG, "old addr: %x\n",pHostadptRX->pkt_addr);
+-	HOSTADPT_MSG(DBG_LOG, "pkt len: %d\n",pHostadptRX->pkt_ctrl.len);
+-	HOSTADPT_MSG(DBG_LOG, "recv done: %d\n",pHostadptRX->pkt_ctrl.done);
+-	HOSTADPT_MSG(DBG_LOG, "foe_number: %d\n",pHostadptRX->pkt_info.foe_number);
+-	HOSTADPT_MSG(DBG_LOG, "crsn: %d\n",pHostadptRX->pkt_info.crsn);
+-
+-	if(1)
+-	{
+-		if(pHostadptRX->pkt_ctrl.len != pHostadptRX->pkt_ctrl.cur_len)
+-		{
+-			cpu_idx_tmp = hostadpt_rx_cpu_idx[ring_idx];
+-			pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
+-			scatter_pkt_len = pHostadptRX->pkt_ctrl.len;
+-			//scatter_cnt = 0;	
+-			all_total_len = 0;
+-			HOSTADPT_MSG(DBG_CATTER, "scatter handle\n");
+-			HOSTADPT_MSG(DBG_CATTER, "scatter_pkt_len: %d,pkt_cnt=%d\n",scatter_pkt_len,pkt_cnt);
+-			while(1)
+-			{
+-				pHostadptRX_tmp =pHostadptRX_BASE[ring_idx] + cpu_idx_tmp;
+-				ddonebit = pHostadptRX_tmp->pkt_ctrl.done;
+-				rmb();
+-				pkt_idx = pHostadptRX_tmp->pkt_info.pkt_idx & 0x7;
+-				cur_len = pHostadptRX_tmp->pkt_ctrl.cur_len;
+-				single_total_len = pHostadptRX_tmp->pkt_ctrl.len;
+-				is_last = pHostadptRX_tmp->pkt_ctrl.is_last;
+-				pkt_cnt_dbg = (pHostadptRX_tmp->pkt_info.pkt_idx >> 3);
+-				HOSTADPT_MSG(DBG_CATTER, "pkt_idx: %d,cur_len: %d,len:%d,is_last: %d,ddonebit: %d\n",pkt_idx,cur_len,single_total_len,is_last,ddonebit);
+-				if(ddonebit == 0)
+-				{
+-					try_times++;
+-					udelay(1000);
+-				}
+-				else
+-				{
+-					try_times = 0;
+-					scatter_cnt = scatter_cnt+1;	
+-					all_total_len += cur_len;
+-					if(cur_len == single_total_len)
+-					{
+-						/*normal packet within scatter packet*/
+-						scatter_cnt = scatter_cnt - 1;
+-						if(scatter_cnt != pkt_cnt)
+-						{
+-							//printk("desc_pkt_cnt:%d cur_len:%d single_total_len:%d desc_cur_len:%d desc_single_total_len:%d\n",
+-							//	(pHostadptRX->pkt_info.pkt_idx >> 3), cur_len, single_total_len,
+-							//	pHostadptRX_tmp->pkt_ctrl.cur_len, pHostadptRX_tmp->pkt_ctrl.len);
+-							//printk("cur CIDX:%d ori CIDX:%d cur pkt_cnt:%d is_last:%d\n",
+-							//	cpu_idx_tmp, hostadpt_rx_cpu_idx[ring_idx], pkt_cnt_dbg, is_last);
+-							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d cur_len:%d scatter_pkt_len:%d\n\n",
+-							//	scatter_cnt, pkt_cnt, pkt_idx, cur_len, scatter_pkt_len);
+-							checkfail = 1;
+-							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE1\n");
+-							goto error;
+-						}
+-					}
+-					else
+-					{
+-						/*scatter packet handle*/
+-						if(scatter_cnt != pkt_idx || scatter_pkt_len !=single_total_len)
+-						{
+-							checkfail = 1;
+-							//printk("desc_pkt_idx:%d desc_scatter_pkt_len:%d desc_single_total_len:%d \n",
+-							//	(pHostadptRX_tmp->pkt_info.pkt_idx & 0x7), pHostadptRX->pkt_ctrl.len,
+-							//	pHostadptRX_tmp->pkt_ctrl.len);
+-							//printk("cur CIDX:%d ori CIDX:%d cur pkt_cnt:%d is_last:%d\n",
+-							//	cpu_idx_tmp, hostadpt_rx_cpu_idx[ring_idx], pkt_cnt_dbg, is_last);
+-							//printk("scatter_cnt:%d pkt_cnt:%d pkt_idx:%d scatter_pkt_len:%d single_total_len:%d\n\n",
+-							//	scatter_cnt, pkt_cnt, pkt_idx, scatter_pkt_len, single_total_len);
+-							HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE2\n");
+-							goto error;
+-						}
+-
+-						if(is_last == 0x1)
+-						{
+-							allPkt_done = 1;
+-							if(scatter_cnt != pkt_cnt || scatter_pkt_len !=single_total_len || scatter_pkt_len !=all_total_len)
+-							{
+-									checkfail = 1;
+-									if(all_total_len != scatter_pkt_len)
+-									{
+-											HOSTADPT_MSG(DBG_CATTER, "hostapterror check:temptotallen=%d,scatter_pkt_len=%d,pkt_cnt=%d,scatter_cnt=%d,len=%d,cur_len=%d!\n",all_total_len,scatter_pkt_len,pkt_cnt,scatter_cnt,scatter_pkt_len,single_total_len);
+-									}
+-									HOSTADPT_MSG(DBG_CATTER, "BIGPKT_CHECK_PKT_LOSE3\n");
+-									goto error;
+-							}
+-							break;
+-						}						
+-					}
+-											
+-					cpu_idx_tmp++;
+-					if(cpu_idx_tmp >=  hostadpt_rx_dscp_max_num[ring_idx])
+-						cpu_idx_tmp = 0;
+-						
+-
+-				}
+-error:				
+-				if((try_times > reTryTimes) || checkfail/*|| (scatter_cnt > pkt_cnt)*/)
+-				{
+-					//printk("[Hostadpt] get all scatter packets fail.\n");
+-					HOSTADPT_MSG(DBG_CATTER, " get all scatter packets fail,checkfail=%d,current try_times=%d\n",checkfail,try_times);
+-					allPkt_done = 0;
+-					try_times = 0;
+-					break;
+-				}
+-				
+-			}
+-
+-			while(scatter_cnt > 0)
+-			{
+-				HOSTADPT_MSG(DBG_CATTER, "allPkt_done =% d,scatter_cnt=%d\n",allPkt_done,scatter_cnt);
+-				realcopylen = 0;
+-				pHostadptRX =pHostadptRX_BASE[ring_idx] + hostadpt_rx_cpu_idx[ring_idx];
+-				if(allPkt_done)
+-				{
+-					HOSTADPT_MSG(DBG_CATTER, "[Hostadpt]scatter handle begin\n");
+-					pkt_idx = (pHostadptRX->pkt_info.pkt_idx & 0x7);
+-					pkt_cnt = (pHostadptRX->pkt_info.pkt_idx >> 3);
+-					skb_tmp = (struct sk_buff*)pHostadptRX->skb_p;
+-					cur_len = pHostadptRX->pkt_ctrl.cur_len;
+-					single_total_len = pHostadptRX->pkt_ctrl.len;
+-					is_last = pHostadptRX->pkt_ctrl.is_last;
+-					HOSTADPT_MSG(DBG_CATTER, "pkt_idx: %d,pkt_cnt: %d,cur_len; %d,len:%d,is_last: %d\n",pkt_idx,pkt_cnt,cur_len,single_total_len,pHostadptRX->pkt_ctrl.is_last);
+-					if(is_last == 0x0)
+-					{
+-						if(pkt_idx == 1)
+-						{
+-							//skb_all = dev_alloc_skb(pHostadptRX->pkt_ctrl.len);
+-							skb_all = alloc_skb(single_total_len+1, GFP_KERNEL); 
+-							total_pktSize = single_total_len;
+-							cur_pktSize = 0;
+-						}
+-						if(skb_all)
+-						{
+-							if(cur_pktSize+cur_len <= total_pktSize)
+-								realcopylen = cur_len;
+-							else
+-								realcopylen = total_pktSize - cur_pktSize;
+-
+-							if(realcopylen)
+-							{
+-								memcpy(skb_all->data+cur_pktSize, skb_tmp->data, realcopylen);
+-								skb_put(skb_all, realcopylen);
+-							}
+-						}
+-						else
+-						{
+-							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL\n",pkt_idx, pkt_cnt,scatter_cnt);
+-						}
+-						//isLastPkt = 0;
+-						cur_pktSize = cur_pktSize+realcopylen;		
+-					}
+-					else if(is_last == 0x1)
+-					{
+-						if(skb_all)
+-						{
+-							if(cur_pktSize+cur_len <= total_pktSize)
+-								realcopylen = cur_len;
+-							else{
+-								realcopylen = total_pktSize - cur_pktSize;
+-							}
+-							
+-							if(realcopylen)
+-							{
+-								memcpy(skb_all->data+cur_pktSize, skb_tmp->data, realcopylen);
+-								skb_put(skb_all,realcopylen);
+-							}
+-							
+-							skb = skb_all;
+-							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt]scatter handle end\n");
+-						}
+-						else
+-						{
+-							HOSTADPT_MSG(DBG_CATTER, "[Hostadpt] Alloc skb for scatter packet(%d/%d/%d), but skb is NULL,is_last=%d\n",pkt_idx, pkt_cnt,scatter_cnt,pHostadptRX->pkt_ctrl.is_last);
+-							skb = NULL;
+-						}
+-						cur_pktSize = 0;	
+-						//isLastPkt = 1;
+-					}
+-				}
+-
+-				scatter_cnt--;
+-				pHostadptRX->pkt_ctrl.is_last = 0;
+-				pHostadptRX->pkt_info.pkt_idx = 0;
+-				pHostadptRX->pkt_ctrl.done = 0;
+-				hostadpt_rx_cpu_idx[ring_idx]++;
+-				if(hostadpt_rx_cpu_idx[ring_idx] >= hostadpt_rx_dscp_max_num[ring_idx])
+-					hostadpt_rx_cpu_idx[ring_idx] = 0;			
+-			}
+-		}
+-		else
+-		{
+-			skb = (struct sk_buff *)pHostadptRX->skb_p;
+-	                skb_put(skb,pHostadptRX->pkt_ctrl.len);
+-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+-			skb_new = alloc_skb(HOSTAPD_BUFFER_LEN, GFP_KERNEL); //  
+-#else
+-			skb_new = skbmgr_dev_alloc_skb4k();	
+-#endif
+-			if(skb_new == NULL)
+-			{
+-				HOSTADPT_MSG(DBG_ERR, "alloc new skb failed!\n");
+-				skb_new = skb;
+-				skb = NULL;
+-					pHostadptRX->pkt_ctrl.done = 0;
+-					pHostadptRX->pkt_info.pkt_idx = 0;
+-					pHostadptRX->pkt_ctrl.is_last = 0;
+-			}
+-			else
+-			{
+-				dev = npu->dev;
+-				pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb_new->data), HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
+-					if(dma_mapping_error(dev, pkt_addr)){
+-						HOSTADPT_MSG(DBG_ERR, "!!!! Hostadpt dma_mapping_error!!!!\n");
+-						dev_kfree_skb_any(skb_new);
+-						return NULL;
+-				}else{
+-
+-					// unmap old skb->data
+-					dma_unmap_single(dev, pHostadptRX->pkt_addr, HOSTAPD_BUFFER_LEN, DMA_FROM_DEVICE);
+-					pHostadptRX->pkt_addr = pkt_addr; 
+-								HOSTADPT_MSG(DBG_LOG, "new addr: %x\n",pHostadptRX->pkt_addr);
+-					pHostadptRX->pkt_info.pkt_idx = 0;
+-					pHostadptRX->pkt_ctrl.is_last = 0;
+-					pHostadptRX->pkt_ctrl.done = 0;	
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-					pHostadptRX->skb_p = (u64)skb_new;
+-#else
+-					pHostadptRX->skb_p = (u32)skb_new;
+-#endif
+-			 	}
+-			}
+-			
+-			wmb();
+-
+-			hostadpt_rx_cpu_idx[ring_idx]++;
+-			if(hostadpt_rx_cpu_idx[ring_idx] >= hostadpt_rx_dscp_max_num[ring_idx])
+-				hostadpt_rx_cpu_idx[ring_idx] = 0;
+-		}	
+-	}
+-	if(ring_idx == 0)
+-		regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX0_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
+-	else if(ring_idx == 1)
+-		regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_RX1_CPU_IDX, hostadpt_rx_cpu_idx[ring_idx]);	
+-		
+-	if(skb != NULL){	
+-		skb_reset_mac_header(skb);
+-		npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
+-	}
+-	return skb;
+-}
+-
+ /********* wifi tx part  *************/
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ void enque_to_hostapdt_tx(struct device *dev, HOSTADPT_DMA_TX_DSCP_T *pHostadptTX,
+@@ -660,13 +290,6 @@ int hostadpt_tx_handler(unsigned char ba
+ int hostadpInit(struct airoha_npu *_npu)
+ {
+ 	npu = _npu;
+-#if 0
+-	if(hostadpt_rxdscp_init())
+-	{
+-		HOSTADPT_MSG(DBG_ERR, "hostadpt_rxdscp_init failed!\n");
+-		return -ENODEV;
+-	}
+-#endif
+ 	
+ #if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+ 	pHostadptTX_BASE[0] = (HOSTADPT_DMA_TX_DSCP_T *)npu->tx_desc[0];
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -43,6 +43,46 @@
+ #define NPU_TX0_DESC_NUM	1024
+ #define NPU_TX1_DESC_NUM	1024
+ 
++/* CTRL */
++#define NPU_RX_DMA_DESC_LAST_MASK	BIT(29)
++#define NPU_RX_DMA_DESC_LEN_MASK	GENMASK(28, 15)
++#define NPU_RX_DMA_DESC_CUR_LEN_MASK	GENMASK(14, 1)
++#define NPU_RX_DMA_DESC_DONE_MASK	BIT(0)
++/* INFO */
++#define NPU_RX_DMA_PKT_COUNT_MASK	GENMASK(31, 28)
++#define NPU_RX_DMA_PKT_ID_MASK		GENMASK(28, 26)
++#define NPU_RX_DMA_SRC_PORT_MASK	GENMASK(25, 21)
++#define NPU_RX_DMA_CRSN_MASK		GENMASK(20, 16)
++#define NPU_RX_DMA_FOE_ID_MASK		GENMASK(15, 0)
++/* DATA */
++#define NPU_RX_DMA_SID_MASK		GENMASK(31, 16)
++#define NPU_RX_DMA_FRAG_TYPE_MASK	GENMASK(15, 14)
++#define NPU_RX_DMA_PRIORITY_MASK	GENMASK(13, 10)
++#define NPU_RX_DMA_RADIO_ID_MASK	GENMASK(9, 6)
++#define NPU_RX_DMA_VAP_ID_MASK		GENMASK(5, 2)
++#define NPU_RX_DMA_FRAME_TYPE_MASK	GENMASK(1, 0)
++
++struct airoha_npu_rx_dma_desc {
++	u32 ctrl;
++	u32 info;
++	u32 data;
++	u32 addr;
++	u64 rsv;
++} __packed;
++
++struct airoha_npu_tx_dma_desc {
++	u32 ctrl;
++	u32 addr;
++	u64 rsv;
++	u8 data[192];
++} __packed;
++
++struct airoha_npu_queue_entry {
++	void *buf;
++	dma_addr_t dma_addr;
++	u16 dma_len;
++};
++
+ struct airoha_npu_queue {
+ 	u16 head;
+ 	u16 tail;
+@@ -51,8 +91,8 @@ struct airoha_npu_queue {
+ 	int ndesc;
+ 	int buf_size;
+ 
+-	void *desc;
+-	void *entry;
++	struct airoha_npu_queue_entry *entry;
++	struct airoha_npu_rx_dma_desc *desc;
+ 	struct page_pool *page_pool;
+ };
+ 
