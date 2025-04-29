@@ -1,0 +1,38 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -460,23 +460,25 @@ static int airoha_npu_foe_commit_entry(s
+ static int airoha_npu_stats_setup(struct airoha_npu *npu,
+ 				  dma_addr_t foe_stats_addr)
+ {
+-	struct ppe_mbox_data ppe_data = {
+-		.func_type = NPU_OP_SET,
+-		.func_id = PPE_FUNC_SET_WAIT_FLOW_STATS_SETUP,
+-		.stats_info = {
+-			.foe_stats_addr = foe_stats_addr,
+-		},
+-	};
++	struct ppe_mbox_data *ppe_data;
+ 	void *stats;
+ 	int err;
+ 
+-	err = airoha_npu_send_msg(npu, NPU_FUNC_PPE, &ppe_data,
+-				  sizeof(struct ppe_mbox_data));
++	ppe_data = kzalloc(sizeof(*ppe_data), GFP_ATOMIC);
++	if (!ppe_data)
++		return -ENOMEM;
++
++	ppe_data->func_type = NPU_OP_SET;
++	ppe_data->func_id = PPE_FUNC_SET_WAIT_FLOW_STATS_SETUP;
++	ppe_data->stats_info.foe_stats_addr = foe_stats_addr;
++
++	err = airoha_npu_send_msg(npu, NPU_FUNC_PPE, ppe_data,
++				  sizeof(*ppe_data));
+ 	if (err)
+ 		return err;
+ 
+ 	stats = devm_ioremap(npu->dev,
+-			     ppe_data.stats_info.npu_stats_addr,
++			     ppe_data->stats_info.npu_stats_addr,
+ 			     PPE_STATS_NUM_ENTRIES * sizeof(*npu->stats));
+ 	if (!stats)
+ 		return -ENOMEM;
