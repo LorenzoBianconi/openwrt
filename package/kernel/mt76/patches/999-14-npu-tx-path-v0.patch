@@ -1,0 +1,222 @@
+--- a/npu.c
++++ b/npu.c
+@@ -344,94 +344,6 @@ char npu_mt76_token_release(struct mt76_
+ 	return 0;
+ }
+ 
+-void npu_mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_dev *dev, struct mt76_txwi_cache *t, 
+-	struct sk_buff *skb, void *txwi_ptr, struct mt76_wcid *wcid, struct ieee80211_sta *sta)
+-{
+-	struct airoha_npu *npu = dev->mmio.npu;
+-	//struct sk_buff *n_skb = NULL;
+-	unsigned short vnd_len;
+-	__le32 *_txd;
+-	unsigned char hostadpt_ring_num = 0, band_idx;
+-	unsigned int token;
+-	int ret = 0;//0 means to free skb
+-	unsigned char txp_temp[MT_TXD_SIZE+HIF_TXP_SIZE];
+-	//struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+-	_txd = (__le32 *)txwi_ptr;
+-
+-	//n_skb = skb_clone(skb, GFP_ATOMIC);	
+-
+-	//if (!n_skb) {
+-	//	dev_kfree_skb(skb);
+-	//	return;
+-	//}
+-	
+-	if(phy == dev->phys[1])		
+-		band_idx = MT_BAND1;
+-	else
+-		band_idx = MT_BAND0;
+-	
+-	hostadpt_ring_num = band_idx;
+-	token = (_txd[8] >> 16) & 0xffff;
+-#if 0
+-	if (ra_sw_nat_hook_tx != NULL)
+-	{
+-		memset(&wifi_info, 0 , sizeof(struct port_info));
+-#if defined(TCSUPPORT_CPU_EN7580)
+-		wifi_info.tsid = 0x7F;
+-		wifi_info.nbq = 1;
+-#endif
+-		bss_idx = _txd[9] & 0xff; //txp[9] bss_id[7:0]
+-		wcidx = (_txd[9] >> 8) & 0xffff; //txp[9] wtbl_idx[23:8]
+-		//is_tcp = GET_PACKET_TCP(skb) ? 1 : 0;
+-			
+-		if (bss_idx > 0x7f) {
+-			  printk("npu_mt76_dma_tx_queue_skb bss index is error\n");
+-		}
+-
+-		qos_tid = n_skb->priority & IEEE80211_QOS_CTL_TID_MASK;
+-
+-		npu_txp_info._detail.ring_num = hostadpt_ring_num;
+-		npu_txp_info._detail.qos_tid	=	qos_tid;
+-
+-		wifi_info.magic = FOE_MAGIC_WLAN;
+-		wifi_info.udf = (bss_idx & 0x7f) | (is_tcp << 7);		
+-		wifi_info.stag = ((wcidx & 0x7ff) | ((npu_txp_info.ctrl_word & 0x1f) << 11));
+-
+-#ifdef TCSUPPORT_MT7510_FE
+-		if (ra_sw_nat_hook_tx(n_skb, &wifi_info, wifi_info.magic) == 0)
+-#else
+-		if (ra_sw_nat_hook_tx(n_skb, 1) == 0)
+-#endif
+-		{
+-			if(npu_mt76_token_release(dev, token, wcid, sta)){
+-				printk("npu_mt76_token_release fail\n");
+-			}
+-			dev_kfree_skb(n_skb);
+-			return;
+-		}
+-	}
+-#endif
+-	vnd_len = MT_TXD_SIZE + HIF_TXP_SIZE;
+-	
+-	memcpy(txp_temp,txwi_ptr,vnd_len);
+-	
+-	if(!(IS_ERR(npu)) && skb)	{
+-		ret = npu->ops.hostadpt_tx_handler_ops(hostadpt_ring_num, skb, txp_temp, vnd_len);
+-	}
+-	
+-	//handle token/txwi free
+-	if(ret == -2)  //tx hook
+-		dev_kfree_skb(skb);
+-	
+-	//if(npu_mt76_token_release(dev, token, wcid, sta)){
+-	//	printk("npu_mt76_token_release fail\n");
+-	//}
+-	
+-	return;
+-}
+-
+-EXPORT_SYMBOL_GPL(npu_mt76_dma_tx_queue_skb);
+-
+ void npu_set_rx_event(struct mt7996_dev *dev,struct pci_dev *pdev)
+ {
+ 	struct airoha_npu *npu = dev->mt76.mmio.npu;
+@@ -485,12 +397,12 @@ int mt76_npu_rx_poll(struct napi_struct
+ 		struct sk_buff *skb;
+ 
+ 		skb = npu->ops.wlan_rx_dequeue(npu, 0);
+-		if (!skb)
+-			break;
+-
+-		dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
+-		mt76_rx_poll_complete(dev, qid, napi);
+-	}
++		if (!skb)
++			break;
++
++		dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
++		mt76_rx_poll_complete(dev, qid, napi);
++	}
+ 
+ 	rcu_read_unlock();
+ 
+@@ -517,6 +429,33 @@ static irqreturn_t mt76_npu_irq_handler(
+ 	return IRQ_HANDLED;
+ }
+ 
++int mt76_npu_tx_queue_skb(struct mt76_phy *phy, struct sk_buff *skb,
++			  void *txwi_ptr)
++{
++	struct mt76_dev *dev = phy->dev;
++	struct airoha_npu *npu;
++	int qid, ret = 0;
++
++	rcu_read_lock();
++	npu = rcu_dereference(dev->mmio.npu);
++	if (!npu) {
++		ret = -ENODEV;
++		goto out;
++	}
++
++	qid = phy == dev->phys[1] ? MT_BAND1 : MT_BAND0;
++	ret = npu->ops.wlan_tx_enqueue(npu, qid, skb, txwi_ptr,
++				       MT_TXD_SIZE + HIF_TXP_SIZE);
++	if (ret)
++		goto out;
++
++	ret = npu->ops.wlan_kick_tx_queue(npu, qid);
++out:
++	rcu_read_unlock();
++
++	return ret;
++}
++
+ int mt76_npu_init(struct mt76_dev *dev)
+ {
+ 	struct airoha_npu *npu;
+@@ -529,22 +468,22 @@ int mt76_npu_init(struct mt76_dev *dev)
+ 		request_module("airoha-npu");
+ 		npu = airoha_npu_get(dev->dev, NULL);
+ 	}
+-
+-	if (IS_ERR(npu)) {
+-		err = PTR_ERR(npu);
+-		goto unlock;
+-	}
+-
+-	err = devm_request_irq(npu->dev, npu->irqs[0], mt76_npu_irq_handler,
+-			       IRQF_SHARED, "mt76-npu", dev);
+-	if (err)
+-		goto unlock;
+ 
+-	rcu_assign_pointer(dev->mmio.npu, npu);
++	if (IS_ERR(npu)) {
++		err = PTR_ERR(npu);
++		goto unlock;
++	}
++
++	err = devm_request_irq(npu->dev, npu->irqs[0], mt76_npu_irq_handler,
++			       IRQF_SHARED, "mt76-npu", dev);
++	if (err)
++		goto unlock;
++
++	rcu_assign_pointer(dev->mmio.npu, npu);
+ 	synchronize_rcu();
+ 
+ 	npu->ops.wlan_irq_enable(dev->mmio.npu, 0);
+-unlock:
++unlock:
+ 	mutex_unlock(&dev->mutex);
+ 
+ 	return err;
+--- a/dma.c
++++ b/dma.c
+@@ -754,8 +754,9 @@ mt76_dma_tx_queue_skb(struct mt76_phy *p
+ 
+ 	phy->tx_dbg_stats.tx_to_hw++;
+ #ifdef CONFIG_NET_AIROHA_NPU
+-    if(airoha_npu_device_active(dev->mmio.npu)){
+-		npu_mt76_dma_tx_queue_skb(phy, dev, t, skb, txwi, wcid, sta);
++	if(airoha_npu_device_active(dev->mmio.npu)) {
++		if (mt76_npu_tx_queue_skb(phy, skb, txwi))
++			dev_kfree_skb(skb);
+ 		return -1;
+     }else
+     	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
+--- a/mt76.h
++++ b/mt76.h
+@@ -1771,6 +1771,8 @@ int mt76_testmode_set_state(struct mt76_
+ int mt76_testmode_alloc_skb(struct mt76_phy *phy, u32 len);
+ 
+ int mt76_npu_rx_poll(struct napi_struct *napi, int budget);
++int mt76_npu_tx_queue_skb(struct mt76_phy *phy, struct sk_buff *skb,
++			  void *txwi_ptr);
+ int mt76_npu_init(struct mt76_dev *dev);
+ void mt76_npu_deinit(struct mt76_dev *dev);
+ 
+--- a/npu.h
++++ b/npu.h
+@@ -72,9 +72,6 @@ int npu_enable(void);
+ void set_npu_enable(int enable);
+ 
+ int mt7996_npu_count(struct seq_file *s, void *data);
+-
+-void npu_mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_dev *dev, struct mt76_txwi_cache *t, 
+-	struct sk_buff *skb, void *txwi_ptr, struct mt76_wcid *wcid, struct ieee80211_sta *sta);
+ void npu_set_rx_event(struct mt7996_dev *dev,struct pci_dev *pdev);
+ void get_npu_txd(struct mt7996_dev *dev,struct pci_dev *pdev);
+ void npu_mt76_init_done(struct mt7996_dev *dev,struct pci_dev *pdev);

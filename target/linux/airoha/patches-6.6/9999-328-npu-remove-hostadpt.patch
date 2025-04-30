@@ -1,0 +1,638 @@
+--- a/drivers/net/ethernet/airoha/Makefile
++++ b/drivers/net/ethernet/airoha/Makefile
+@@ -6,4 +6,4 @@
+ obj-$(CONFIG_NET_AIROHA) += airoha-eth.o
+ airoha-eth-y := airoha_eth.o airoha_ppe.o
+ airoha-eth-$(CONFIG_DEBUG_FS) += airoha_ppe_debugfs.o
+-obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o hostadpt.o
++obj-$(CONFIG_NET_AIROHA_NPU) += airoha_npu.o
+--- a/drivers/net/ethernet/airoha/hostadpt.c
++++ /dev/null
+@@ -1,288 +0,0 @@
+-#include <linux/proc_fs.h>
+-#include <linux/regmap.h>
+-#include <linux/soc/airoha/airoha_npu.h>
+-#include "hostadpt.h"
+-
+-#define NPU_384K_SRAM_BASE      (0x000000)  /*phys:0x1e800000*/
+-#define NPU_64K_SRAM_BASE       (0x000000)  /*phys:0x1e900000*/
+-#ifdef TCSUPPORT_NPU_V2
+-#define NPU_DEBUG_BASE          (0x305000)  /*phys:0x1eC05000*/
+-#define NPU_CLUSTER_BASE        (0x306000)  /*phys:0x1eC06000*/
+-#define CR_PC_BASE_ADDR	        (NPU_DEBUG_BASE)
+-#else
+-#define NPU_CLUSTER_BASE        (0x308000)  /*phys:0x1eC08000*/
+-#define CR_PC_BASE_ADDR	        (NPU_CLUSTER_BASE+0x800)
+-#endif
+-#define CR_CORE_BOOT_TRIGGER    (NPU_CLUSTER_BASE+0x000)
+-#define CR_CORE_BOOT_CONFIG     (NPU_CLUSTER_BASE+0x004)
+-#define CR_CORE_BOOT_BASE       (NPU_CLUSTER_BASE+0x020)
+-
+-#define NPU_MBOX_BASE           (0x30C000)  /*phys:0x1eC0C000*/
+-#define CR_MBOX_INTR_STATUS     (NPU_MBOX_BASE+0x0)
+-#define CR_MBOX_INT_MASK0       (NPU_MBOX_BASE+0x004)
+-#define CR_MBOX_INT_MASK8       (NPU_MBOX_BASE+0x024)
+-#define CR_MBQ0_CTRL0           (NPU_MBOX_BASE+0x030)
+-#define CR_MBQ0_CTRL1           (NPU_MBOX_BASE+0x034)
+-#define CR_MBQ0_CTRL2           (NPU_MBOX_BASE+0x038)
+-#define CR_MBQ0_CTRL3           (NPU_MBOX_BASE+0x03C)
+-#define CR_MBQ8_CTRL0           (NPU_MBOX_BASE+0x0b0)
+-#define CR_MBQ8_CTRL1           (NPU_MBOX_BASE+0x0b4)
+-#define CR_MBQ8_CTRL2           (NPU_MBOX_BASE+0x0b8)
+-#define CR_MBQ8_CTRL3           (NPU_MBOX_BASE+0x0bC)
+-#define CR_NPU_MIB0             (NPU_MBOX_BASE+0x140)
+-#define CR_NPU_MIB8             (NPU_MBOX_BASE+0x160)
+-#define CR_NPU_MIB9             (NPU_MBOX_BASE+0x164)
+-#define CR_NPU_MIB10            (NPU_MBOX_BASE+0x168)
+-#define CR_NPU_MIB11            (NPU_MBOX_BASE+0x16C)
+-#define CR_NPU_MIB12            (NPU_MBOX_BASE+0x170)
+-#define CR_NPU_MIB13            (NPU_MBOX_BASE+0x174)
+-#define CR_NPU_MIB14            (NPU_MBOX_BASE+0x178)
+-#define CR_NPU_MIB15            (NPU_MBOX_BASE+0x17C)
+-#define CR_NPU_MIB16            (NPU_MBOX_BASE+0x180)
+-#define CR_NPU_MIB19            (NPU_MBOX_BASE+0x18C)
+-#define CR_NPU_MIB20            (NPU_MBOX_BASE+0x190)
+-#define CR_NPU_MIB21            (NPU_MBOX_BASE+0x194)
+-
+-#define NPU_RBUS_BASE           (0x30E000)  /*phys:0x1eC0E000*/
+-#define CR_NPU_RBUS_DECODER     (NPU_RBUS_BASE+0x1200)
+-
+-#define NPU_UART_BASE           (0x310000)  /*phys:0x1eC10000*/
+-#define NPU_TIME0_BASE          (0x310100)  /*phys:0x1eC10100*/
+-#define NPU_TIME1_BASE          (0x310200)  /*phys:0x1eC10200*/
+-
+-#define NPU_SCU_BASE            (0x311000)  /*phys:0x1eC11000*/
+-
+-#ifdef TCSUPPORT_NPU_V2
+-#if defined(TCSUPPORT_NPU_V2_S) || defined(TCSUPPORT_NPU_V2_P) /*7552*/
+-#define TMR_EN_BITS     (0x1e0001ef) /* keep enable_bits (4 cntTimers + 4 wdogTimers) */
+-#else /*7581*/
+-#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
+-#endif
+-#define CSR_REG_NUM     (3)
+-#else /*7523*/
+-#define CSR_REG_NUM     (12)
+-#define TMR_EN_BITS     (0x2000027) /* keep enable_bits (3 cntTimers + 1 wdogTimer) */
+-#endif
+-
+-#define NPU_HOSTADAPTER_BASE    (0x30D000)  /*phys:0x1eC0D000*/
+-
+-volatile unsigned short int reTryTimes;
+-unsigned int hostaptDebug = DBG_OFF;
+-
+-extern struct airoha_eth *glb_eth;
+-static struct airoha_npu *npu;
+-
+-#if defined(TCSUPPORT_WLAN_INODE) || defined(TCSUPPORT_NPU_WIFI_TX)
+-u32 hostadpt_tx_dma_idx[2] = {0};
+-u32 hostadpt_tx_cpu_idx[2] = {0};
+-u32 hostadpt_tx_skbin_cnt[2] = {0};
+-u32 hostadpt_tx_skbfree_cnt[2] = {0};
+-int host_apd_debug[2] = {0};
+-static DEFINE_SPINLOCK(hostadpt_lock_2G);
+-#endif
+-
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-static DEFINE_SPINLOCK(hostadpt_lock_test);
+-#endif
+-
+-/********* wifi tx part  *************/
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-void enque_to_hostapdt_tx(struct device *dev, HOSTADPT_DMA_TX_DSCP_T *pHostadptTX,
+-	struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len)
+-{
+-	/*just only get vaild dev*/
+-	if (dev == NULL) {
+-		printk("\n%s() device failed\n", __func__);
+-		return ;
+-	}
+-
+-	if(vnd_len > HOSTADPT_TX_VEND_SPEC_LEN){
+-		printk("[hostadpt][ERROR] vender len is too long %d!\n", vnd_len);
+-		vnd_len = HOSTADPT_TX_VEND_SPEC_LEN;
+-	}
+-	memcpy(pHostadptTX->vnd_spec, vnd, vnd_len);
+-	pHostadptTX->pkt_ctrl.vnd_len = vnd_len;
+-
+-	pHostadptTX->pkt_ctrl.len = skb->len;
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-	pHostadptTX->skb_p = (u64)skb;
+-#else
+-	pHostadptTX->skb_p = (u32)skb;
+-#endif
+-
+-	if(skb->len != 0)
+-		pHostadptTX->pkt_addr = dma_map_single(dev, (void *)((unsigned long)skb->data), skb->len, DMA_TO_DEVICE);
+-	else
+-		pHostadptTX->pkt_addr = 0;
+-
+-	pHostadptTX->pkt_ctrl.done = 1;
+-}
+-
+-HOSTADPT_DMA_TX_DSCP_T *pHostadptTX_BASE[HOSTADPT_TX_RING_NUM] = {NULL};
+-
+-static unsigned char hostadpt_is_ring_available(u32 dma_idx, u32 cpu_idx, u32 ring_size)
+-{
+-	unsigned short res;
+-
+-	if (dma_idx >= cpu_idx)
+-		res = ring_size - dma_idx + cpu_idx;
+-	else
+-		res = cpu_idx - dma_idx;
+-
+-	if(res > 5)
+-		return 1;
+-	else
+-		return 0;
+-
+-}
+-
+-int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len)
+-{
+-	u32 dmaIdx0 = 0, dmaIdx1 = 0;
+-	int ret = 0;
+-	u32 cpuIdx0 = 0, cpuIdx1 = 0;
+-	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX0 = NULL;
+-	HOSTADPT_DMA_TX_DSCP_T *pHostadptTX1 = NULL;
+-	unsigned long int flags=0;
+-	struct device *dev = NULL;
+-	HOSTADPT_MSG(DBG_LOG, "+++++++++++++enter hostadpt_send API++++++++++++\n");
+-
+-	if((skb == NULL) || (vnd == NULL)) {
+-		printk("[hostadpt][%d] invalid put !\n", __LINE__);
+-		return 0;
+-	}
+-
+-	/*just only get vaild dev*/
+-	dev = npu->dev;
+-
+-#if 1
+-	struct port_info wifi_info;
+-	unsigned char bss_idx, is_tcp, qos_tid;
+-	unsigned int wcidx;	
+-	npu_hif_v2_info npu_txp_info;
+-	__le32 *_txd = (__le32 *)vnd;
+-	unsigned int token;
+-	
+-	memset(&wifi_info, 0 , sizeof(struct port_info));
+-	
+-	wifi_info.tsid = 0x7F;
+-	wifi_info.nbq = band;
+-	bss_idx = _txd[9] & 0xff; //txp[9] bss_id[7:0]
+-	wcidx = (_txd[9] >> 8) & 0xffff; //txp[9] wtbl_idx[23:8]
+-		
+-	if (bss_idx > 0x7f) {
+-		  printk("npu_wifi bss index is error\n");
+-	}
+-
+-	qos_tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
+-	token = (_txd[8] >> 16) & 0xffff;
+-
+-	npu_txp_info._detail.ring_num = band;
+-	npu_txp_info._detail.qos_tid	=	qos_tid;
+-
+-	wifi_info.udf = (bss_idx & 0x7f) | (is_tcp << 7);		
+-	wifi_info.stag = ((wcidx & 0x7ff) | ((npu_txp_info.ctrl_word & 0x1f) << 11));
+-	airoha_ppe_foe_flow_update_wifi_npu_offload(glb_eth->ppe, skb, &wifi_info);
+-
+-#endif
+-	
+-	if(band == 0)
+-	{
+-		//disable isr
+-		spin_lock_irqsave(&hostadpt_lock_2G, flags);
+-		HOSTADPT_MSG(DBG_LOG, "Send data to RX0 ... \n");
+-		regmap_read(npu->regmap, NPU_HOSTADAPTER_BASE  + HOSTADPT_TX2_CPU_IDX, &cpuIdx0);
+-		HOSTADPT_MSG(DBG_LOG, "HOSTADPT_TX2_CPU_IDX = %d\n", dmaIdx0);
+-		pHostadptTX0 = pHostadptTX_BASE[0] + hostadpt_tx_dma_idx[0];
+-		if(pHostadptTX0->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[0],
+-			cpuIdx0, HOSTADPT_TX0_DSCP_NUM))
+-		{
+-			enque_to_hostapdt_tx(dev,pHostadptTX0, skb, vnd, vnd_len);
+-			hostadpt_tx_skbin_cnt[0]++;
+-
+-			hostadpt_tx_dma_idx[0] = (hostadpt_tx_dma_idx[0] + 1);
+-			if(hostadpt_tx_dma_idx[0] >= HOSTADPT_TX0_DSCP_NUM)
+-				hostadpt_tx_dma_idx[0] = 0;
+-			regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX2_DMA_IDX, hostadpt_tx_dma_idx[0]);
+-		}
+-		else
+-		{
+-			dev_kfree_skb_any(skb);
+-			ret = -1;
+-		}
+-
+-		while(hostadpt_tx_cpu_idx[0] != cpuIdx0){
+-			pHostadptTX0 = pHostadptTX_BASE[0] + hostadpt_tx_cpu_idx[0];
+-			if(pHostadptTX0->skb_p){
+-				//if(pHostadptTX0->pkt_addr) {
+-				//	dma_unmap_single(dev, pHostadptTX0->pkt_addr, pHostadptTX0->pkt_ctrl.len, DMA_TO_DEVICE);
+-				//}
+-				//dev_kfree_skb_any((struct sk_buff *)pHostadptTX0->skb_p);
+-				hostadpt_tx_skbfree_cnt[0]++;
+-				pHostadptTX0->skb_p = 0;//NULL;
+-			}
+-			pHostadptTX0->pkt_ctrl.done = 0;
+-			hostadpt_tx_cpu_idx[0]++;
+-			if(hostadpt_tx_cpu_idx[0] >= HOSTADPT_TX0_DSCP_NUM)
+-				hostadpt_tx_cpu_idx[0] = 0;
+-			if(hostadpt_tx_cpu_idx[0] == cpuIdx0)
+-				break;
+-		}
+-		//enable isr
+-		spin_unlock_irqrestore(&hostadpt_lock_2G, flags);
+-	}
+-	else if(band == 1)
+-	{
+-		spin_lock_irqsave(&hostadpt_lock_test, flags);
+-		HOSTADPT_MSG(DBG_LOG, "Send data to RX0 ... \n");
+-		regmap_read(npu->regmap, NPU_HOSTADAPTER_BASE  + HOSTADPT_TX3_CPU_IDX, &cpuIdx1);
+-		HOSTADPT_MSG(DBG_LOG, "HOSTADPT_TX3_DMA_IDX = %d\n", dmaIdx1);
+-		pHostadptTX1 = pHostadptTX_BASE[1] + hostadpt_tx_dma_idx[1];
+-		if(pHostadptTX1->pkt_ctrl.done == 0 && hostadpt_is_ring_available(hostadpt_tx_dma_idx[1],
+-			cpuIdx1, HOSTADPT_TX1_DSCP_NUM))
+-		{
+-			enque_to_hostapdt_tx(dev,pHostadptTX1, skb, vnd, vnd_len);
+-			hostadpt_tx_skbin_cnt[1]++;
+-
+-			hostadpt_tx_dma_idx[1] = (hostadpt_tx_dma_idx[1] + 1);
+-			if(hostadpt_tx_dma_idx[1] >= HOSTADPT_TX1_DSCP_NUM)
+-				hostadpt_tx_dma_idx[1] = 0;
+-			regmap_write(npu->regmap, NPU_HOSTADAPTER_BASE + HOSTADPT_TX3_DMA_IDX, hostadpt_tx_dma_idx[1]);
+-		}
+-		else 
+-		{
+-			dev_kfree_skb_any(skb);
+-			ret = -1;
+-		}
+-
+-		while(hostadpt_tx_cpu_idx[1] != cpuIdx1){
+-			
+-			pHostadptTX1 = pHostadptTX_BASE[1] + hostadpt_tx_cpu_idx[1];
+-			if(pHostadptTX1->skb_p){
+-				//if(pHostadptTX1->pkt_addr) {
+-				//	dma_unmap_single(dev, pHostadptTX1->pkt_addr, pHostadptTX1->pkt_ctrl.len, DMA_TO_DEVICE);
+-				//}
+-				//dev_kfree_skb_any((struct sk_buff *)pHostadptTX1->skb_p);
+-				hostadpt_tx_skbfree_cnt[1]++;
+-				pHostadptTX1->skb_p = 0;//NULL;
+-			}
+-			pHostadptTX1->pkt_ctrl.done = 0;
+-
+-			hostadpt_tx_cpu_idx[1]++;
+-			if(hostadpt_tx_cpu_idx[1] >= HOSTADPT_TX1_DSCP_NUM)
+-				hostadpt_tx_cpu_idx[1] = 0;
+-			if(hostadpt_tx_cpu_idx[1] == cpuIdx1)
+-				break;
+-		}
+-		spin_unlock_irqrestore(&hostadpt_lock_test, flags);
+-	}
+-	else
+-	{
+-		HOSTADPT_MSG(DBG_LOG, "band Index error!\n");
+-		dev_kfree_skb_any(skb);
+-		ret = -1;
+-	}
+-	
+-	return ret;
+-}
+-#endif
+--- a/drivers/net/ethernet/airoha/hostadpt.h
++++ /dev/null
+@@ -1,159 +0,0 @@
+-#ifndef _HOSTADPT_H_
+-#define _HOSTADPT_H_
+-
+-/***************************************************************
+-*						INCLUDE
+-***************************************************************/
+-#include <linux/version.h>
+-#include <linux/init.h>
+-#include <linux/module.h>
+-#include <linux/kernel.h>
+-#include <linux/interrupt.h>
+-#include <linux/types.h>
+-#include <linux/netdevice.h>
+-#include <linux/dma-mapping.h>
+-#include <linux/sched.h>
+-#include <linux/delay.h>
+-#include <linux/spinlock.h>
+-#include <linux/soc/airoha/npu_host_adpt.h>
+-#include <linux/soc/airoha/npu_test_common.h>
+-
+-#include "airoha_eth.h"
+-
+-#ifndef TCSUPPORT_CPU_EN7581
+-#define TCSUPPORT_CPU_EN7581
+-#endif
+-#ifndef TCSUPPORT_CPU_ARMV8_64
+-#define TCSUPPORT_CPU_ARMV8_64
+-#endif
+-#ifndef TCSUPPORT_NPU_V2
+-#define TCSUPPORT_NPU_V2
+-#endif
+-#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_TX
+-#define TCSUPPORT_NPU_WIFI_TX
+-#endif
+-#ifndef TCSUPPORT_WLAN_MT7992
+-#define TCSUPPORT_WLAN_MT7992
+-#endif
+-#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
+-#define TCSUPPORT_TR471_NPU_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
+-#define TCSUPPORT_NPU_WIFI_OFFLOAD
+-#endif
+-/***************************************************************
+-*						DEFINES & CONSTANTS
+-***************************************************************/
+-
+-/* reg addr */
+-
+-#define HOSTADPT_RX0_BASE_PTR   (0x180)     /*RX Ring 0 Base pointer*/
+-#define HOSTADPT_RX0_MAX_CNT    (0x184)
+-#define HOSTADPT_RX0_DMA_IDX    (0x188)
+-#define HOSTADPT_RX0_CPU_IDX    (0x18C)
+-
+-#define HOSTADPT_RX1_BASE_PTR   (0x190)     /*RX Ring 1 Base pointer*/
+-#define HOSTADPT_RX1_MAX_CNT    (0x194)
+-#define HOSTADPT_RX1_DMA_IDX    (0x198)
+-#define HOSTADPT_RX1_CPU_IDX    (0x19C)
+-
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-#define HOSTADPT_TX2_BASE_PTR	(0xA0)     /*RX Ring 2 Base pointer*/
+-#define HOSTADPT_TX2_MAX_CNT	(0xA4)
+-#define HOSTADPT_TX2_DMA_IDX	(0xA8)
+-#define HOSTADPT_TX2_CPU_IDX	(0xAC)
+-
+-#define HOSTADPT_TX3_BASE_PTR	(0xB0)     /*RX Ring 3 Base pointer*/
+-#define HOSTADPT_TX3_MAX_CNT	(0xB4)
+-#define HOSTADPT_TX3_DMA_IDX	(0xB8)
+-#define HOSTADPT_TX3_CPU_IDX	(0xBC)
+-
+-#define HOST_TX_EVT_INT_MASK2	(0x4C) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-#define HOST_TX_EVT_INT_MASK3	(0x50) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-//extern int (*toHostadptPktHandle_hook)(unsigned char band,
+-	//struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-#endif
+-
+-/* interrupt */
+-#define HOSTADPT_TXRXDONE0_INT_MASK       (0x34) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-#define HOSTADPT_TXRXDONE1_INT_MASK       (0x38) /*32bit: Tx0---Tx15,Rx0---Rx15*/
+-
+-#define HOSTADPT_TX0_INT  (1<<0)
+-#define HOSTADPT_TX1_INT  (1<<1)
+-#define HOSTADPT_TX2_INT  (1<<2)
+-#define HOSTADPT_TX3_INT  (1<<3)
+-#define HOSTADPT_TX4_INT  (1<<4)
+-#define HOSTADPT_TX5_INT  (1<<5)
+-#define HOSTADPT_TX6_INT  (1<<6)
+-#define HOSTADPT_TX7_INT  (1<<7)
+-#define HOSTADPT_TX8_INT  (1<<8)
+-#define HOSTADPT_TX9_INT  (1<<9)
+-#define HOSTADPT_TX10_INT (1<<10)
+-#define HOSTADPT_TX11_INT (1<<11)
+-#define HOSTADPT_TX12_INT (1<<12)
+-#define HOSTADPT_TX13_INT (1<<13)
+-#define HOSTADPT_TX14_INT (1<<14)
+-#define HOSTADPT_TX16_INT (1<<15)
+-
+-#define HOSTADPT_RX0_INT  (1<<0)
+-#define HOSTADPT_RX1_INT  (1<<1)
+-#define HOSTADPT_RX2_INT  (1<<2)
+-#define HOSTADPT_RX3_INT  (1<<3)
+-#define HOSTADPT_RX4_INT  (1<<4)
+-#define HOSTADPT_RX5_INT  (1<<5)
+-#define HOSTADPT_RX6_INT  (1<<6)
+-#define HOSTADPT_RX7_INT  (1<<7)
+-#define HOSTADPT_RX8_INT  (1<<8)
+-#define HOSTADPT_RX9_INT  (1<<9)
+-#define HOSTADPT_RX10_INT (1<<10)
+-#define HOSTADPT_RX11_INT (1<<11)
+-#define HOSTADPT_RX12_INT (1<<12)
+-#define HOSTADPT_RX13_INT (1<<13)
+-#define HOSTADPT_RX14_INT (1<<14)
+-#define HOSTADPT_RX15_INT (1<<15)
+-
+-extern unsigned int hostaptDebug;
+-#define HOSTADPT_MSG(level, F, B...)	{ \
+-											if(hostaptDebug >= level)	\
+-												printk("%s: %s [%d]: " F, "host adaptor", strrchr(__FILE__, '/')+1, __LINE__, ##B) ; \
+-										}
+-// for debug counter
+-enum HOSTADPT_COUNTER_OFFSET
+-{
+-	GET_NORMAL_PKT = 0,
+-	GET_BIGGER_PKT,
+-	BIGPKT_CHECK_PKT_LOSE,
+-	BIGPKT_CHECK_PKT_LOSE1,
+-	BIGPKT_CHECK_PKT_LOSE2,
+-	BIGPKT_CHECK_PKT_LOSE3,
+-	BIGPKT_CHECK_PKT_OVER_RETRY,
+-	BIGPKT_COMBINE_PKT_FAIL,
+-	BIGPKT_COMBINE_PKT_DONE,
+-	ALLOC_NEW_SKB_FAIL,	
+-	SEND_PKT_TO_DRIVER,
+-	TX_GET_PKT_FROM_TXRING,
+-	TX_Q_IS_FULL,
+-	HADPT_CNT_BOTTOM			//
+-};
+-
+-#define IEEE80211_QOS_CTL_TID_MASK		0x000f
+-
+-typedef union {
+-	struct {
+-		unsigned char ring_num		: 1;
+-		unsigned char qos_tid		: 4;
+-		unsigned char wcid_dummy	: 3;//Do no use since area not enough
+-	} _detail;
+-	unsigned char ctrl_word;
+-} npu_hif_v2_info;
+-
+-int hostadpt_tx_handler(unsigned char band, struct sk_buff *skb, unsigned char *vnd, unsigned short vnd_len);
+-struct sk_buff *hostadpt_rx_handler(struct airoha_npu *npu, int ring_idx);
+-int hostadpInit(struct airoha_npu *_npu);
+-
+-struct device* get_ecnt_npu_dev(void);
+-
+-#endif
+--- a/include/linux/soc/airoha/npu_host_adpt.h
++++ /dev/null
+@@ -1,164 +0,0 @@
+-#ifndef _NPU_HOST_ADPT_H_
+-#define _NPU_HOST_ADPT_H_
+-
+-#ifndef TCSUPPORT_CPU_EN7581
+-#define TCSUPPORT_CPU_EN7581
+-#endif
+-#ifndef TCSUPPORT_CPU_ARMV8_64
+-#define TCSUPPORT_CPU_ARMV8_64
+-#endif
+-#ifndef TCSUPPORT_NPU_V2
+-#define TCSUPPORT_NPU_V2
+-#endif
+-#ifndef TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#define TCSUPPORT_NPU_TUNNEL_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_TX
+-#define TCSUPPORT_NPU_WIFI_TX
+-#endif
+-#ifndef TCSUPPORT_WLAN_MT7992
+-#define TCSUPPORT_WLAN_MT7992
+-#endif
+-#ifndef TCSUPPORT_TR471_NPU_OFFLOAD
+-#define TCSUPPORT_TR471_NPU_OFFLOAD
+-#endif
+-#ifndef TCSUPPORT_NPU_WIFI_OFFLOAD
+-#define TCSUPPORT_NPU_WIFI_OFFLOAD
+-#endif
+-
+-#define dma_addr_t  unsigned long long int	//npu v2 is 64bit address, but npu v1 is 32bit
+-
+-#define HOSTADPT_RX_DSCP_WORD_LENS    4
+-#define HOSTADPT_RX_RING_NUM          2
+-#define HOSTADPT_RX0_DSCP_NUM         512
+-#define HOSTADPT_RX1_DSCP_NUM         512
+-#define HOSTADPT_RX_TOTAL_DSCP_NUM    (HOSTADPT_RX0_DSCP_NUM + HOSTADPT_RX1_DSCP_NUM)
+-
+-#if defined(TCSUPPORT_NPU_WIFI_TX) || defined(TCSUPPORT_WLAN_INODE)
+-#define HOSTADPT_TX_RING_NUM          2
+-#define HOSTADPT_TX0_DSCP_NUM         1024
+-#define HOSTADPT_TX1_DSCP_NUM         1024
+-#define HOSTADPT_TX_TOTAL_DSCP_NUM    (HOSTADPT_TX0_DSCP_NUM + HOSTADPT_TX1_DSCP_NUM)
+-#endif
+-
+-#ifdef TCSUPPORT_WLAN_INODE
+-#define INODE_RX_OFFLOAD 1
+-#endif
+-#define HOSTAPD_BUFFER_LEN		     3500//4096
+-#define HOSTADPT_RX_RING_0            0
+-#define HOSTADPT_RX_RING_1            1
+-
+-//#define HOSTADPT_TEST
+-
+-#define DBG_OFF     0
+-#define DBG_ERR     1
+-#define DBG_WRN     2
+-#define DBG_CATTER     3
+-#define DBG_LOG     4
+-#define DBG_MAX     5//must be button
+-
+-#define DBG_LEVEL   DBG_OFF
+-
+-typedef struct {
+-    
+-    struct {
+-		unsigned int done               : 1 ;
+-		unsigned int cur_len            : 14;
+-		unsigned int len                : 14;
+-		unsigned int is_last	        : 1;
+-		unsigned int resv1	        : 2;
+-    } pkt_ctrl ;
+-    union{
+-    struct {
+-#if (defined(TCSUPPORT_CPU_EN7581) || defined(TCSUPPORT_CPU_AN7552) || defined(TCSUPPORT_CPU_AN7583))
+-		unsigned int foe_number		: 16;
+-		unsigned int crsn		: 5 ;
+-		unsigned int src_port		: 5 ;
+-		unsigned int pkt_idx            : 6;
+-#else
+-		unsigned int foe_number		: 15;
+-		unsigned int crsn		: 5 ;
+-		unsigned int src_port		: 5 ;
+-		unsigned int pkt_idx            : 7;
+-#endif
+-    } pkt_info;
+-	unsigned int pktInfo;
+-     };
+-
+-	union{
+-//#ifdef TCSUPPORT_WLAN_INODE
+-		struct {
+-			unsigned int frametype	: 2;
+-			unsigned int vap_id		: 4;
+-			unsigned int radio_id	: 4;
+-			unsigned int priority	: 4;
+-			unsigned int fragtype	: 2;
+-			unsigned int sid		: 16;
+-		}pkt_info_inode;
+-//#endif
+-		unsigned int vend_specific;
+-	};
+-
+-    unsigned int pkt_addr ;
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-    unsigned long long int skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
+-#else
+-    unsigned int skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
+-    unsigned int resv4;
+-#endif
+-} __attribute__ ((packed)) HOSTADPT_DMA_DSCP_T;
+-
+-
+-#ifdef TCSUPPORT_WLAN_INODE
+-#define HOSTADPT_TX_VEND_SPEC_LEN 6
+-#else
+-#define HOSTADPT_TX_VEND_SPEC_LEN 192
+-#endif
+-
+-typedef struct {
+-	union {
+-		unsigned int word1;
+-		struct {
+-			unsigned int done		: 1 ;
+-			unsigned int vnd_len		: 17;
+-			unsigned int len			: 13;
+-			unsigned int reschedule	: 1 ;
+-	    } pkt_ctrl ;
+-	};
+-	unsigned int		pkt_addr;
+-#if defined(TCSUPPORT_CPU_ARMV8_64)
+-	unsigned long long int		skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
+-#else
+-	unsigned int		skb_p;//npuv2 is 64bit address, but npuv1 is 32bit
+-	unsigned int		resv4;
+-#endif
+-//#ifdef TCSUPPORT_NPU_WIFI_TX
+-	unsigned char vnd_spec[HOSTADPT_TX_VEND_SPEC_LEN];
+-//#endif
+-} HOSTADPT_DMA_TX_DSCP_T;
+-
+-
+-#ifdef TCSUPPORT_NPU_WIFI_TX
+-struct wifi_tx_info_mt7916{
+-	unsigned char rept_wds_wcid;
+-	unsigned char BssInfoIdx;
+-};
+-
+-struct wifi_tx_info_eagle{
+-	unsigned short rept_wds_wcid;
+-	unsigned char BssInfoIdx;
+-};
+-#endif
+-
+-#ifdef TCSUPPORT_WLAN_INODE
+-struct wifi_tx_info_ione{
+-	unsigned char vapid; //4bit
+-	unsigned char epid; //4bit
+-	unsigned char sid; //8bit
+-	unsigned char mcf;//1bit
+-	unsigned char tid;//4bit
+-	unsigned char hw_id;//2bit
+-};
+-#endif
+-
+-#endif
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -15,7 +15,6 @@
+ #include <net/page_pool/helpers.h>
+ 
+ #include "airoha_eth.h"
+-#include "hostadpt.h"
+ 
+ #define NPU_EN7581_FIRMWARE_DATA		"airoha/en7581_npu_data.bin"
+ #define NPU_EN7581_FIRMWARE_RV32		"airoha/en7581_npu_rv32.bin"
