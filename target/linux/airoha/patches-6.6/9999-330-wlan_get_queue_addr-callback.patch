@@ -1,0 +1,37 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -844,6 +844,15 @@ static int airoha_npu_wlan_tx_enqueue(st
+ 	return 0;
+ }
+ 
++static u32 airoha_npu_wlan_get_queue_addr(struct airoha_npu *npu, int qid,
++					  bool xmit)
++{
++	if (xmit)
++		return REG_TX_BASE(qid + 2);
++
++	return REG_RX_BASE(qid);
++}
++
+ static int airoha_npu_wlan_kick_tx_queue(struct airoha_npu *npu, int qid)
+ {
+ 	if (qid >= ARRAY_SIZE(npu->q_tx))
+@@ -1167,6 +1178,7 @@ static int airoha_npu_probe(struct platf
+ 		airoha_npu_wlan_get_npu_support_map;
+ 	npu->ops.wlan_rx_dequeue = airoha_npu_wlan_rx_dequeue;
+ 	npu->ops.wlan_tx_enqueue = airoha_npu_wlan_tx_enqueue;
++	npu->ops.wlan_get_queue_addr = airoha_npu_wlan_get_queue_addr;
+ 	npu->ops.wlan_kick_tx_queue = airoha_npu_wlan_kick_tx_queue;
+ 	npu->ops.wlan_set_irq_mask = airoha_npu_wlan_set_irq_mask;
+ 	npu->ops.wlan_get_irq = airoha_npu_wlan_get_irq;
+--- a/include/linux/soc/airoha/airoha_npu.h
++++ b/include/linux/soc/airoha/airoha_npu.h
+@@ -166,6 +166,8 @@ struct airoha_npu {
+ 		int (*wlan_tx_enqueue)(struct airoha_npu *npu, int qid,
+ 				       struct sk_buff *skb, void *txwi,
+ 				       u16 txwi_len);
++		u32 (*wlan_get_queue_addr)(struct airoha_npu *npu, int qid,
++					   bool xmit);
+ 		int (*wlan_kick_tx_queue)(struct airoha_npu *npu, int qid);
+ 		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
+ 		u32 (*wlan_get_irq)(struct airoha_npu *npu, int q);

@@ -1,0 +1,67 @@
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -51,13 +51,13 @@
+ 
+ #define REG_TX_BASE(_n)			(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x080)
+ #define REG_TX_DSCP_NUM(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x084)
+-#define REG_TX_DMA_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x088)
+-#define REG_TX_CPU_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x08c)
++#define REG_TX_CPU_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x088)
++#define REG_TX_DMA_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x08c)
+ 
+ #define REG_RX_BASE(_n)			(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x180)
+ #define REG_RX_DSCP_NUM(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x184)
+-#define REG_RX_DMA_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x188)
+-#define REG_RX_CPU_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x18c)
++#define REG_RX_CPU_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x188)
++#define REG_RX_DMA_IDX(_n)		(NPU_WLAN_BASE_ADDR + ((_n) << 4) + 0x18c)
+ 
+ #define NPU_TIMER_BASE_ADDR		0x310100
+ #define REG_WDT_TIMER_CTRL(_n)		(NPU_TIMER_BASE_ADDR + ((_n) * 0x100))
+@@ -759,7 +759,7 @@ static struct sk_buff *airoha_npu_wlan_r
+ 	q->queued -= i;
+ 
+ 	airoha_npu_wlan_fill_rx_queue(npu, q);
+-	regmap_write(npu->regmap, REG_RX_CPU_IDX(qid), q->tail);
++	regmap_write(npu->regmap, REG_RX_DMA_IDX(qid), q->tail);
+ 	/* FIXME */
+ 	//npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
+ 
+@@ -780,7 +780,7 @@ static int airoha_npu_wlan_tx_enqueue(st
+ 
+ 	q = &npu->q_tx[qid];
+ 	/* FIXME: This must be moved in mt76 callback */
+-	regmap_read(npu->regmap, REG_TX_CPU_IDX(qid + 2), &tail);
++	regmap_read(npu->regmap, REG_TX_DMA_IDX(qid + 2), &tail);
+ 	while (tail != q->tail) {
+ 		q->tx_desc[q->tail].ctrl &= ~NPU_TX_DMA_DESC_DONE_MASK;
+ 		q->tail = (q->tail + 1) % q->ndesc;
+@@ -849,7 +849,7 @@ static int airoha_npu_wlan_kick_tx_queue
+ 	if (qid >= ARRAY_SIZE(npu->q_tx))
+ 		return -EINVAL;
+ 
+-	regmap_write(npu->regmap, REG_TX_DMA_IDX(qid + 2),
++	regmap_write(npu->regmap, REG_TX_CPU_IDX(qid + 2),
+ 		     npu->q_tx[qid].head);
+ 
+ 	return 0;
+@@ -898,8 +898,8 @@ static int airoha_npu_wlan_init_rx_queue
+ 	airoha_npu_wlan_fill_rx_queue(npu, q);
+ 
+ 	regmap_write(npu->regmap, REG_RX_DSCP_NUM(qid), ndesc);
+-	regmap_write(npu->regmap, REG_RX_CPU_IDX(qid), 0);
+ 	regmap_write(npu->regmap, REG_RX_DMA_IDX(qid), 0);
++	regmap_write(npu->regmap, REG_RX_CPU_IDX(qid), 0);
+ 	regmap_write(npu->regmap, REG_RX_BASE(qid), dma_addr);
+ 
+ 	return 0;
+@@ -950,8 +950,8 @@ static int airoha_npu_wlan_init_tx_queue
+ 		return -ENOMEM;
+ 
+ 	regmap_write(npu->regmap, REG_TX_DSCP_NUM(index), ndesc);
+-	regmap_write(npu->regmap, REG_TX_CPU_IDX(index), 0);
+ 	regmap_write(npu->regmap, REG_TX_DMA_IDX(index), 0);
++	regmap_write(npu->regmap, REG_TX_CPU_IDX(index), 0);
+ 	regmap_write(npu->regmap, REG_TX_BASE(index), dma_addr);
+ 
+ 	return 0;
