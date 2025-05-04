@@ -1,0 +1,281 @@
+--- a/agg-rx.c
++++ b/agg-rx.c
+@@ -175,10 +175,7 @@ void mt76_rx_aggr_reorder(struct mt76_de
+ 	ackp = status->qos_ctl & IEEE80211_QOS_CTL_ACK_POLICY_MASK;
+ 	if (ackp == IEEE80211_QOS_CTL_ACK_POLICY_NOACK)
+ 		return;
+-#ifdef CONFIG_NET_AIROHA_NPU
+-	if(airoha_npu_device_active(dev->mmio.npu))
+-		return;
+-#endif
++
+ 	tid = rcu_dereference(wcid->aggr[tidno]);
+ 	if (!tid)
+ 		return;
+--- a/mac80211.c
++++ b/mac80211.c
+@@ -1461,11 +1461,10 @@ void mt76_rx_poll_complete(struct mt76_d
+ 
+ 	while ((skb = __skb_dequeue(&dev->rx_skb[q])) != NULL) {
+ 		mt76_check_sta(dev, skb);
+-		#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+-		if (mtk_wed_device_active(&dev->mmio.wed))
++		if (mtk_wed_device_active(&dev->mmio.wed) ||
++		    mt76_npu_device_active(dev))
+ 			__skb_queue_tail(&frames, skb);
+ 		else
+-		#endif
+ 			mt76_rx_aggr_reorder(dev, skb, &frames);
+ 	}
+ 
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -620,19 +620,12 @@ start_hw_rro:
+ #endif	
+ 	{
+ 		if (is_mt7996(&dev->mt76)) {
+-			mt76_queue_rx_init(dev, MT_RXQ_TXFREE_BAND0, mt76_dma_rx_poll);
+-			mt76_queue_rx_init(dev, MT_RXQ_TXFREE_BAND2, mt76_dma_rx_poll);
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND1, mt76_dma_rx_poll);
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND2, mt76_dma_rx_poll);
+ 		}
+-#ifndef CONFIG_NET_AIROHA_NPU		
+-		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND0, mt76_dma_rx_poll);
+-		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND1, mt76_dma_rx_poll);
+-#endif		
+-		if (mt7996_band_valid(dev, MT_BAND2))
+-			mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND2, mt76_dma_rx_poll);
++
+ 		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+-			if (airoha_npu_device_active(dev->mt76.mmio.npu))
++			if (mt76_npu_device_active(&dev->mt76))
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_npu_rx_poll);
+ 			else
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_dma_rx_poll);
+@@ -640,6 +633,7 @@ start_hw_rro:
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
+ 				mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND0, mt76_dma_rx_poll);
+ 		}
++
+ 		if (!mt76_npu_device_active(&dev->mt76))
+ 			mt7996_irq_enable(dev, MT_INT_RRO_RX_DONE);
+ 	}
+--- a/mt7996/init.c
++++ b/mt7996/init.c
+@@ -1233,12 +1233,10 @@ static void mt7996_wed_rro_work(struct w
+ 		e = list_first_entry(&list, struct mt7996_wed_rro_session_id,
+ 				     list);
+ 		list_del_init(&e->list);
+-#ifdef CONFIG_NET_AIROHA_NPU		
+-		if(airoha_npu_device_active(dev->mt76.mmio.npu)){
+-			mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
+-			goto out;
+-		}
+-#endif
++
++		if (mt76_npu_device_active(&dev->mt76))
++			goto reset_session;
++
+ 		for (i = 0; i < MT7996_RRO_WINDOW_MAX_LEN; i++) {
+ 			void *ptr = dev->wed_rro.session.ptr;
+ 			struct mt7996_wed_rro_addr *elem;
+@@ -1259,6 +1257,7 @@ reset:
+ 			elem = ptr + elem_id * sizeof(*elem);
+ 			elem->signature = 0xff;
+ 		}
++reset_session:
+ 		mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
+ out:
+ 		kfree(e);
+--- a/mt7996/mmio.c
++++ b/mt7996/mmio.c
+@@ -724,23 +724,20 @@ void mt7996_dual_hif_set_irq_mask(struct
+ static void mt7996_rx_poll_complete(struct mt76_dev *mdev,
+ 				    enum mt76_rxq_id q)
+ {
+-	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+-	struct airoha_npu *npu = dev->mt76.mmio.npu;
+-	//struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+-#ifdef CONFIG_NET_AIROHA_NPU
+-    if(airoha_npu_device_active(npu)){
+-        if(q != MT_RXQ_RRO_RXDMAD_C)//wifi host not rcv data pkts after enable npu  rro3.1 
+-			mt7996_irq_enable(dev, MT_INT_RX(q)); //enable wifi irq
+-		if(q == MT_RXQ_RRO_RXDMAD_C && !(IS_ERR(npu)))
++	if (mt76_npu_device_active(mdev) && q == MT_RXQ_RRO_RXDMAD_C) {
++		struct airoha_npu *npu;
++
++		npu = rcu_dereference(mdev->mmio.npu);
++		if (npu)
+ 			npu->ops.wlan_irq_enable(npu, 0);
+-	}else
++	} else {
++		struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev,
++						      mt76);
++
+ 		mt7996_irq_enable(dev, MT_INT_RX(q));
+-#else
+-	mt7996_irq_enable(dev, MT_INT_RX(q));
+-#endif
++	}
+ }
+ 
+-
+ /* TODO: support 2/4/6/8 MSI-X vectors */
+ static void mt7996_irq_tasklet(struct tasklet_struct *t)
+ {
+@@ -799,17 +796,8 @@ static void mt7996_irq_tasklet(struct ta
+ 		napi_schedule(&dev->mt76.tx_napi);
+ 
+ 	for (i = 0; i < __MT_RXQ_MAX; i++) {
+-		if ((intr & MT_INT_RX(i))){
+-#ifdef CONFIG_NET_AIROHA_NPU	
+-			if(airoha_npu_device_active(dev->mt76.mmio.npu)){
+-				if (i != MT_RXQ_MAIN_WA)
+-					napi_schedule(&dev->mt76.napi[i]);				
+-			}else
+-				napi_schedule(&dev->mt76.napi[i]);
+-#else
++		if ((intr & MT_INT_RX(i)))
+ 			napi_schedule(&dev->mt76.napi[i]);
+-#endif
+-		}
+ 	}
+ 
+ 	if (intr & MT_INT_MCU_CMD) {
+@@ -853,7 +841,6 @@ irqreturn_t mt7996_irq_handler(int irq,
+ struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
+ 				     void __iomem *mem_base, u32 device_id)
+ {
+-	//struct airoha_npu *npu = airoha_npu_get(glb_eth->dev);
+ 	static const struct mt76_driver_ops drv_ops = {
+ 		/* txwi_size = txd size + txp size */
+ 		.txwi_size = MT_TXD_SIZE + sizeof(struct mt76_connac_fw_txp),
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -333,12 +333,9 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
+ 
+ 	band_idx = FIELD_GET(MT_RXD1_NORMAL_BAND_IDX, rxd1);
+ 	mphy = dev->mt76.phys[band_idx];
+-#ifdef CONFIG_NET_AIROHA_NPU	
+-	if(!mphy){
+-		printk("=======mt7996_mac_fill_rx!!! band_idx = %d =====\n", band_idx);	
++	if (!mphy)
+ 		return -EINVAL;
+-	}	
+-#endif	
++
+ 	phy = mphy->priv;
+ 	status->phy_idx = mphy->band_idx;
+ 
+@@ -958,6 +955,7 @@ int mt7996_tx_prepare_skb(struct mt76_de
+ 			  struct mt76_tx_info *tx_info)
+ {
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)tx_info->skb->data;
++	int token_start = mt76_npu_device_active(mdev) ? MT7996_TOKEN_SIZE : 0;
+ 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx_info->skb);
+ 	struct ieee80211_key_conf *key = info->control.hw_key;
+@@ -1014,7 +1012,13 @@ int mt7996_tx_prepare_skb(struct mt76_de
+ 	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
+ 	t->skb = tx_info->skb;
+ 
+-	id = mt76_token_consume(mdev, &t, mconf->mt76.band_idx);
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++	if (mtk_wed_device_active(&mdev->mmio.wed))
++		token_start = mdev->mmio.wed.wlan.nbuf;
++#endif
++
++	id = __mt76_token_consume(mdev, &t, mconf->mt76.band_idx,
++				  token_start);
+ 	if (id < 0) {
+ 		mdev->tx_dbg_stats.tx_drop[MT_TX_DROP_GET_TOKEN_FAIL]++;
+ 		return id;
+--- a/npu.c
++++ b/npu.c
+@@ -37,11 +37,11 @@ int mt76_npu_rx_poll(struct napi_struct
+ 		i++;
+ 	}
+ out:
+-	rcu_read_unlock();
+-
+ 	if (i < budget && napi_complete(napi))
+ 		dev->drv->rx_poll_complete(dev, qid);
+ 
++	rcu_read_unlock();
++
+ 	return i;
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_rx_poll);
+--- a/mt76.h
++++ b/mt76.h
+@@ -2055,8 +2055,23 @@ static inline bool mt76_queue_is_npu_rx(
+ 
+ struct mt76_txwi_cache *
+ mt76_token_release(struct mt76_dev *dev, int token, bool *wake);
+-int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
+-		       u8 phy_idx);
++int __mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
++			 u8 phy_idx, int token_start);
++
++static inline int mt76_token_consume(struct mt76_dev *dev,
++				     struct mt76_txwi_cache **ptxwi,
++				     u8 phy_idx)
++{
++	int token_start = 0;
++
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++	if (mtk_wed_device_active(&dev->mmio.wed))
++		token_start = dev->mmio.wed.wlan.nbuf;
++#endif
++
++	return __mt76_token_consume(dev, ptxwi, phy_idx, token_start);
++}
++
+ void __mt76_set_tx_blocked(struct mt76_dev *dev, bool blocked);
+ struct mt76_rxwi_cache *mt76_rx_token_release(struct mt76_dev *dev, int token);
+ int mt76_rx_token_consume(struct mt76_dev *dev, void *ptr,
+--- a/tx.c
++++ b/tx.c
+@@ -859,26 +859,20 @@ void __mt76_set_tx_blocked(struct mt76_d
+ }
+ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked);
+ 
+-int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
+-		       u8 phy_idx)
++int __mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
++			 u8 phy_idx, int token_start)
+ {
+-	int token = -EINVAL, start = 0;
+ 	struct mt76_phy *phy = mt76_dev_phy(dev, phy_idx);
+-	#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+-	if (mtk_wed_device_active(&dev->mmio.wed))
+-		start = dev->mmio.wed.wlan.nbuf;
+-	#endif
+-	#ifdef CONFIG_NET_AIROHA_NPU
+-		start = 16384;//NPU_TX_TOKEN_CNT;
+-	#endif
++	int token = -EINVAL;
++
+ 	spin_lock_bh(&dev->token_lock);
+ 
+ 	if (phy->tokens >= dev->token_threshold)
+ 		goto out;
+ 
+-	token = idr_alloc(&dev->token, *ptxwi, start, start + dev->token_size,
+-			  GFP_ATOMIC);
+-	if (token >= start) {
++	token = idr_alloc(&dev->token, *ptxwi, token_start,
++			  token_start + dev->token_size, GFP_ATOMIC);
++	if (token >= token_start) {
+ 		dev->token_count++;
+ 
+ 		(*ptxwi)->phy_idx = phy_idx;
+@@ -899,7 +893,7 @@ out:
+ 
+ 	return token;
+ }
+-EXPORT_SYMBOL_GPL(mt76_token_consume);
++EXPORT_SYMBOL_GPL(__mt76_token_consume);
+ 
+ int mt76_rx_token_consume(struct mt76_dev *dev, void *ptr,
+ 			  struct mt76_rxwi_cache *r, dma_addr_t phys)
