@@ -1,0 +1,53 @@
+--- a/mt7996/main.c
++++ b/mt7996/main.c
+@@ -2564,7 +2564,6 @@ out:
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ static int
+ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+ 			     struct ieee80211_vif *vif,
+@@ -2612,15 +2611,18 @@ mt7996_net_fill_forward_path(struct ieee
+ 			break;
+ 		}
+ 	}
+-	#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+-	if (!mtk_wed_device_active(wed))
+-	#else
++
++	if (!mtk_wed_device_active(wed) && !mt76_npu_device_active(&dev->mt76))
+ 		return -ENODEV;
+-	#endif
+ 
+ 	path->type = DEV_PATH_MTK_WDMA;
+ 	path->dev = ctx->dev;
+-	path->mtk_wdma.wdma_idx = wed->wdma_idx;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++	if (mtk_wed_device_active(wed))
++		path->mtk_wdma.wdma_idx = wed->wdma_idx;
++	else
++#endif
++	path->mtk_wdma.wdma_idx = mconf->phy->mt76->band_idx;
+ 	path->mtk_wdma.bss = mconf->mt76.idx;
+ 	path->mtk_wdma.queue = 0;
+ 	path->mtk_wdma.wcid = mlink->wcid.idx;
+@@ -2642,8 +2644,6 @@ mt7996_net_fill_forward_path(struct ieee
+ 	return 0;
+ }
+ 
+-#endif
+-
+ void mt7996_scan_complete(struct mt7996_phy *phy, bool aborted)
+ {
+ 	struct ieee80211_vif *vif = phy->scan_vif;
+@@ -3513,8 +3513,8 @@ const struct ieee80211_ops mt7996_ops =
+ 	.vif_add_debugfs = mt7996_vif_add_debugfs,
+ #endif
+ 	.set_radar_background = mt7996_set_radar_background,
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	.net_fill_forward_path = mt7996_net_fill_forward_path,
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	.net_setup_tc = mt76_wed_net_setup_tc,
+ #endif
+ 	.event_callback = mt7996_event_callback,

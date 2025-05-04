@@ -1,0 +1,506 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -247,6 +247,10 @@ enum {
+ #define AIROHA_FOE_MAC_SMAC_ID		GENMASK(20, 16)
+ #define AIROHA_FOE_MAC_PPPOE_ID		GENMASK(15, 0)
+ 
++#define AIROHA_FOE_MAC_WDMA_QOS		GENMASK(15, 12)
++#define AIROHA_FOE_MAC_WDMA_BAND	BIT(11)
++#define AIROHA_FOE_MAC_WDMA_WCID	GENMASK(10, 0)
++
+ struct airoha_foe_mac_info_common {
+ 	u16 vlan1;
+ 	u16 etype;
+@@ -475,6 +479,13 @@ struct airoha_flow_table_entry {
+ 	unsigned long cookie;
+ };
+ 
++struct airoha_wdma_info {
++	u8 idx;
++	u8 queue;
++	u16 wcid;
++	u8 bss;
++};
++
+ /* IRQ BANK0: RINGS [0-7]
+  * IRQ BANK1: RINGS [8-15]
+  * IRQ BANK2: RINGS [16-23]
+@@ -622,43 +633,4 @@ static inline int airoha_ppe_debugfs_ini
+ }
+ #endif
+ 
+-#define AIROHA_DEBUG_LEVEL_NONE 0
+-#define AIROHA_DEBUG_LEVEL_ERR  1
+-#define AIROHA_DEBUG_LEVEL_WARN 2
+-#define AIROHA_DEBUG_LEVEL_INFO 3
+-#define AIROHA_DEBUG_LEVEL_DBG  4
+-
+-extern int airoha_debug_level;
+-
+-#define AIROHA_LOG(level, fmt, ...) \
+-	do { \
+-		if (level <= airoha_debug_level) \
+-		printk(fmt, ##__VA_ARGS__); \
+-	} while (0)
+-
+-struct port_info {
+-    unsigned long int tsid:8;
+-    unsigned long int channel:5;
+-    unsigned long int nbq:5;
+-    unsigned long int fast:1;
+-    unsigned long int txq:4;
+-    unsigned long int atm_pppoa:1;
+-    unsigned long int atm_ipoa:1;
+-    unsigned long int atm_vc_mux:1;
+-    unsigned long int eth_macSTagEn:1;
+-	unsigned long int eth_is_wan:1;
+-    unsigned long int ds_to_qdma:1;
+-    unsigned long int ds_need_offload:1;
+-    unsigned long int force_high_priority_ring:1;
+-	unsigned long int txq_is_valid:1;
+-    unsigned long int stag:16;
+-    unsigned long int magic:16;
+-	unsigned long int udf:8;//add for inode wifi 
+-};
+-
+-void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason);
+-void airoha_ppe_foe_flow_update_wifi_npu_offload(struct airoha_ppe *ppe, struct sk_buff *skb, struct port_info *pinfo);
+-
+-#define FOE_ENTRY_NUM(skb)		skb_get_hash(skb)
+-
+ #endif /* AIROHA_ETH_H */
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -189,6 +189,31 @@ static int airoha_ppe_flow_mangle_ipv4(c
+ 	return 0;
+ }
+ 
++static int airoha_ppe_get_wdma_info(struct net_device *dev, const u8 *addr,
++				    struct airoha_wdma_info *info)
++{
++	struct net_device_path_stack stack;
++	struct net_device_path *path;
++	int err;
++
++	if (!dev)
++		return -ENODEV;
++
++	err = dev_fill_forward_path(dev, addr, &stack);
++	if (err)
++		return err;
++
++	path = &stack.path[stack.num_paths - 1];
++	if (path->type != DEV_PATH_MTK_WDMA)
++		return -1;
++
++	info->idx = path->mtk_wdma.wdma_idx;
++	info->bss = path->mtk_wdma.bss;
++	info->wcid = path->mtk_wdma.wcid;
++
++	return 0;
++}
++
+ static int airoha_get_dsa_port(struct net_device **dev)
+ {
+ #if IS_ENABLED(CONFIG_NET_DSA)
+@@ -213,34 +238,14 @@ static void airoha_ppe_foe_set_bridge_ad
+ 	br->src_mac_lo = get_unaligned_be32(eh->h_source + 2);
+ }
+ 
+-static inline int airoha_ppe_is_wifi_dev(struct net_device *dev)
+-{
+-    return ((dev != NULL) && \
+-			(strncmp(dev->name,"phy", 3) == 0)) || \
+-		((dev != NULL) && \
+-			(strncmp(dev->name,"ap-mld", 6) == 0));
+-}
+-
+-static inline int airoha_ppe_is_br_dev(struct net_device *dev)
+-{
+-	return ((dev != NULL) && \
+-			(strncmp(dev->name,"br-lan", 6) == 0));
+-}
+-
+-static inline int airoha_ppe_is_wifi2G_dev(struct net_device *dev)
+-{
+-    return ((dev != NULL) && \
+-			(strncmp(dev->name,"phy0.0", 6) == 0));
+-}
+-
+ static int airoha_ppe_foe_entry_prepare(struct airoha_eth *eth,
+ 					struct airoha_foe_entry *hwe,
+ 					struct net_device *dev, int type,
+ 					struct airoha_flow_data *data,
+ 					int l4proto, u32 priority)
+ {
+-	u32 qid, channel = 0, qdata, ports_pad, val;
+-	int dsa_port = airoha_get_dsa_port(&dev);
++	u32 qdata = FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f), ports_pad, val;
++	int wlan_etype = -EINVAL, dsa_port = airoha_get_dsa_port(&dev);
+ 	struct airoha_foe_mac_info_common *l2;
+ 
+ 	memset(hwe, 0, sizeof(*hwe));
+@@ -254,18 +259,26 @@ static int airoha_ppe_foe_entry_prepare(
+ 	      AIROHA_FOE_IB1_BIND_TTL;
+ 	hwe->ib1 = val;
+ 
+-	val = FIELD_PREP(AIROHA_FOE_IB2_PORT_AG, 0x1f) |
+-	      AIROHA_FOE_IB2_PSE_QOS;
+-	if (dsa_port >= 0)
+-		val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, dsa_port);
+-
++	val = FIELD_PREP(AIROHA_FOE_IB2_PORT_AG, 0x1f);
+ 	if (dev) {
+-		struct airoha_gdm_port *port = netdev_priv(dev);
+-		u8 pse_port;
++		struct airoha_wdma_info info = {};
+ 
+-		if(airoha_ppe_is_wifi_dev(dev)) {
+-			pse_port = FE_PSE_PORT_CDM4;
++		if (!airoha_ppe_get_wdma_info(dev, data->eth.h_dest, &info)) {
++			val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, info.idx) |
++			       FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT,
++					  FE_PSE_PORT_CDM4);
++			qdata |= FIELD_PREP(AIROHA_FOE_ACTDP, info.bss);
++			wlan_etype = FIELD_PREP(AIROHA_FOE_MAC_WDMA_QOS,
++						priority) |
++				     FIELD_PREP(AIROHA_FOE_MAC_WDMA_BAND,
++						info.idx) |
++				     FIELD_PREP(AIROHA_FOE_MAC_WDMA_WCID,
++						info.wcid);
+ 		} else {
++			struct airoha_gdm_port *port = netdev_priv(dev);
++			u32 qid, channel;
++			u8 pse_port;
++
+ 			if (!airoha_is_valid_gdm_port(eth, port))
+ 				return -EINVAL;
+ 
+@@ -274,9 +287,20 @@ static int airoha_ppe_foe_entry_prepare(
+ 			else
+ 				/* uplink relies on GDM2 loopback for GDM3 and GDM4 */
+ 				pse_port = 2;
+-			val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port);
++
++			val |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, pse_port) |
++			       AIROHA_FOE_IB2_PSE_QOS;
++			if (dsa_port >= 0)
++				val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ,
++						  dsa_port);
++
+ 			channel = dsa_port >= 0 ? dsa_port : port->id;
+ 			channel = channel % AIROHA_NUM_QOS_CHANNELS;
++
++			priority = priority % AIROHA_NUM_QOS_QUEUES;
++			qid = (AIROHA_NUM_QOS_QUEUES - 1) - priority;
++			qdata |= FIELD_PREP(AIROHA_FOE_CHANNEL, channel) |
++				 FIELD_PREP(AIROHA_FOE_QID, qid);
+ 		}
+ 	}
+ 
+@@ -289,12 +313,6 @@ static int airoha_ppe_foe_entry_prepare(
+ 	if (type == PPE_PKT_TYPE_IPV6_ROUTE_3T)
+ 		hwe->ipv6.ports = ports_pad;
+ 
+-	priority = priority % AIROHA_NUM_QOS_QUEUES;
+-	qid = (AIROHA_NUM_QOS_QUEUES - 1) - priority;
+-	qdata = FIELD_PREP(AIROHA_FOE_CHANNEL, channel) |
+-		FIELD_PREP(AIROHA_FOE_QID, qid) |
+-		FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f);
+-
+ 	if (type == PPE_PKT_TYPE_BRIDGE) {
+ 		airoha_ppe_foe_set_bridge_addrs(&hwe->bridge, &data->eth);
+ 		hwe->bridge.data = qdata;
+@@ -331,7 +349,9 @@ static int airoha_ppe_foe_entry_prepare(
+ 	l2->vlan1 = data->vlan.hdr[0].id;
+ 	l2->vlan2 = data->vlan.hdr[1].id;
+ 
+-	if (dsa_port >= 0) {
++	if (wlan_etype >= 0) {
++		l2->etype = wlan_etype;
++	} else if (dsa_port >= 0) {
+ 		l2->etype = BIT(dsa_port);
+ 		l2->etype |= !data->vlan.num ? BIT(15) : 0;
+ 	} else if (data->pppoe.num) {
+@@ -774,165 +794,6 @@ airoha_ppe_foe_l2_flow_commit_entry(stru
+ 				       airoha_l2_flow_table_params);
+ }
+ 
+-void airoha_ppe_foe_flow_update_wifi_npu_offload(struct airoha_ppe *ppe, struct sk_buff *skb, struct port_info *pinfo)
+-{
+-	u32 hash = FOE_ENTRY_NUM(skb);
+-	int type;
+-	struct airoha_flow_table_entry *e;
+-	struct airoha_foe_entry *hwe;
+-	struct hlist_node *n;
+-//	struct airoha_foe_bridge br = {};
+-
+-	u32 index, data;
+-	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "hash at wifi_tx: %u\n", hash);
+-	if (hash >= PPE_SRAM_NUM_ENTRIES || !skb->l4_hash || skb->sw_hash != false) {
+-		AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Incorrect hash:%u\n", hash);
+-        return;
+-    }
+-	
+-	spin_lock_bh(&ppe_lock);
+-	hwe = airoha_ppe_foe_get_entry(ppe, hash);
+-	if (!hwe)
+-	{
+-		goto unlock;
+-	}
+-	
+-	type = FIELD_GET(AIROHA_FOE_IB1_BIND_PACKET_TYPE, hwe->ib1);
+-	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Packet type:%d\n", type);
+-	index = airoha_ppe_foe_get_entry_hash(hwe);
+-	
+-	if(airoha_ppe_is_wifi2G_dev(skb->dev)){		
+-		pinfo->nbq = 0;
+-	}
+-	else{		
+-		pinfo->nbq = 1;
+-	}
+-	
+-	hlist_for_each_entry_safe(e, n, &ppe->foe_flow[index], list) {
+-		if (airoha_ppe_foe_compare_entry(e, hwe)) {
+-			data = FIELD_PREP(AIROHA_FOE_ACTDP, pinfo->udf) |
+-	       			FIELD_PREP(AIROHA_FOE_SHAPER_ID, pinfo->tsid);
+-			
+-			switch (type) {
+-				case PPE_PKT_TYPE_IPV4_ROUTE:
+-				case PPE_PKT_TYPE_IPV4_HNAPT:
+-					e->data.ipv4.data = data;
+-					e->data.ipv4.l2.common.etype = pinfo->stag;
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);		//TDMA
+-					break;
+-				
+-				case PPE_PKT_TYPE_BRIDGE:
+-					e->data.bridge.data = data;
+-					e->data.bridge.l2.common.etype = pinfo->stag;
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-				
+-				case PPE_PKT_TYPE_IPV6_ROUTE_3T:
+-				case PPE_PKT_TYPE_IPV6_ROUTE_5T:
+-				case PPE_PKT_TYPE_IPV6_6RD:
+-					e->data.ipv6.data = data;
+-					e->data.ipv6.l2.etype = pinfo->stag;
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-					
+-				case PPE_PKT_TYPE_IPV4_DSLITE:
+-					e->data.dslite.data = data;		
+-					e->data.dslite.l2.common.etype = pinfo->stag;
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-					
+-				default:
+-					break;
+-			}			
+-			break;
+-		}
+-	}
+-	
+-#if 0
+-	/*---START------ For Bridge Case, it should be get from L2_flows not foe_flow ---------*/
+-	airoha_ppe_foe_set_bridge_addrs(&br, eth_hdr(skb));
+-	e = rhashtable_lookup_fast(&ppe->l2_flows, &br,
+-				   airoha_l2_flow_table_params);
+-	if(e){
+-			data = FIELD_PREP(AIROHA_FOE_ACTDP, pinfo->udf) |
+-	       			FIELD_PREP(AIROHA_FOE_SHAPER_ID, pinfo->tsid);
+-			
+-			switch (type) {
+-				case PPE_PKT_TYPE_IPV4_ROUTE:
+-				case PPE_PKT_TYPE_IPV4_HNAPT:
+-					e->data.ipv4.data = data;
+-					e->data.ipv4.l2.common.etype = pinfo->stag;
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.ipv4.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.ipv4.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);		//TDMA
+-					
+-					AIROHA_LOG(AIROHA_DEBUG_LEVEL_ERR, "Packet type:%d, hash at wifi_tx: %u, stag = %x, info2 = %x, data = %x\n", 
+-								type, hash, pinfo->stag, e->data.ipv4.ib2, e->data.ipv4.data);
+-					break;
+-				
+-				case PPE_PKT_TYPE_BRIDGE:
+-					e->data.bridge.data = data;
+-					e->data.bridge.l2.common.etype = pinfo->stag;
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);
+-					e->data.bridge.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.bridge.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-				
+-				case PPE_PKT_TYPE_IPV6_ROUTE_3T:
+-				case PPE_PKT_TYPE_IPV6_ROUTE_5T:
+-				case PPE_PKT_TYPE_IPV6_6RD:
+-					e->data.ipv6.data = data;
+-					e->data.ipv6.l2.etype = pinfo->stag;
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.ipv6.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.ipv6.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-					
+-				case PPE_PKT_TYPE_IPV4_DSLITE:
+-					e->data.dslite.data = data;		
+-					e->data.dslite.l2.common.etype = pinfo->stag;
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_QOS;					
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_NBQ;
+-					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_NBQ, pinfo->nbq);	
+-					e->data.dslite.ib2 &= ~AIROHA_FOE_IB2_PSE_PORT;
+-					e->data.dslite.ib2 |= FIELD_PREP(AIROHA_FOE_IB2_PSE_PORT, FE_PSE_PORT_CDM4);					
+-					break;
+-					
+-				default:
+-					break;
+-			}			
+-			e->tx_modified_bit = 1; 
+-		}else{
+-		AIROHA_LOG(AIROHA_DEBUG_LEVEL_WARN, "wifi tx hash:%d Can't find Flow table and L2 Table \n",hash);
+-	}
+-	/*----END----- For Bridge Case, it should be get from L2_flows not foe_flow ---------*/
+-#endif						   
+-unlock:
+-	spin_unlock_bh(&ppe_lock);
+-}
+-
+ static int airoha_ppe_foe_flow_commit_entry(struct airoha_ppe *ppe,
+ 					    struct airoha_flow_table_entry *e)
+ {
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -3484,6 +3484,7 @@ static struct platform_driver airoha_dri
+ };
+ module_platform_driver(airoha_driver);
+ 
++#if 0
+ void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason)
+ {
+ 	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Hash: %u\n", hash);
+@@ -3496,6 +3497,7 @@ void npu_get_entry_bind(struct sk_buff *
+ 		airoha_ppe_check_skb(glb_eth->ppe, skb, hash);
+ 	}
+ }
++#endif
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -766,85 +766,6 @@ static struct sk_buff *airoha_npu_wlan_r
+ 	return skb;
+ }
+ 
+-#if 0
+-static int airoha_npu_wlan_tx_enqueue(struct airoha_npu *npu, int qid,
+-				      struct sk_buff *skb, dma_addr_t dma_addr,
+-				      void *txwi, u16 txwi_len)
+-{
+-	struct airoha_npu_tx_dma_desc *desc;
+-	struct airoha_npu_queue *q;
+-	//dma_addr_t dma_addr;
+-	u32 tail;
+-
+-	if (qid >= ARRAY_SIZE(npu->q_tx))
+-		return -EINVAL;
+-
+-	q = &npu->q_tx[qid];
+-	/* FIXME: This must be moved in mt76 callback */
+-	regmap_read(npu->regmap, REG_TX_DMA_IDX(qid + 2), &tail);
+-	while (tail != q->tail) {
+-		q->tx_desc[q->tail].ctrl &= ~NPU_TX_DMA_DESC_DONE_MASK;
+-		q->tail = (q->tail + 1) % q->ndesc;
+-		q->queued--;
+-	}
+-
+-	/* FIXME: Take into account unlinear skbs */
+-	if (skb_linearize(skb))
+-		return -EINVAL;
+-
+-	if (q->queued + 1 > q->ndesc)
+-		return -EBUSY;
+-
+-	struct port_info wifi_info;
+-	unsigned char bss_idx, is_tcp, qos_tid;
+-	unsigned int wcidx;	
+-	npu_hif_v2_info npu_txp_info;
+-	__le32 *_txd = (__le32 *)vnd;
+-	unsigned int token;
+-	
+-	memset(&wifi_info, 0 , sizeof(struct port_info));
+-	
+-	wifi_info.tsid = 0x7F;
+-	wifi_info.nbq = band;
+-	bss_idx = _txd[9] & 0xff; //txp[9] bss_id[7:0]
+-	wcidx = (_txd[9] >> 8) & 0xffff; //txp[9] wtbl_idx[23:8]
+-		
+-	if (bss_idx > 0x7f) {
+-		  printk("npu_wifi bss index is error\n");
+-	}
+-
+-	qos_tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
+-	token = (_txd[8] >> 16) & 0xffff;
+-
+-	npu_txp_info._detail.ring_num = band;
+-	npu_txp_info._detail.qos_tid	=	qos_tid;
+-
+-	wifi_info.udf = (bss_idx & 0x7f) | (is_tcp << 7);		
+-	wifi_info.stag = ((wcidx & 0x7ff) | ((npu_txp_info.ctrl_word & 0x1f) << 11));
+-	airoha_ppe_foe_flow_update_wifi_npu_offload(glb_eth->ppe, skb, &wifi_info);
+-
+-	desc = &q->tx_desc[q->head];
+-	txwi_len = min_t(u16, txwi_len, sizeof(desc->txwi));
+-	memcpy(desc->txwi, txwi, txwi_len);
+-	/* FIXME: DMA map into mt76 driver */
+-
+-	dma_addr = dma_map_single(npu->dev, skb->data, skb->len, DMA_TO_DEVICE);
+-	if (dma_mapping_error(npu->dev, dma_addr))
+-		return -ENOMEM;
+-
+-	desc->addr = dma_addr;
+-	/* FIXME: Take into account unlinear skbs */
+-	desc->ctrl = FIELD_PREP(NPU_TX_DMA_DESC_VEND_LEN_MASK, txwi_len) |
+-		     FIELD_PREP(NPU_TX_DMA_DESC_LEN_MASK, skb->len) |
+-		     NPU_TX_DMA_DESC_DONE_MASK;
+-
+-	q->head = (q->head + 1) % q->ndesc;
+-	q->queued++;
+-
+-	return 0;
+-}
+-#endif
+-
+ static u32 airoha_npu_wlan_get_queue_addr(struct airoha_npu *npu, int qid,
+ 					  bool xmit)
+ {
+--- a/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
+@@ -6,7 +6,6 @@
+ 
+ #include "airoha_eth.h"
+ 
+-int airoha_debug_level = AIROHA_DEBUG_LEVEL_NONE;
+ int airoha_upstream_fast_path_enable = 0;
+ int airoha_downstream_fast_path_enable = 1;
+ extern struct airoha_eth *glb_eth;
