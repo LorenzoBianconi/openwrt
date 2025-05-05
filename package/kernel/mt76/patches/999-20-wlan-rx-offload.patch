@@ -1,0 +1,227 @@
+--- a/mt76.h
++++ b/mt76.h
+@@ -14,7 +14,7 @@
+ #include <linux/usb.h>
+ #include <linux/average.h>
+ #include <linux/pci.h>
+-#include <linux/soc/airoha/airoha_npu.h>
++#include <linux/soc/airoha/airoha_offload.h>
+ #include <linux/soc/mediatek/mtk_wed.h>
+ #include <net/netlink.h>
+ #include <net/mac80211.h>
+@@ -816,6 +816,7 @@ struct mt76_mmio {
+ 	struct completion wed_reset_complete;
+ 
+ 	struct airoha_npu __rcu *npu;
++	struct airoha_ppe __rcu *ppe;
+ };
+ 
+ struct mt76_rx_status {
+@@ -1785,6 +1786,9 @@ int mt76_npu_init(struct mt76_dev *dev);
+ void mt76_npu_deinit(struct mt76_dev *dev);
+ void mt76_npu_queue_setup(struct mt76_dev *dev, struct mt76_queue *q);
+ void mt76_npu_txdesc_cleanup(struct mt76_queue *q, int index);
++int mt76_npu_net_setup_tc(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
++			  struct net_device *dev, enum tc_setup_type type,
++			  void *type_data);
+ 
+ static inline bool mt76_npu_device_active(struct mt76_dev *dev)
+ {
+--- a/npu.c
++++ b/npu.c
+@@ -3,6 +3,8 @@
+  * Copyright (c) 2025 AIROHA Inc
+  * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+  */
++#include <net/flow_offload.h>
++#include <net/pkt_cls.h>
+ 
+ #include "mt76.h"
+ #include "dma.h"
+@@ -12,6 +14,7 @@
+ 
+ int mt76_npu_rx_poll(struct napi_struct *napi, int budget)
+ {
++	struct airoha_ppe *ppe;
+ 	struct airoha_npu *npu;
+ 	struct mt76_dev *dev;
+ 	int i = 0, qid;
+@@ -25,13 +28,22 @@ int mt76_npu_rx_poll(struct napi_struct
+ 	if (!npu)
+ 		goto out;
+ 
++	ppe = rcu_dereference(dev->mmio.ppe);
++	if (!ppe)
++		goto out;
++
+ 	while (i < budget) {
+ 		struct sk_buff *skb;
++		u16 reason, hash;
+ 
+-		skb = npu->ops.wlan_rx_dequeue(npu, 0);
++		skb = npu->ops.wlan_rx_dequeue(npu, 0, &hash, &reason);
+ 		if (!skb)
+ 			break;
+ 
++		skb_set_hash(skb, hash, PKT_HASH_TYPE_L4);
++		if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
++			ppe->ops.check_skb(ppe, skb, hash);
++
+ 		dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
+ 		mt76_rx_poll_complete(dev, qid, napi);
+ 		i++;
+@@ -211,9 +223,97 @@ void mt76_npu_init_tx_done(struct mt76_d
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_init_tx_done);
+ 
++static int mt76_npu_setup_tc_block_cb(enum tc_setup_type type,
++				      void *type_data, void *cb_priv)
++{
++	struct mt76_phy *phy = cb_priv;
++	struct airoha_ppe *ppe;
++	int err = ENODEV;
++
++	if (type != TC_SETUP_CLSFLOWER)
++		return -EOPNOTSUPP;
++
++	rcu_read_lock();
++	ppe = rcu_dereference(phy->dev->mmio.ppe);
++	if (ppe)
++		err = ppe->ops.setup_tc_block_cb(ppe, type_data);
++	rcu_read_unlock();
++
++        return err;
++}
++
++static int mt76_npu_setup_tc_block(struct mt76_phy *phy,
++				   struct net_device *dev,
++				   struct flow_block_offload *f)
++{
++	flow_setup_cb_t *cb = mt76_npu_setup_tc_block_cb;
++	static LIST_HEAD(block_cb_list);
++	struct flow_block_cb *block_cb;
++
++	if (f->binder_type != FLOW_BLOCK_BINDER_TYPE_CLSACT_INGRESS)
++		return -EOPNOTSUPP;
++
++	if (!tc_can_offload(dev))
++		return -EOPNOTSUPP;
++
++	f->driver_block_list = &block_cb_list;
++	switch (f->command) {
++	case FLOW_BLOCK_BIND:
++		block_cb = flow_block_cb_lookup(f->block, cb, dev);
++		if (block_cb) {
++			flow_block_cb_incref(block_cb);
++			return 0;
++		}
++
++		block_cb = flow_block_cb_alloc(cb, dev, phy, NULL);
++		if (IS_ERR(block_cb))
++			return PTR_ERR(block_cb);
++
++		flow_block_cb_incref(block_cb);
++		flow_block_cb_add(block_cb, f);
++		list_add_tail(&block_cb->driver_list, &block_cb_list);
++		return 0;
++	case FLOW_BLOCK_UNBIND:
++		block_cb = flow_block_cb_lookup(f->block, cb, dev);
++		if (!block_cb)
++			return -ENOENT;
++
++		if (!flow_block_cb_decref(block_cb)) {
++			flow_block_cb_remove(block_cb, f);
++			list_del(&block_cb->driver_list);
++		}
++		return 0;
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++
++int mt76_npu_net_setup_tc(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
++			  struct net_device *dev, enum tc_setup_type type,
++			  void *type_data)
++{
++	struct mt76_phy *phy = hw->priv;
++
++	if (!tc_can_offload(dev))
++		return -EOPNOTSUPP;
++
++	if (!mt76_npu_device_active(phy->dev))
++		return -EOPNOTSUPP;
++
++	switch (type) {
++	case TC_SETUP_BLOCK:
++	case TC_SETUP_FT:
++		return mt76_npu_setup_tc_block(phy, dev, type_data);
++	default:
++		return -EOPNOTSUPP;
++	}
++}
++EXPORT_SYMBOL_GPL(mt76_npu_net_setup_tc);
++
+ int mt76_npu_init(struct mt76_dev *dev)
+ {
+ 	struct airoha_npu *npu;
++	struct airoha_ppe *ppe;
+ 	int err = 0;
+ 
+ 	mutex_lock(&dev->mutex);
+@@ -229,6 +329,17 @@ int mt76_npu_init(struct mt76_dev *dev)
+ 		goto unlock;
+ 	}
+ 
++	ppe = airoha_ppe_get(dev->dev);
++	if (IS_ERR(ppe)) {
++		request_module("airoha-eth");
++		ppe = airoha_ppe_get(dev->dev);
++	}
++
++	if (IS_ERR(ppe)) {
++		err = PTR_ERR(ppe);
++		goto unlock;
++	}
++
+ 	err = devm_request_irq(npu->dev, npu->irqs[0], mt76_npu_irq_handler,
+ 			       IRQF_SHARED, "mt76-npu", dev);
+ 	if (err)
+@@ -237,6 +348,7 @@ int mt76_npu_init(struct mt76_dev *dev)
+ 	dev->dma_dev = npu->dev;
+ 
+ 	rcu_assign_pointer(dev->mmio.npu, npu);
++	rcu_assign_pointer(dev->mmio.ppe, ppe);
+ 	synchronize_rcu();
+ unlock:
+ 	mutex_unlock(&dev->mutex);
+@@ -248,6 +360,7 @@ EXPORT_SYMBOL_GPL(mt76_npu_init);
+ 
+ void mt76_npu_deinit(struct mt76_dev *dev)
+ {
++	struct airoha_ppe *ppe;
+ 	struct airoha_npu *npu;
+ 
+ 	mutex_lock(&dev->mutex);
+@@ -257,6 +370,11 @@ void mt76_npu_deinit(struct mt76_dev *de
+ 	if (npu)
+ 		airoha_npu_put(npu);
+ 
++	ppe = rcu_replace_pointer(dev->mmio.ppe, NULL,
++				  lockdep_is_held(&dev->mutex));
++	if (ppe)
++		airoha_ppe_put(ppe);
++
+ 	mutex_unlock(&dev->mutex);
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_deinit);
+--- a/mt7996/main.c
++++ b/mt7996/main.c
+@@ -3516,6 +3516,8 @@ const struct ieee80211_ops mt7996_ops =
+ 	.net_fill_forward_path = mt7996_net_fill_forward_path,
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	.net_setup_tc = mt76_wed_net_setup_tc,
++#elif (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
++	.net_setup_tc = mt76_npu_net_setup_tc,
+ #endif
+ 	.event_callback = mt7996_event_callback,
+ 	.add_chanctx = mt7996_add_chanctx,

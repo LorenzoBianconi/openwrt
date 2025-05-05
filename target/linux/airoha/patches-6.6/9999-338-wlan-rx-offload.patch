@@ -1,0 +1,292 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -225,10 +225,6 @@ struct airoha_hw_stats {
+ };
+ 
+ enum {
+-	PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED = 0x0f,
+-};
+-
+-enum {
+ 	AIROHA_FOE_STATE_INVALID,
+ 	AIROHA_FOE_STATE_UNBIND,
+ 	AIROHA_FOE_STATE_BIND,
+@@ -547,23 +543,6 @@ struct airoha_gdm_port {
+ #define AIROHA_RXD4_PPE_CPU_REASON	GENMASK(20, 16)
+ #define AIROHA_RXD4_FOE_ENTRY		GENMASK(15, 0)
+ 
+-struct airoha_ppe {
+-	struct airoha_eth *eth;
+-
+-	void *foe;
+-	dma_addr_t foe_dma;
+-
+-	struct rhashtable l2_flows;
+-
+-	struct hlist_head *foe_flow;
+-	u16 *foe_check_time;
+-
+-	struct airoha_foe_stats *foe_stats;
+-	dma_addr_t foe_stats_dma;
+-
+-	struct dentry *debugfs_dir;
+-};
+-
+ struct airoha_eth {
+ 	struct device *dev;
+ 
+@@ -617,7 +596,7 @@ bool airoha_is_valid_gdm_port(struct air
+ 
+ void airoha_ppe_check_skb(struct airoha_ppe *ppe, struct sk_buff *skb,
+ 			  u16 hash);
+-int airoha_ppe_setup_tc_block_cb(struct airoha_eth *eth, void *type_data);
++int airoha_ppe_setup_tc_block_cb(struct airoha_ppe *ppe, void *type_data);
+ int airoha_ppe_init(struct airoha_eth *eth);
+ void airoha_ppe_deinit(struct airoha_eth *eth);
+ struct airoha_foe_entry *airoha_ppe_foe_get_entry(struct airoha_ppe *ppe,
+--- a/include/linux/soc/airoha/airoha_offload.h
++++ b/include/linux/soc/airoha/airoha_offload.h
+@@ -33,6 +33,51 @@
+ #define TCSUPPORT_NPU_WIFI_OFFLOAD
+ #endif
+ 
++struct airoha_eth;
++struct airoha_foe_stats;
++
++enum {
++	PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED = 0x0f,
++};
++
++struct airoha_ppe {
++#if (IS_BUILTIN(CONFIG_NET_AIROHA) || IS_MODULE(CONFIG_NET_AIROHA))
++	struct {
++		int (*setup_tc_block_cb)(struct airoha_ppe *ppe,
++					 void *type_data);
++		void (*check_skb)(struct airoha_ppe *ppe, struct sk_buff *skb,
++				  u16 hash);
++	} ops;
++	struct airoha_eth *eth;
++
++	void *foe;
++	dma_addr_t foe_dma;
++
++	struct rhashtable l2_flows;
++
++	struct hlist_head *foe_flow;
++	u16 *foe_check_time;
++
++	struct airoha_foe_stats *foe_stats;
++	dma_addr_t foe_stats_dma;
++
++	struct dentry *debugfs_dir;
++#endif
++};
++
++#if (IS_BUILTIN(CONFIG_NET_AIROHA) || IS_MODULE(CONFIG_NET_AIROHA))
++struct airoha_ppe *airoha_ppe_get(struct device *dev);
++void airoha_ppe_put(struct airoha_ppe *ppe);
++#else
++static inline airoha_ppe *airoha_ppe_get(struct device *dev)
++{
++	return NULL;
++}
++
++static inline void airoha_ppe_put(struct airoha_ppe *ppe)
++{
++}
++#endif
+ 
+ #define NPU_NUM_CORES		8
+ #define NPU_NUM_IRQ		6
+@@ -153,7 +198,8 @@ struct airoha_npu {
+ 		int (*wlan_get_npu_support_map)(struct airoha_npu *npu,
+ 						int index, u32 *map);
+ 		struct sk_buff *(*wlan_rx_dequeue)(struct airoha_npu *npu,
+-						   int index);
++						   int index, u16 *hash,
++						   u16 *reason);
+ 		u32 (*wlan_get_queue_addr)(struct airoha_npu *npu, int qid,
+ 					   bool xmit);
+ 		void (*wlan_set_irq_mask)(struct airoha_npu *npu, int q);
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -6,6 +6,7 @@
+ 
+ #include <linux/ip.h>
+ #include <linux/ipv6.h>
++#include <linux/of_platform.h>
+ #include <linux/rhashtable.h>
+ #include <linux/soc/airoha/airoha_offload.h>
+ #include <net/ipv6.h>
+@@ -1270,8 +1271,9 @@ clear_state:
+ 	return err;
+ }
+ 
+-int airoha_ppe_setup_tc_block_cb(struct airoha_eth *eth, void *type_data)
++int airoha_ppe_setup_tc_block_cb(struct airoha_ppe *ppe, void *type_data)
+ {
++	struct airoha_eth *eth = ppe->eth;
+ 	int err;
+ 
+ 	err = airoha_ppe_offload_setup(eth);
+@@ -1298,6 +1300,60 @@ void airoha_ppe_check_skb(struct airoha_
+ 	airoha_ppe_foe_insert_entry(ppe, skb, hash);
+ }
+ 
++struct airoha_ppe *airoha_ppe_get(struct device *dev)
++{
++	struct platform_device *pdev;
++	struct device_node *np;
++	struct airoha_eth *eth;
++
++	np = of_parse_phandle(dev->of_node, "airoha,eth", 0);
++	if (!np)
++		return ERR_PTR(-ENODEV);
++
++	pdev = of_find_device_by_node(np);
++	of_node_put(np);
++
++	if (!pdev) {
++		dev_err(dev, "cannot find device node %s\n", np->name);
++		return ERR_PTR(-ENODEV);
++	}
++
++	if (!try_module_get(THIS_MODULE)) {
++		dev_err(dev, "failed to get the device driver module\n");
++		goto error_pdev_put;
++	}
++
++	eth = platform_get_drvdata(pdev);
++	if (!eth)
++		goto error_module_put;
++
++	if (!device_link_add(dev, &pdev->dev, DL_FLAG_AUTOREMOVE_SUPPLIER)) {
++		dev_err(&pdev->dev,
++			"failed to create device link to consumer %s\n",
++			dev_name(dev));
++		goto error_module_put;
++	}
++
++	return eth->ppe;
++
++error_module_put:
++	module_put(THIS_MODULE);
++error_pdev_put:
++	platform_device_put(pdev);
++
++	return ERR_PTR(-ENODEV);
++}
++EXPORT_SYMBOL_GPL(airoha_ppe_get);
++
++void airoha_ppe_put(struct airoha_ppe *ppe)
++{
++	struct airoha_eth *eth = ppe->eth;
++
++	module_put(THIS_MODULE);
++	put_device(eth->dev);
++}
++EXPORT_SYMBOL_GPL(airoha_ppe_put);
++
+ int airoha_ppe_init(struct airoha_eth *eth)
+ {
+ 	struct airoha_ppe *ppe;
+@@ -1307,6 +1363,9 @@ int airoha_ppe_init(struct airoha_eth *e
+ 	if (!ppe)
+ 		return -ENOMEM;
+ 
++	ppe->ops.setup_tc_block_cb = airoha_ppe_setup_tc_block_cb;
++	ppe->ops.check_skb = airoha_ppe_check_skb;
++
+ 	foe_size = PPE_NUM_ENTRIES * sizeof(struct airoha_foe_entry);
+ 	ppe->foe = dmam_alloc_coherent(eth->dev, foe_size, &ppe->foe_dma,
+ 				       GFP_KERNEL);
+--- a/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe_debugfs.c
+@@ -4,6 +4,8 @@
+  * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+  */
+ 
++#include <linux/soc/airoha/airoha_offload.h>
++
+ #include "airoha_eth.h"
+ 
+ int airoha_upstream_fast_path_enable = 0;
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -16,6 +16,7 @@
+ #include <uapi/linux/ppp_defs.h>
+ #include <linux/regmap.h>
+ #include <linux/of_platform.h>
++#include <linux/soc/airoha/airoha_offload.h>
+ 
+ #include "airoha_regs.h"
+ #include "airoha_eth.h"
+@@ -2654,14 +2655,14 @@ static int airoha_dev_setup_tc_block_cb(
+ 					void *type_data, void *cb_priv)
+ {
+ 	struct airoha_gdm_port *port = cb_priv;
++	struct airoha_eth *eth = port->qdma->eth;
+ 
+ 	if (!tc_can_offload(port->dev))
+ 		return -EOPNOTSUPP;
+ 
+ 	switch (type) {
+ 	case TC_SETUP_CLSFLOWER:
+-		return airoha_ppe_setup_tc_block_cb(port->qdma->eth,
+-						    type_data);
++		return airoha_ppe_setup_tc_block_cb(eth->ppe, type_data);
+ 	case TC_SETUP_CLSMATCHALL:
+ 		return airoha_dev_tc_matchall(port, type_data);
+ 	default:
+@@ -3484,21 +3485,6 @@ static struct platform_driver airoha_dri
+ };
+ module_platform_driver(airoha_driver);
+ 
+-#if 0
+-void npu_get_entry_bind(struct sk_buff *skb, u32 hash, u32 reason)
+-{
+-	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "Hash: %u\n", hash);
+-	if (hash < PPE_SRAM_NUM_ENTRIES)
+-		skb_set_hash(skb, hash,
+-				 PKT_HASH_TYPE_L4);
+-
+-	AIROHA_LOG(AIROHA_DEBUG_LEVEL_INFO, "CPU_REASON: %u\n", reason);
+-	if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED){
+-		airoha_ppe_check_skb(glb_eth->ppe, skb, hash);
+-	}
+-}
+-#endif
+-
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+ MODULE_DESCRIPTION("Ethernet driver for Airoha SoC");
+--- a/drivers/net/ethernet/airoha/airoha_npu.c
++++ b/drivers/net/ethernet/airoha/airoha_npu.c
+@@ -700,7 +700,8 @@ static int airoha_npu_wlan_fill_rx_queue
+ }
+ 
+ static struct sk_buff *airoha_npu_wlan_rx_dequeue(struct airoha_npu *npu,
+-						  int qid)
++						  int qid, u16 *hash,
++						  u16 *reason)
+ {
+ 	struct airoha_npu_rx_dma_desc *desc;
+ 	enum dma_data_direction dir;
+@@ -754,14 +755,15 @@ static struct sk_buff *airoha_npu_wlan_r
+ 
+ 		index = (index + 1) % q->ndesc;
+ 		desc = &q->desc[index];
++
++		*hash = FIELD_GET(NPU_RX_DMA_FOE_ID_MASK, desc->info);
++		*reason = FIELD_GET(NPU_RX_DMA_CRSN_MASK, desc->info);
+ 	}
+ 	q->tail = index;
+ 	q->queued -= i;
+ 
+ 	airoha_npu_wlan_fill_rx_queue(npu, q);
+ 	regmap_write(npu->regmap, REG_RX_DMA_IDX(qid), q->tail);
+-	/* FIXME */
+-	//npu_get_entry_bind(skb, pHostadptRX->pkt_info.foe_number, pHostadptRX->pkt_info.crsn);
+ 
+ 	return skb;
+ }

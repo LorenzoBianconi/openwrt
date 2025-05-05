@@ -214,6 +214,7 @@
 			compatible = "mediatek,mt76";
 			reg = <0x0000 0 0 0 0>;
 			airoha,npu = <&npu>;
+			airoha,eth = <&eth>;
 		};
 	};
 };

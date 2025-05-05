@@ -1,0 +1,139 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -2615,11 +2615,10 @@ static int airoha_tc_matchall_act_valida
+ 	return 0;
+ }
+ 
+-static int airoha_dev_tc_matchall(struct net_device *dev,
++static int airoha_dev_tc_matchall(struct airoha_gdm_port *port,
+ 				  struct tc_cls_matchall_offload *f)
+ {
+ 	enum trtcm_unit_type unit_type = TRTCM_BYTE_UNIT;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
+ 	u32 rate = 0, bucket_size = 0;
+ 
+ 	switch (f->command) {
+@@ -2654,16 +2653,17 @@ static int airoha_dev_tc_matchall(struct
+ static int airoha_dev_setup_tc_block_cb(enum tc_setup_type type,
+ 					void *type_data, void *cb_priv)
+ {
+-	struct net_device *dev = cb_priv;
++	struct airoha_gdm_port *port = cb_priv;
+ 
+-	if (!tc_can_offload(dev))
++	if (!tc_can_offload(port->dev))
+ 		return -EOPNOTSUPP;
+ 
+ 	switch (type) {
+ 	case TC_SETUP_CLSFLOWER:
+-		return airoha_ppe_setup_tc_block_cb(dev, type_data);
++		return airoha_ppe_setup_tc_block_cb(port->qdma->eth,
++						    type_data);
+ 	case TC_SETUP_CLSMATCHALL:
+-		return airoha_dev_tc_matchall(dev, type_data);
++		return airoha_dev_tc_matchall(port, type_data);
+ 	default:
+ 		return -EOPNOTSUPP;
+ 	}
+@@ -2687,7 +2687,7 @@ static int airoha_dev_setup_tc_block(str
+ 			flow_block_cb_incref(block_cb);
+ 			return 0;
+ 		}
+-		block_cb = flow_block_cb_alloc(cb, port->dev, port->dev, NULL);
++		block_cb = flow_block_cb_alloc(cb, port->dev, port, NULL);
+ 		if (IS_ERR(block_cb))
+ 			return PTR_ERR(block_cb);
+ 
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -616,7 +616,7 @@ bool airoha_is_valid_gdm_port(struct air
+ 
+ void airoha_ppe_check_skb(struct airoha_ppe *ppe, struct sk_buff *skb,
+ 			  u16 hash);
+-int airoha_ppe_setup_tc_block_cb(struct net_device *dev, void *type_data);
++int airoha_ppe_setup_tc_block_cb(struct airoha_eth *eth, void *type_data);
+ int airoha_ppe_init(struct airoha_eth *eth);
+ void airoha_ppe_deinit(struct airoha_eth *eth);
+ struct airoha_foe_entry *airoha_ppe_foe_get_entry(struct airoha_ppe *ppe,
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -911,11 +911,10 @@ static int airoha_ppe_entry_idle_time(st
+ 	return airoha_ppe_get_entry_idle_time(ppe, e->data.ib1);
+ }
+ 
+-static int airoha_ppe_flow_offload_replace(struct airoha_gdm_port *port,
++static int airoha_ppe_flow_offload_replace(struct airoha_eth *eth,
+ 					   struct flow_cls_offload *f)
+ {
+ 	struct flow_rule *rule = flow_cls_offload_flow_rule(f);
+-	struct airoha_eth *eth = port->qdma->eth;
+ 	struct airoha_flow_table_entry *e;
+ 	struct airoha_flow_data data = {};
+ 	struct net_device *odev = NULL;
+@@ -1113,10 +1112,9 @@ free_entry:
+ 	return err;
+ }
+ 
+-static int airoha_ppe_flow_offload_destroy(struct airoha_gdm_port *port,
++static int airoha_ppe_flow_offload_destroy(struct airoha_eth *eth,
+ 					   struct flow_cls_offload *f)
+ {
+-	struct airoha_eth *eth = port->qdma->eth;
+ 	struct airoha_flow_table_entry *e;
+ 
+ 	e = rhashtable_lookup(&eth->flow_table, &f->cookie,
+@@ -1155,10 +1153,9 @@ void airoha_ppe_foe_entry_get_stats(stru
+ 	rcu_read_unlock();
+ }
+ 
+-static int airoha_ppe_flow_offload_stats(struct airoha_gdm_port *port,
++static int airoha_ppe_flow_offload_stats(struct airoha_eth *eth,
+ 					 struct flow_cls_offload *f)
+ {
+-	struct airoha_eth *eth = port->qdma->eth;
+ 	struct airoha_foe_stats64 stats = {};
+ 	struct airoha_flow_table_entry *e;
+ 	int idle;
+@@ -1180,16 +1177,16 @@ static int airoha_ppe_flow_offload_stats
+ 	return 0;
+ }
+ 
+-static int airoha_ppe_flow_offload_cmd(struct airoha_gdm_port *port,
++static int airoha_ppe_flow_offload_cmd(struct airoha_eth *eth,
+ 				       struct flow_cls_offload *f)
+ {
+ 	switch (f->command) {
+ 	case FLOW_CLS_REPLACE:
+-		return airoha_ppe_flow_offload_replace(port, f);
++		return airoha_ppe_flow_offload_replace(eth, f);
+ 	case FLOW_CLS_DESTROY:
+-		return airoha_ppe_flow_offload_destroy(port, f);
++		return airoha_ppe_flow_offload_destroy(eth, f);
+ 	case FLOW_CLS_STATS:
+-		return airoha_ppe_flow_offload_stats(port, f);
++		return airoha_ppe_flow_offload_stats(eth, f);
+ 	default:
+ 		break;
+ 	}
+@@ -1256,11 +1253,9 @@ error_npu_put:
+ 	return err;
+ }
+ 
+-int airoha_ppe_setup_tc_block_cb(struct net_device *dev, void *type_data)
++int airoha_ppe_setup_tc_block_cb(struct airoha_eth *eth, void *type_data)
+ {
+-	struct airoha_gdm_port *port = netdev_priv(dev);
+ 	struct flow_cls_offload *cls = type_data;
+-	struct airoha_eth *eth = port->qdma->eth;
+ 	int err = 0;
+ 
+ 	mutex_lock(&flow_offload_mutex);
+@@ -1268,7 +1263,7 @@ int airoha_ppe_setup_tc_block_cb(struct
+ 	if (!eth->npu)
+ 		err = airoha_ppe_offload_setup(eth);
+ 	if (!err)
+-		err = airoha_ppe_flow_offload_cmd(port, cls);
++		err = airoha_ppe_flow_offload_cmd(eth, cls);
+ 
+ 	mutex_unlock(&flow_offload_mutex);
+ 

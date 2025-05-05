@@ -1,0 +1,26 @@
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -1322,6 +1322,12 @@ int airoha_ppe_init(struct airoha_eth *e
+ 	if (!ppe->foe_flow)
+ 		return -ENOMEM;
+ 
++	ppe->foe_check_time = devm_kzalloc(eth->dev,
++					   PPE_NUM_ENTRIES * sizeof(*ppe->foe_check_time),
++					   GFP_KERNEL);
++	if (!ppe->foe_check_time)
++		return -ENOMEM;
++
+ 	foe_size = PPE_STATS_NUM_ENTRIES * sizeof(*ppe->foe_stats);
+ 	ppe->foe_stats = dmam_alloc_coherent(eth->dev, foe_size,
+ 					     &ppe->foe_stats_dma, GFP_KERNEL);
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -556,7 +556,7 @@ struct airoha_ppe {
+ 	struct rhashtable l2_flows;
+ 
+ 	struct hlist_head *foe_flow;
+-	u16 foe_check_time[PPE_NUM_ENTRIES];
++	u16 *foe_check_time;
+ 
+ 	struct airoha_foe_stats *foe_stats;
+ 	dma_addr_t foe_stats_dma;

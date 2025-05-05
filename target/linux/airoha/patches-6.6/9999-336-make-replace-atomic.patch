@@ -1,0 +1,112 @@
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -14,7 +14,7 @@
+ #include "airoha_regs.h"
+ #include "airoha_eth.h"
+ 
+-static DEFINE_MUTEX(flow_offload_mutex);
++static DEFINE_SPINLOCK(flow_offload_lock);
+ static DEFINE_SPINLOCK(ppe_lock);
+ 
+ static const struct rhashtable_params airoha_flow_table_params = {
+@@ -1086,7 +1086,7 @@ static int airoha_ppe_flow_offload_repla
+ 			return err;
+ 	}
+ 
+-	e = kzalloc(sizeof(*e), GFP_KERNEL);
++	e = kzalloc(sizeof(*e), GFP_ATOMIC);
+ 	if (!e)
+ 		return -ENOMEM;
+ 
+@@ -1180,18 +1180,27 @@ static int airoha_ppe_flow_offload_stats
+ static int airoha_ppe_flow_offload_cmd(struct airoha_eth *eth,
+ 				       struct flow_cls_offload *f)
+ {
++	int err = -EOPNOTSUPP;
++
++	spin_lock(&flow_offload_lock);
++
+ 	switch (f->command) {
+ 	case FLOW_CLS_REPLACE:
+-		return airoha_ppe_flow_offload_replace(eth, f);
++		err = airoha_ppe_flow_offload_replace(eth, f);
++		break;
+ 	case FLOW_CLS_DESTROY:
+-		return airoha_ppe_flow_offload_destroy(eth, f);
++		err = airoha_ppe_flow_offload_destroy(eth, f);
++		break;
+ 	case FLOW_CLS_STATS:
+-		return airoha_ppe_flow_offload_stats(eth, f);
++		err = airoha_ppe_flow_offload_stats(eth, f);
++		break;
+ 	default:
+ 		break;
+ 	}
+ 
+-	return -EOPNOTSUPP;
++	spin_unlock(&flow_offload_lock);
++
++	return err;
+ }
+ 
+ static int airoha_ppe_flush_sram_entries(struct airoha_ppe *ppe,
+@@ -1225,11 +1234,17 @@ static struct airoha_npu *airoha_ppe_npu
+ 
+ static int airoha_ppe_offload_setup(struct airoha_eth *eth)
+ {
+-	struct airoha_npu *npu = airoha_ppe_npu_get(eth);
++	struct airoha_npu *npu;
+ 	int err;
+ 
+-	if (IS_ERR(npu))
+-		return PTR_ERR(npu);
++	if (test_and_set_bit(DEV_STATE_NPU_LOADED, &eth->state))
++		return 0;
++
++	npu = airoha_ppe_npu_get(eth);
++	if (IS_ERR(npu)) {
++		err = PTR_ERR(npu);
++		goto clear_state;
++	}
+ 
+ 	err = npu->ops.ppe_init(npu);
+ 	if (err)
+@@ -1249,23 +1264,19 @@ static int airoha_ppe_offload_setup(stru
+ 
+ error_npu_put:
+ 	airoha_npu_put(npu);
++clear_state:
++	clear_bit(DEV_STATE_NPU_LOADED, &eth->state);
+ 
+ 	return err;
+ }
+ 
+ int airoha_ppe_setup_tc_block_cb(struct airoha_eth *eth, void *type_data)
+ {
+-	struct flow_cls_offload *cls = type_data;
+-	int err = 0;
+-
+-	mutex_lock(&flow_offload_mutex);
++	int err;
+ 
+-	if (!eth->npu)
+-		err = airoha_ppe_offload_setup(eth);
++	err = airoha_ppe_offload_setup(eth);
+ 	if (!err)
+-		err = airoha_ppe_flow_offload_cmd(eth, cls);
+-
+-	mutex_unlock(&flow_offload_mutex);
++		err = airoha_ppe_flow_offload_cmd(eth, type_data);
+ 
+ 	return err;
+ }
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -87,6 +87,7 @@ enum {
+ 
+ enum {
+ 	DEV_STATE_INITIALIZED,
++	DEV_STATE_NPU_LOADED,
+ };
+ 
+ enum {
