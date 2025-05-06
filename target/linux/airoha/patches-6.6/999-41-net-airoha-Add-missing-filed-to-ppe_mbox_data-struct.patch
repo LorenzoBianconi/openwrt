@@ -1,27 +1,52 @@
-From 8e489c7d0715318beac7420d9a1310b8a645d0be Mon Sep 17 00:00:00 2001
-Message-ID: <8e489c7d0715318beac7420d9a1310b8a645d0be.1743625578.git.lorenzo@kernel.org>
+From 3339cd3a0d6d0ab14533dcebcc7c044adb6f0824 Mon Sep 17 00:00:00 2001
+Message-ID: <3339cd3a0d6d0ab14533dcebcc7c044adb6f0824.1746549120.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Wed, 2 Apr 2025 22:24:27 +0200
-Subject: [PATCH net-next] net: airoha: Add missing filed to ppe_mbox_data
- struct
+Subject: [PATCH net] net: airoha: Add missing field to ppe_mbox_data struct
 
+The official Airoha EN7581 firmware requires adding max_packet field in
+ppe_mbox_data struct while the unofficial one used to develop the Airoha
+EN7581 flowtable support does not require this field.
+This patch does not introduce any real backwards compatible issue since
+EN7581 fw is not publicly available in linux-firmware or other
+repositories (e.g. OpenWrt) yet and the official fw version will use this
+new layout. For this reason this change needs to be backported.
+Moreover, make explicit the padding added by the compiler introducing
+the rsv array in init_info struct.
+At the same time use u32 instead of int for init_info and set_info
+struct definitions in ppe_mbox_data struct.
+
+Fixes: 23290c7bc190d ("net: airoha: Introduce Airoha NPU support")
+Reviewed-by: Simon Horman <horms@kernel.org>
+Reviewed-by: Jacob Keller <jacob.e.keller@intel.com>
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---
- drivers/net/ethernet/airoha/airoha_npu.c | 1 +
- 1 file changed, 1 insertion(+)
+ drivers/net/ethernet/airoha/airoha_npu.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/net/ethernet/airoha/airoha_npu.c b/drivers/net/ethernet/airoha/airoha_npu.c
-index 489acdf58dd0..47f987e36627 100644
+index 7a5710f9ccf6..ead0625e781f 100644
 --- a/drivers/net/ethernet/airoha/airoha_npu.c
 +++ b/drivers/net/ethernet/airoha/airoha_npu.c
-@@ -106,6 +106,7 @@ struct ppe_mbox_data {
+@@ -104,12 +104,14 @@ struct ppe_mbox_data {
  			u8 xpon_hal_api;
  			u8 wan_xsi;
  			u8 ct_joyme4;
+-			int ppe_type;
+-			int wan_mode;
+-			int wan_sel;
 +			u8 max_packet;
- 			int ppe_type;
- 			int wan_mode;
- 			int wan_sel;
++			u8 rsv[3];
++			u32 ppe_type;
++			u32 wan_mode;
++			u32 wan_sel;
+ 		} init_info;
+ 		struct {
+-			int func_id;
++			u32 func_id;
+ 			u32 size;
+ 			u32 data;
+ 		} set_info;
 -- 
 2.49.0
 
