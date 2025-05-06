@@ -1,0 +1,253 @@
+--- a/mt76.h
++++ b/mt76.h
+@@ -180,6 +180,8 @@ enum mt76_rxq_id {
+ 	MT_RXQ_RRO_IND,
+ 	/*rro3.1*/
+ 	MT_RXQ_RRO_RXDMAD_C,	
++	MT_RXQ_NPU0,
++	MT_RXQ_NPU1,
+ 	__MT_RXQ_MAX
+ };
+ 
+@@ -1776,6 +1778,7 @@ int mt76_testmode_set_state(struct mt76_
+ int mt76_testmode_alloc_skb(struct mt76_phy *phy, u32 len);
+ 
+ int mt76_npu_rx_poll(struct napi_struct *napi, int budget);
++int mt76_npu_rx_queue_init(struct mt76_dev *dev, struct mt76_queue *q);
+ int mt76_npu_dma_add_buf(struct mt76_phy *phy, struct mt76_queue *q,
+ 			 struct sk_buff *skb, struct mt76_queue_buf *buf,
+ 			 void *txwi_ptr);
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -624,6 +624,18 @@ start_hw_rro:
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND2, mt76_dma_rx_poll);
+ 		}
+ 
++		if (mt76_npu_device_active(&dev->mt76)) {
++			ret = mt76_npu_rx_queue_init(&dev->mt76,
++						     &mdev->q_rx[MT_RXQ_NPU0]);
++			if (ret)
++				return ret;
++
++			ret = mt76_npu_rx_queue_init(&dev->mt76,
++						     &mdev->q_rx[MT_RXQ_NPU1]);
++			if (ret)
++				return ret;
++		}
++
+ 		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+ 			if (mt76_npu_device_active(&dev->mt76))
+ 				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_npu_rx_poll);
+--- a/npu.c
++++ b/npu.c
+@@ -11,6 +11,126 @@
+ #include "mt76_connac.h"
+ 
+ #define HIF_TXP_SIZE	(11 * 4)
++#define MT76_NPU_RX_BUF_SIZE	(1800 + \
++				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
++
++static int mt76_npu_fill_rx_queue(struct mt76_dev *dev, struct mt76_queue *q)
++{
++	int nframes = 0;
++
++	/* FIXME: use page_pool here */
++	while (q->queued < q->ndesc - 1) {
++		struct mt76_queue_entry *e = &q->entry[q->head];
++		struct airoha_npu_rx_dma_desc *desc = q->desc;
++
++		e->buf = page_frag_alloc(&q->rx_page, q->buf_size,
++					 GFP_ATOMIC | GFP_DMA32);
++		if (!e->buf)
++			break;
++
++		e->dma_len[0] = SKB_WITH_OVERHEAD(q->buf_size);
++		e->dma_addr[0] = dma_map_single(dev->dma_dev, e->buf,
++						e->dma_len[0],
++						DMA_FROM_DEVICE);
++		if (dma_mapping_error(dev->dma_dev, e->dma_addr[0])) {
++			skb_free_frag(e->buf);
++			break;
++		}
++
++		memset(&desc[q->head], 0, sizeof(*desc));
++		desc[q->head].addr = e->dma_addr[0];
++
++		q->head = (q->head + 1) % q->ndesc;
++		q->queued++;
++		nframes++;
++	}
++
++	return nframes;
++}
++
++static void mt76_npu_queue_cleanup(struct mt76_dev *dev, struct mt76_queue *q)
++{
++	struct page *page;
++
++	spin_lock_bh(&q->lock);
++	while (q->queued > 0) {
++		struct mt76_queue_entry *e = &q->entry[q->tail];
++
++		dma_unmap_single(dev->dma_dev, e->dma_addr[0],
++				 e->dma_len[0], DMA_FROM_DEVICE);
++		skb_free_frag(e->buf);
++
++		q->tail = (q->tail + 1) % q->ndesc;
++		q->queued--;
++	}
++	spin_unlock_bh(&q->lock);
++
++	page = virt_to_page(q->rx_page.va);
++	__page_frag_cache_drain(page, q->rx_page.pagecnt_bias);
++	memset(&q->rx_page, 0, sizeof(q->rx_page));
++}
++
++static struct sk_buff *mt76_npu_dequeue(struct mt76_dev *dev,
++					struct airoha_ppe *ppe,
++					struct mt76_queue *q)
++{
++	struct airoha_npu_rx_dma_desc *desc = q->desc;
++	int i, nframes, index = q->tail;
++	struct sk_buff *skb = NULL;
++	u16 hash, reason;
++
++	nframes = FIELD_GET(NPU_RX_DMA_PKT_COUNT_MASK, desc[index].info);
++	nframes = max_t(int, nframes, 1);
++
++	for (i = 0; i < nframes; i++) {
++		struct mt76_queue_entry *e = &q->entry[index];
++		int len = FIELD_GET(NPU_RX_DMA_DESC_CUR_LEN_MASK,
++				    desc[index].ctrl);
++
++		if (!FIELD_GET(NPU_RX_DMA_DESC_DONE_MASK, desc[index].ctrl)) {
++			dev_kfree_skb(skb);
++			return NULL;
++		}
++
++		/* FIXME: use page_pool here */
++		dma_unmap_single(dev->dma_dev, e->dma_addr[0], e->dma_len[0],
++				 DMA_FROM_DEVICE);
++
++		if (!skb) {
++			skb = build_skb(e->buf, q->buf_size);
++			if (!skb)
++				return NULL;
++
++			__skb_put(skb, len);
++			skb_reset_mac_header(skb);
++		} else {
++			struct skb_shared_info *shinfo = skb_shinfo(skb);
++			struct page *page = virt_to_head_page(e->buf);
++			int nr_frags = shinfo->nr_frags;
++
++			if (nr_frags < ARRAY_SIZE(shinfo->frags))
++				skb_add_rx_frag(skb, nr_frags, page,
++						e->buf - page_address(page),
++						len, q->buf_size);
++		}
++
++		hash = FIELD_GET(NPU_RX_DMA_FOE_ID_MASK, desc[index].info);
++		reason = FIELD_GET(NPU_RX_DMA_CRSN_MASK, desc[index].info);
++
++		index = (index + 1) % q->ndesc;
++	}
++	q->tail = index;
++	q->queued -= i;
++	Q_WRITE(q, dma_idx, q->tail);
++
++	if (skb) {
++		skb_set_hash(skb, hash, PKT_HASH_TYPE_L4);
++		if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
++			ppe->ops.check_skb(ppe, skb, hash);
++	}
++
++	return skb;
++}
+ 
+ int mt76_npu_rx_poll(struct napi_struct *napi, int budget)
+ {
+@@ -34,20 +154,17 @@ int mt76_npu_rx_poll(struct napi_struct
+ 
+ 	while (i < budget) {
+ 		struct sk_buff *skb;
+-		u16 reason, hash;
+ 
+-		skb = npu->ops.wlan_rx_dequeue(npu, 0, &hash, &reason);
++		skb = mt76_npu_dequeue(dev, ppe, &dev->q_rx[MT_RXQ_NPU0]);
+ 		if (!skb)
+ 			break;
+ 
+-		skb_set_hash(skb, hash, PKT_HASH_TYPE_L4);
+-		if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
+-			ppe->ops.check_skb(ppe, skb, hash);
+-
+ 		dev->drv->rx_skb(dev, &dev->q_rx[qid] - dev->q_rx, skb, 0);
+ 		mt76_rx_poll_complete(dev, qid, napi);
+ 		i++;
+ 	}
++
++	mt76_npu_fill_rx_queue(dev, &dev->q_rx[MT_RXQ_NPU0]);
+ out:
+ 	if (i < budget && napi_complete(napi))
+ 		dev->drv->rx_poll_complete(dev, qid);
+@@ -213,6 +330,30 @@ int mt76_npu_init_txd(struct mt76_dev *d
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_init_txd);
+ 
++int mt76_npu_rx_queue_init(struct mt76_dev *dev, struct mt76_queue *q)
++{
++	int err, qid = q - &dev->q_rx[0];
++	int size;
++
++	mutex_lock(&dev->mutex);
++
++	q->flags = MT_NPU_Q_RX(qid - MT_RXQ_NPU0);
++	size = qid == MT_RXQ_NPU1 ? NPU_RX1_DESC_NUM : NPU_RX0_DESC_NUM;
++	err = dev->queue_ops->alloc(dev, q, 0, size,
++				    MT76_NPU_RX_BUF_SIZE, 0);
++	if (err)
++		goto unlock;
++
++	netif_napi_add(&dev->napi_dev, &dev->napi[qid], mt76_npu_rx_poll);
++	mt76_npu_fill_rx_queue(dev, q);
++	napi_enable(&dev->napi[qid]);
++unlock:
++	mutex_unlock(&dev->mutex);
++
++	return err;
++}
++EXPORT_SYMBOL_GPL(mt76_npu_rx_queue_init);
++
+ void mt76_npu_init_tx_done(struct mt76_dev *dev, struct airoha_npu *npu)
+ {
+ 	if (npu->ops.wlan_set_txrx_reg_addr(npu, 2, 0, 0, 0, 0))
+@@ -376,5 +517,8 @@ void mt76_npu_deinit(struct mt76_dev *de
+ 		airoha_ppe_put(ppe);
+ 
+ 	mutex_unlock(&dev->mutex);
++
++	mt76_npu_queue_cleanup(dev, &dev->q_rx[MT_RXQ_NPU0]);
++	mt76_npu_queue_cleanup(dev, &dev->q_rx[MT_RXQ_NPU1]);
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_deinit);
+--- a/dma.c
++++ b/dma.c
+@@ -165,7 +165,7 @@ mt76_dma_sync_idx(struct mt76_dev *dev,
+ #endif		
+ 		Q_WRITE(q, ring_size, q->ndesc);
+ 
+-	if (mt76_queue_is_npu(q)) {
++	if (mt76_queue_is_npu_tx(q)) {
+ 		writel(q->desc_dma, &q->regs->desc_base);
+ 		writel(q->ndesc, &q->regs->ring_size);
+ 	}
+@@ -828,6 +828,8 @@ mt76_dma_alloc_queue(struct mt76_dev *de
+ 		size = sizeof(struct mt76_wed_rro_desc);
+ 	else if (mt76_queue_is_npu_tx(q))
+ 		size = sizeof(struct airoha_npu_tx_dma_desc);
++	else if (mt76_queue_is_npu_rx(q))
++		size = sizeof(struct airoha_npu_rx_dma_desc);
+ 	else
+ 		size = sizeof(struct mt76_desc);
+ 
