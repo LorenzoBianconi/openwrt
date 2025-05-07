@@ -1,0 +1,159 @@
+--- a/npu.c
++++ b/npu.c
+@@ -156,7 +156,7 @@ int mt76_npu_rx_poll(struct napi_struct
+ 	while (done < budget) {
+ 		struct sk_buff *skb;
+ 
+-		skb = mt76_npu_dequeue(dev, ppe, &dev->q_rx[MT_RXQ_NPU0]);
++		skb = mt76_npu_dequeue(dev, ppe, &dev->q_rx[qid]);
+ 		if (!skb)
+ 			break;
+ 
+@@ -165,10 +165,10 @@ int mt76_npu_rx_poll(struct napi_struct
+ 		done++;
+ 	}
+ 
+-	mt76_npu_fill_rx_queue(dev, &dev->q_rx[MT_RXQ_NPU0]);
++	mt76_npu_fill_rx_queue(dev, &dev->q_rx[qid]);
+ out:
+ 	if (done < budget && napi_complete(napi))
+-		dev->drv->rx_poll_complete(dev, MT_RXQ_NPU0);
++		dev->drv->rx_poll_complete(dev, qid);
+ 
+ 	rcu_read_unlock();
+ 
+@@ -176,25 +176,29 @@ out:
+ }
+ EXPORT_SYMBOL_GPL(mt76_npu_rx_poll);
+ 
+-static irqreturn_t mt76_npu_irq_handler(int irq, void *dev_instance)
++static irqreturn_t mt76_npu_irq_handler(int irq, void *q_instance)
+ {
+-	struct mt76_dev *dev = dev_instance;
++	struct mt76_queue *q = q_instance;
++	struct mt76_dev *dev = q->dev;
++	int qid = q - &dev->q_rx[0];
++	int index = qid - MT_RXQ_NPU0;
+ 	struct airoha_npu *npu;
+ 
+ 	rcu_read_lock();
+ 
+ 	npu = rcu_dereference(dev->mmio.npu);
+-	if (npu) {
+-		/* FIXME: should we check status value */
+-		//u32 status = npu->ops.wlan_get_irq(npu, 0);
+-
+-		npu->ops.wlan_set_irq_mask(npu, 0);
+-
+-		/* FIXME: should we check status value */
+-		npu->ops.wlan_irq_disable(npu, 0);
+-		napi_schedule(&dev->napi[MT_RXQ_RRO_RXDMAD_C]);
+-	}
++	if (!npu)
++		goto out;
++
++	/* FIXME: should we check status value */
++	//u32 status = npu->ops.wlan_get_irq(npu, index);
++
++	npu->ops.wlan_set_irq_mask(npu, index);
+ 
++	/* FIXME: should we check status value */
++	npu->ops.wlan_irq_disable(npu, index);
++	napi_schedule(&dev->napi[qid]);
++out:
+ 	rcu_read_unlock();
+ 
+ 	return IRQ_HANDLED;
+@@ -333,18 +337,41 @@ EXPORT_SYMBOL_GPL(mt76_npu_init_txd);
+ 
+ int mt76_npu_rx_queue_init(struct mt76_dev *dev, struct mt76_queue *q)
+ {
+-	int err, qid = q - &dev->q_rx[0];
+-	int size;
++	int err, irq, qid = q - &dev->q_rx[0];
++	int size, index = qid - MT_RXQ_NPU0;
++	struct airoha_npu *npu;
++	const char *name;
++
++	rcu_read_lock();
++
++	npu = rcu_dereference(dev->mmio.npu);
++	irq = npu && index < ARRAY_SIZE(npu->irqs) ? npu->irqs[index]
++						   : -EINVAL;
++	rcu_read_unlock();
++
++	if (irq < 0)
++		return irq;
+ 
+ 	mutex_lock(&dev->mutex);
+ 
+-	q->flags = MT_NPU_Q_RX(qid - MT_RXQ_NPU0);
++	q->flags = MT_NPU_Q_RX(index);
+ 	size = qid == MT_RXQ_NPU1 ? NPU_RX1_DESC_NUM : NPU_RX0_DESC_NUM;
+ 	err = dev->queue_ops->alloc(dev, q, 0, size,
+ 				    MT76_NPU_RX_BUF_SIZE, 0);
+ 	if (err)
+ 		goto unlock;
+ 
++	name = devm_kasprintf(dev->dev, GFP_KERNEL, "mt76-npu" ".%d", index);
++	if (!name) {
++		err = -ENOMEM;
++		goto unlock;
++	}
++
++	err = devm_request_irq(dev->dev, irq, mt76_npu_irq_handler,
++			       IRQF_SHARED, name, q);
++	if (err)
++		goto unlock;
++
+ 	netif_napi_add(&dev->napi_dev, &dev->napi[qid], mt76_npu_rx_poll);
+ 	mt76_npu_fill_rx_queue(dev, q);
+ 	napi_enable(&dev->napi[qid]);
+@@ -482,13 +509,7 @@ int mt76_npu_init(struct mt76_dev *dev)
+ 		goto unlock;
+ 	}
+ 
+-	err = devm_request_irq(npu->dev, npu->irqs[0], mt76_npu_irq_handler,
+-			       IRQF_SHARED, "mt76-npu", dev);
+-	if (err)
+-		goto unlock;
+-
+ 	dev->dma_dev = npu->dev;
+-
+ 	rcu_assign_pointer(dev->mmio.npu, npu);
+ 	rcu_assign_pointer(dev->mmio.ppe, ppe);
+ 	synchronize_rcu();
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -637,10 +637,7 @@ start_hw_rro:
+ 		}
+ 
+ 		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+-			if (mt76_npu_device_active(&dev->mt76))
+-				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_npu_rx_poll);
+-			else
+-				mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_dma_rx_poll);
++			mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_dma_rx_poll);
+ 		} else {
+ 			mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND0, mt76_dma_rx_poll);
+--- a/mt7996/pci.c
++++ b/mt7996/pci.c
+@@ -193,6 +193,7 @@ static void mt7996_npu_init_rx_event(str
+ static void mt7996_npu_pci_hw_init(struct mt7996_dev *dev, struct pci_dev *pdev)
+ {
+ 	struct airoha_npu *npu;
++	int i;
+ 
+ 	rcu_read_lock();
+ 	npu = rcu_dereference(dev->mt76.mmio.npu);
+@@ -205,7 +206,8 @@ static void mt7996_npu_pci_hw_init(struc
+ 	mt7996_npu_init_rx_event(dev, npu, pdev);
+ 	mt76_npu_init_tx_done(&dev->mt76, npu);
+ 
+-	npu->ops.wlan_irq_enable(npu, 0);
++	for (i = MT_RXQ_NPU0; i <= MT_RXQ_NPU1; i++)
++		npu->ops.wlan_irq_enable(npu, i - MT_RXQ_NPU0);
+ out:
+ 	rcu_read_unlock();
+ }
