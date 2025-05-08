@@ -1,0 +1,11 @@
+--- a/npu.c
++++ b/npu.c
+@@ -126,7 +126,7 @@ static struct sk_buff *mt76_npu_dequeue(
+ 	if (skb) {
+ 		skb_set_hash(skb, hash, PKT_HASH_TYPE_L4);
+ 		if (reason == PPE_CPU_REASON_HIT_UNBIND_RATE_REACHED)
+-			ppe->ops.check_skb(ppe, skb, hash);
++			ppe->ops.check_skb(ppe, skb, hash, true);
+ 	}
+ 
+ 	return skb;
