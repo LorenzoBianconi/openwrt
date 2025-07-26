@@ -42,8 +42,6 @@ Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
  mt7996/mt7996.h |  3 +++
  4 files changed, 49 insertions(+), 18 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index 7b0ada60..0d7107e2 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -74,6 +74,8 @@
@@ -66,11 +64,9 @@ index 7b0ada60..0d7107e2 100644
  	unsigned long ampdu_state;
  
  	u16 idx;
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index df0d8b82..01d2e04f 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1123,16 +1123,17 @@ u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id)
+@@ -1123,16 +1123,17 @@ u32 mt7996_wed_init_buf(void *ptr, dma_a
  }
  
  static void
@@ -94,7 +90,7 @@ index df0d8b82..01d2e04f 100644
  	link_sta = rcu_dereference(sta->link[wcid->link_id]);
  	if (!link_sta)
  		return;
-@@ -1140,6 +1141,28 @@ mt7996_tx_check_aggr(struct ieee80211_sta *sta, struct sk_buff *skb,
+@@ -1140,6 +1141,28 @@ mt7996_tx_check_aggr(struct ieee80211_st
  	if (!sta->mlo && !(link_sta->ht_cap.ht_supported || link_sta->he_cap.has_he))
  		return;
  
@@ -123,7 +119,7 @@ index df0d8b82..01d2e04f 100644
  	tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
  
  	if (is_8023) {
-@@ -1160,10 +1183,7 @@ mt7996_tx_check_aggr(struct ieee80211_sta *sta, struct sk_buff *skb,
+@@ -1160,10 +1183,7 @@ mt7996_tx_check_aggr(struct ieee80211_st
  	if (unlikely(fc != (IEEE80211_FTYPE_DATA | IEEE80211_STYPE_QOS_DATA)))
  		return;
  
@@ -135,7 +131,7 @@ index df0d8b82..01d2e04f 100644
  }
  
  static void
-@@ -1372,12 +1392,11 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
+@@ -1372,12 +1392,11 @@ mt7996_mac_add_txs_skb(struct mt7996_dev
  	}
  
  	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta) {
@@ -153,11 +149,9 @@ index df0d8b82..01d2e04f 100644
  	}
  
  	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 598efb15..b21aea79 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1676,12 +1676,14 @@ mt7996_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -1676,12 +1676,14 @@ mt7996_ampdu_action(struct ieee80211_hw
  	case IEEE80211_AMPDU_TX_OPERATIONAL:
  		mtxq->aggr = true;
  		mtxq->send_bar = false;
@@ -172,7 +166,7 @@ index 598efb15..b21aea79 100644
  		ret = mt7996_mcu_add_tx_ba(dev, params, false);
  		break;
  	case IEEE80211_AMPDU_TX_START:
-@@ -1691,6 +1693,7 @@ mt7996_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -1691,6 +1693,7 @@ mt7996_ampdu_action(struct ieee80211_hw
  	case IEEE80211_AMPDU_TX_STOP_CONT:
  		mtxq->aggr = false;
  		clear_bit(tid, &mlink->wcid.ampdu_state);
@@ -180,7 +174,7 @@ index 598efb15..b21aea79 100644
  		ret = mt7996_mcu_add_tx_ba(dev, params, false);
  		ieee80211_stop_tx_ba_cb_irqsafe(vif, sta->addr, tid);
  		break;
-@@ -2545,7 +2548,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -2545,7 +2548,7 @@ mt7996_net_fill_forward_path(struct ieee
  	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
  	struct mt7996_bss_conf *mconf;
  	struct mt7996_link_sta *mlink;
@@ -189,7 +183,7 @@ index 598efb15..b21aea79 100644
  
  	link_id = msta->pri_link;
  	mconf = rcu_dereference(mvif->link[link_id]);
-@@ -2592,7 +2595,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -2592,7 +2595,7 @@ mt7996_net_fill_forward_path(struct ieee
  	ctx->dev = NULL;
  
  	if (path->mtk_wdma.amsdu)
@@ -198,8 +192,6 @@ index 598efb15..b21aea79 100644
  
  	return 0;
  }
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 5cfd597e..d53234a3 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -164,6 +164,7 @@
@@ -219,6 +211,3 @@ index 5cfd597e..d53234a3 100644
  };
  
  struct mt7996_bss_conf {
--- 
-2.49.0
-

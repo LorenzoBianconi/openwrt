@@ -18,11 +18,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |  22 +++++++
  2 files changed, 112 insertions(+), 59 deletions(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index c083da98..3a8ecc0d 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -41,9 +41,8 @@ static void mt7996_testmode_disable_all(struct mt7996_dev *dev)
+@@ -41,9 +41,8 @@ static void mt7996_testmode_disable_all(
  int mt7996_run(struct ieee80211_hw *hw)
  {
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
@@ -93,13 +91,13 @@ index c083da98..3a8ecc0d 100644
 +		ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
 +		if (ret)
 +			goto out;
-+
-+		ret = mt7996_mcu_set_thermal_throttling(phy, MT7996_THERMAL_THROTTLE_MAX);
-+		if (ret)
-+			goto out;
  
 -	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 -						dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
++		ret = mt7996_mcu_set_thermal_throttling(phy, MT7996_THERMAL_THROTTLE_MAX);
++		if (ret)
++			goto out;
++
 +		ret = mt7996_mcu_set_thermal_protect(phy, true);
 +		if (ret)
 +			goto out;
@@ -154,7 +152,7 @@ index c083da98..3a8ecc0d 100644
  out:
  	return ret;
  }
-@@ -143,18 +152,29 @@ static int mt7996_start(struct ieee80211_hw *hw)
+@@ -143,18 +152,29 @@ static int mt7996_start(struct ieee80211
  static void mt7996_stop(struct ieee80211_hw *hw, bool suspend)
  {
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
@@ -190,7 +188,7 @@ index c083da98..3a8ecc0d 100644
  }
  
  static inline int get_free_idx(u64 mask, u8 start, u8 end)
-@@ -2080,7 +2100,7 @@ mt7996_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2080,7 +2100,7 @@ mt7996_hw_scan(struct ieee80211_hw *hw,
  	       struct ieee80211_scan_request *hw_req)
  {
  	struct cfg80211_scan_request *req = &hw_req->req;
@@ -199,7 +197,7 @@ index c083da98..3a8ecc0d 100644
  
  	mutex_lock(&phy->dev->mt76.mutex);
  	if (WARN_ON(phy->scan_req || phy->scan_chan)) {
-@@ -2102,19 +2122,30 @@ mt7996_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2102,19 +2122,30 @@ mt7996_hw_scan(struct ieee80211_hw *hw,
  static void
  mt7996_cancel_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
  {
@@ -236,11 +234,9 @@ index c083da98..3a8ecc0d 100644
  	struct mt7996_chanctx *ctx = mt7996_chanctx_get(conf);
  	int ret;
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 8450e047..8a9b1c6f 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -800,6 +800,28 @@ mt7996_has_background_radar(struct mt7996_dev *dev)
+@@ -800,6 +800,28 @@ mt7996_has_background_radar(struct mt799
  	return true;
  }
  
@@ -269,6 +265,3 @@ index 8450e047..8a9b1c6f 100644
  static inline struct mt7996_chanctx *
  mt7996_chanctx_get(struct ieee80211_chanctx_conf *ctx)
  {
--- 
-2.49.0
-

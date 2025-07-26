@@ -28,8 +28,6 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  mt7996/mt7996.h   |  8 ++++++-
  4 files changed, 94 insertions(+), 1 deletion(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 73cf311a..1971c7bf 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1267,6 +1267,7 @@ enum {
@@ -40,11 +38,9 @@ index 73cf311a..1971c7bf 100644
  };
  
  enum {
-diff --git a/mt7996/main.c b/mt7996/main.c
-index f36b4a02..b40db025 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -2528,6 +2528,9 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -2528,6 +2528,9 @@ mt7996_net_fill_forward_path(struct ieee
  
  	ctx->dev = NULL;
  
@@ -54,7 +50,7 @@ index f36b4a02..b40db025 100644
  	return 0;
  }
  
-@@ -3041,6 +3044,33 @@ mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -3041,6 +3044,33 @@ mt7996_event_callback(struct ieee80211_h
  	}
  }
  
@@ -88,17 +84,15 @@ index f36b4a02..b40db025 100644
  const struct ieee80211_ops mt7996_ops = {
  	.add_chanctx = ieee80211_emulate_add_chanctx,
  	.remove_chanctx = ieee80211_emulate_remove_chanctx,
-@@ -3109,4 +3139,5 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -3109,4 +3139,5 @@ const struct ieee80211_ops mt7996_ops =
  	.switch_vif_chanctx = mt7996_switch_vif_chanctx,
  	.change_vif_links = mt7996_change_vif_links,
  	.change_sta_links = mt7996_change_sta_links,
 +	.set_qos_map = mt7996_set_qos_map,
  };
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index eeba373d..874dbab7 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -6882,4 +6882,59 @@ int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
+@@ -6882,4 +6882,59 @@ int mt7996_mcu_set_csi(struct mt7996_phy
  		return -EINVAL;
  	}
  }
@@ -158,8 +152,6 @@ index eeba373d..874dbab7 100644
 +				 sizeof(req), false);
 +}
  #endif
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 9e79a7ff..858c6947 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -149,6 +149,8 @@
@@ -181,7 +173,7 @@ index 9e79a7ff..858c6947 100644
  };
  
  /* crash-dump */
-@@ -1351,5 +1356,6 @@ int mt7996_mcu_mlo_agc(struct mt7996_dev *dev, const void *data, int len);
+@@ -1351,5 +1356,6 @@ int mt7996_mcu_mlo_agc(struct mt7996_dev
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
  int mt7996_dma_rro_init(struct mt7996_dev *dev);
  #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
@@ -189,6 +181,3 @@ index 9e79a7ff..858c6947 100644
 +int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct mt7996_bss_conf *mconf,
 +			   struct cfg80211_qos_map *usr_qos_map);
  #endif
--- 
-2.49.0
-

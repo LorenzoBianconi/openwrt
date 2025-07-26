@@ -28,8 +28,6 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/main.c | 35 ++++++++++++++++++++++++++++++++++-
  2 files changed, 57 insertions(+), 21 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 00a1a27a..a1034214 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
 @@ -2789,23 +2789,40 @@ static void
@@ -76,7 +74,7 @@ index 00a1a27a..a1034214 100644
  
  	if (is_unicast_ether_addr(dst)) {
  		struct ieee80211_hdr_3addr *hdr =
-@@ -2823,36 +2840,21 @@ mt7996_scan_send_probe(struct mt7996_phy *phy, struct cfg80211_ssid *ssid,
+@@ -2823,36 +2840,21 @@ mt7996_scan_send_probe(struct mt7996_phy
  
  	skb_set_queue_mapping(skb, IEEE80211_AC_VO);
  
@@ -115,7 +113,7 @@ index 00a1a27a..a1034214 100644
  static void mt7996_scan_check_sta(void *data, struct ieee80211_sta *sta)
  {
  	bool *has_sta = data;
-@@ -2872,6 +2874,7 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -2872,6 +2874,7 @@ void mt7996_scan_work(struct work_struct
  	bool has_sta = false, active_scan = false;
  
  	mutex_lock(&phy->dev->mt76.mutex);
@@ -123,11 +121,9 @@ index 00a1a27a..a1034214 100644
  	if (phy->scan_chan_idx >= req->n_channels) {
  		mt7996_scan_complete(phy, false);
  		mutex_unlock(&phy->dev->mt76.mutex);
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 68408209..b00aefa8 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -2216,12 +2216,28 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -2216,12 +2216,28 @@ mt7996_net_fill_forward_path(struct ieee
  
  #endif
  
@@ -156,7 +152,7 @@ index 68408209..b00aefa8 100644
  
  	mutex_lock(&phy->dev->mt76.mutex);
  	if (WARN_ON(phy->scan_req || phy->scan_chan)) {
-@@ -2229,10 +2245,23 @@ mt7996_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2229,10 +2245,23 @@ mt7996_hw_scan(struct ieee80211_hw *hw,
  		return -EBUSY;
  	}
  
@@ -181,7 +177,7 @@ index 68408209..b00aefa8 100644
  	mutex_unlock(&phy->dev->mt76.mutex);
  
  	ieee80211_queue_delayed_work(hw, &phy->scan_work, 0);
-@@ -2243,6 +2272,7 @@ mt7996_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2243,6 +2272,7 @@ mt7996_hw_scan(struct ieee80211_hw *hw,
  static void
  mt7996_cancel_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
  {
@@ -189,7 +185,7 @@ index 68408209..b00aefa8 100644
  	int band;
  
  	for (band = 0; band < NUM_NL80211_BANDS; band++) {
-@@ -2259,6 +2289,9 @@ mt7996_cancel_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+@@ -2259,6 +2289,9 @@ mt7996_cancel_hw_scan(struct ieee80211_h
  
  		mutex_lock(&phy->dev->mt76.mutex);
  		mt7996_scan_complete(phy, true);
@@ -199,6 +195,3 @@ index 68408209..b00aefa8 100644
  		mutex_unlock(&phy->dev->mt76.mutex);
  	}
  }
--- 
-2.49.0
-

@@ -40,8 +40,6 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mtk_mcu.c     | 21 +++++++++++++++
  5 files changed, 87 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index c9cea5bb..11a1224a 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1302,6 +1302,7 @@ enum {
@@ -52,8 +50,6 @@ index c9cea5bb..11a1224a 100644
  	MCU_UNI_CMD_RRO = 0x57,
  	MCU_UNI_CMD_OFFCH_SCAN_CTRL = 0x58,
  	MCU_UNI_CMD_PER_STA_INFO = 0x6d,
-diff --git a/mt7996/main.c b/mt7996/main.c
-index d1de54d6..cda45622 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
 @@ -91,6 +91,7 @@ int mt7996_run(struct ieee80211_hw *hw)
@@ -64,8 +60,6 @@ index d1de54d6..cda45622 100644
  
  	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
  						dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index fcef6dc8..6db74893 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -502,6 +502,7 @@ struct mt7996_phy {
@@ -76,7 +70,7 @@ index fcef6dc8..6db74893 100644
  #endif
  };
  
-@@ -1043,6 +1044,7 @@ void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type);
+@@ -1043,6 +1044,7 @@ void mt7996_mcu_set_cert(struct mt7996_p
  void mt7996_tm_update_channel(struct mt7996_phy *phy);
  
  int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val);
@@ -84,11 +78,9 @@ index fcef6dc8..6db74893 100644
  #endif
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 44a358c6..1ef70108 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -3135,6 +3135,65 @@ mt7996_show_rro_mib(struct seq_file *s, void *data)
+@@ -3135,6 +3135,65 @@ mt7996_show_rro_mib(struct seq_file *s,
  	return 0;
  }
  
@@ -154,7 +146,7 @@ index 44a358c6..1ef70108 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -3241,6 +3300,9 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -3241,6 +3300,9 @@ int mt7996_mtk_init_debugfs(struct mt799
  					    mt7996_show_rro_mib);
  	}
  
@@ -164,11 +156,9 @@ index 44a358c6..1ef70108 100644
  	return 0;
  }
  
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index 967ee874..809181e0 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -1343,4 +1343,25 @@ int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val)
+@@ -1343,4 +1343,25 @@ int mt7996_mcu_set_vow_drr_dbg(struct mt
  				 sizeof(req), true);
  }
  
@@ -194,6 +184,3 @@ index 967ee874..809181e0 100644
 +	                         sizeof(req), true);
 +}
  #endif
--- 
-2.49.0
-

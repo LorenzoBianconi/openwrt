@@ -57,8 +57,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  tools/fields.c       |  37 ++
  14 files changed, 1590 insertions(+), 61 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index 7c7c7645..d8405273 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -774,6 +774,11 @@ struct mt76_testmode_data {
@@ -73,8 +71,6 @@ index 7c7c7645..d8405273 100644
  	bool ibf;
  	bool ebf;
  
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index dd63d4a0..db152167 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -493,7 +493,8 @@ struct sta_rec_bf {
@@ -95,11 +91,9 @@ index dd63d4a0..db152167 100644
  	MCU_UNI_CMD_TESTMODE_CTRL = 0x46,
  	MCU_UNI_CMD_PRECAL_RESULT = 0x47,
  	MCU_UNI_CMD_RRO = 0x57,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index faf17d77..0136c97e 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1074,7 +1074,12 @@ mt7996_mcu_bss_basic_tlv(struct sk_buff *skb,
+@@ -1074,7 +1074,12 @@ mt7996_mcu_bss_basic_tlv(struct sk_buff
  	bss->hw_bss_idx = idx;
  
  	if (vif->type == NL80211_IFTYPE_MONITOR) {
@@ -113,7 +107,7 @@ index faf17d77..0136c97e 100644
  		return 0;
  	}
  
-@@ -4163,7 +4168,6 @@ int mt7996_mcu_set_ser(struct mt7996_dev *dev, u8 action, u8 val, u8 band)
+@@ -4163,7 +4168,6 @@ int mt7996_mcu_set_ser(struct mt7996_dev
  int mt7996_mcu_set_txbf(struct mt7996_dev *dev, u8 action)
  {
  #define MT7996_BF_MAX_SIZE	sizeof(union bf_tag_tlv)
@@ -121,8 +115,6 @@ index faf17d77..0136c97e 100644
  	struct uni_header hdr;
  	struct sk_buff *skb;
  	struct tlv *tlv;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 28b4e3cd..79c11c2a 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -699,6 +699,22 @@ struct bf_sounding_on {
@@ -174,11 +166,10 @@ index 28b4e3cd..79c11c2a 100644
  struct ra_rate {
  	__le16 wlan_idx;
  	u8 mode;
-@@ -785,17 +820,6 @@ enum {
- #define MUMIMO_UL                      BIT(3)
+@@ -786,17 +821,6 @@ enum {
  #define MUMIMO_DL_CERT                 BIT(4)
  
--enum {
+ enum {
 -	BF_SOUNDING_ON = 1,
 -	BF_PFMU_TAG_READ = 5,
 -	BF_STA_REC_READ = 11,
@@ -189,11 +180,10 @@ index 28b4e3cd..79c11c2a 100644
 -	BF_CFG_PHY = 28,
 -};
 -
- enum {
+-enum {
  	CMD_BAND_NONE,
  	CMD_BAND_24G,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 1497f568..1024c293 100644
+ 	CMD_BAND_5G,
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -504,6 +504,14 @@ struct mt7996_dev {
@@ -211,7 +201,7 @@ index 1497f568..1024c293 100644
  };
  
  enum {
-@@ -861,7 +869,7 @@ int mt7996_mcu_muru_dbg_info(struct mt7996_dev *dev, u16 item, u8 val);
+@@ -861,7 +869,7 @@ int mt7996_mcu_muru_dbg_info(struct mt79
  int mt7996_mcu_set_sr_enable(struct mt7996_phy *phy, u8 action, u64 val, bool set);
  void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb);
  int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev);
@@ -220,7 +210,7 @@ index 1497f568..1024c293 100644
  void mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb);
  int mt7996_mcu_set_muru_fixed_rate_enable(struct mt7996_dev *dev, u8 action, int val);
  int mt7996_mcu_set_muru_fixed_rate_parameter(struct mt7996_dev *dev, u8 action, void *para);
-@@ -873,10 +881,12 @@ int mt7996_mcu_set_rfeature_trig_type(struct mt7996_phy *phy, u8 enable, u8 trig
+@@ -873,10 +881,12 @@ int mt7996_mcu_set_rfeature_trig_type(st
  void mt7996_mcu_set_ppdu_tx_type(struct mt7996_phy *phy, u8 ppdu_type);
  void mt7996_mcu_set_nusers_ofdma(struct mt7996_phy *phy, u8 type, u8 ofdma_user_cnt);
  void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type);
@@ -233,11 +223,9 @@ index 1497f568..1024c293 100644
  
 +
  #endif
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index d976eea0..6dd701ae 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -2924,7 +2924,7 @@ mt7996_starec_bf_read_set(void *data, u64 wlan_idx)
+@@ -2924,7 +2924,7 @@ mt7996_starec_bf_read_set(void *data, u6
  {
  	struct mt7996_phy *phy = data;
  
@@ -246,7 +234,7 @@ index d976eea0..6dd701ae 100644
  }
  DEFINE_DEBUGFS_ATTRIBUTE(fops_starec_bf_read, NULL,
  			 mt7996_starec_bf_read_set, "%lld\n");
-@@ -2968,7 +2968,7 @@ mt7996_bf_fbk_rpt_set(void *data, u64 wlan_idx)
+@@ -2968,7 +2968,7 @@ mt7996_bf_fbk_rpt_set(void *data, u64 wl
  {
  	struct mt7996_phy *phy = data;
  
@@ -255,7 +243,7 @@ index d976eea0..6dd701ae 100644
  }
  DEFINE_DEBUGFS_ATTRIBUTE(fops_bf_fbk_rpt, NULL,
  			 mt7996_bf_fbk_rpt_set, "%lld\n");
-@@ -2978,7 +2978,7 @@ mt7996_bf_pfmu_tag_read_set(void *data, u64 wlan_idx)
+@@ -2978,7 +2978,7 @@ mt7996_bf_pfmu_tag_read_set(void *data,
  {
  	struct mt7996_phy *phy = data;
  
@@ -264,11 +252,9 @@ index d976eea0..6dd701ae 100644
  }
  DEFINE_DEBUGFS_ATTRIBUTE(fops_bf_pfmu_tag_read, NULL,
  			 mt7996_bf_pfmu_tag_read_set, "%lld\n");
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index 30da79f4..b46a66bb 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -295,7 +295,7 @@ __mt7996_mcu_add_uni_tlv(struct sk_buff *skb, u16 tag, u16 len)
+@@ -295,7 +295,7 @@ __mt7996_mcu_add_uni_tlv(struct sk_buff
  	return ptlv;
  }
  
@@ -277,7 +263,7 @@ index 30da79f4..b46a66bb 100644
  {
  	struct mt7996_dev *dev = phy->dev;
  #define MT7996_MTK_BF_MAX_SIZE	sizeof(struct bf_starec_read)
-@@ -318,9 +318,8 @@ int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx)
+@@ -318,9 +318,8 @@ int mt7996_mcu_set_txbf_internal(struct
  
  		tlv = __mt7996_mcu_add_uni_tlv(skb, action, sizeof(*req));
  		req = (struct bf_pfmu_tag *)tlv;
@@ -288,7 +274,7 @@ index 30da79f4..b46a66bb 100644
  		req->band_idx = phy->mt76->band_idx;
  		break;
  	}
-@@ -432,10 +431,61 @@ int mt7996_mcu_set_txbf_snd_info(struct mt7996_phy *phy, void *para)
+@@ -432,10 +431,61 @@ int mt7996_mcu_set_txbf_snd_info(struct
  	return mt76_mcu_skb_send_msg(&phy->dev->mt76, skb, MCU_WM_UNI_CMD(BF), false);
  }
  
@@ -351,7 +337,7 @@ index 30da79f4..b46a66bb 100644
  	struct mt7996_mcu_bf_basic_event *event;
  
  	event = (struct mt7996_mcu_bf_basic_event *)skb->data;
-@@ -470,13 +520,12 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -470,13 +520,12 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev
  			 tag->t1.nr, tag->t1.nc, tag->t1.ngroup, tag->t1.lm, tag->t1.codebook,
  			 tag->t1.mob_cal_en);
  
@@ -367,7 +353,7 @@ index 30da79f4..b46a66bb 100644
  
  		dev_info(dev->mt76.dev, "Mem Col1 = %d, Mem Row1 = %d, Mem Col2 = %d, Mem Row2 = %d\n",
  			 tag->t1.col_id1, tag->t1.row_id1, tag->t1.col_id2, tag->t1.row_id2);
-@@ -728,6 +777,86 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -728,6 +777,86 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev
  
  		break;
  	}
@@ -454,8 +440,6 @@ index 30da79f4..b46a66bb 100644
  	default:
  		dev_info(dev->mt76.dev, "%s: unknown bf event tag %d\n",
  			 __func__, event->tag);
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 7a4140b5..58d61c51 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
 @@ -189,6 +189,165 @@ struct bf_txsnd_info {
@@ -920,8 +904,6 @@ index 7a4140b5..58d61c51 100644
  struct uni_muru_mum_set_group_tbl_entry {
  	__le16 wlan_idx0;
  	__le16 wlan_idx1;
-diff --git a/mt7996/regs.h b/mt7996/regs.h
-index 539e799c..f55d4a94 100644
 --- a/mt7996/regs.h
 +++ b/mt7996/regs.h
 @@ -326,6 +326,9 @@ enum offs_rev {
@@ -934,8 +916,6 @@ index 539e799c..f55d4a94 100644
  /* RMAC: band 0(0x820e5000), band 1(0x820f5000), band 2(0x830e5000), */
  #define MT_WF_RMAC_BASE(_band)			__BASE(WF_RMAC_BASE, (_band))
  #define MT_WF_RMAC(_band, ofs)			(MT_WF_RMAC_BASE(_band) + (ofs))
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index acc00134..0782d55b 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
 @@ -23,6 +23,10 @@ enum {
@@ -993,7 +973,7 @@ index acc00134..0782d55b 100644
  	};
  
  	if (width >= ARRAY_SIZE(width_to_bw))
-@@ -68,26 +81,26 @@ static u32 mt7996_tm_bw_mapping(enum nl80211_chan_width width, enum bw_mapping_m
+@@ -68,26 +81,26 @@ static u32 mt7996_tm_bw_mapping(enum nl8
  	return width_to_bw[width][method];
  }
  
@@ -1045,7 +1025,7 @@ index acc00134..0782d55b 100644
  	struct mt7996_dev *dev = phy->dev;
  	struct mt76_testmode_data *td = &phy->mt76->test;
  	u32 antenna_mask;
-@@ -239,7 +252,7 @@ mt7996_tm_init(struct mt7996_phy *phy, bool en)
+@@ -239,7 +252,7 @@ mt7996_tm_init(struct mt7996_phy *phy, b
  		INIT_DELAYED_WORK(&phy->ipi_work, mt7996_tm_ipi_work);
  }
  
@@ -1054,7 +1034,7 @@ index acc00134..0782d55b 100644
  mt7996_tm_update_channel(struct mt7996_phy *phy)
  {
  #define CHAN_FREQ_BW_80P80_TAG		(SET_ID(CHAN_FREQ) | BIT(16))
-@@ -303,7 +316,8 @@ mt7996_tm_set_tx_frames(struct mt7996_phy *phy, bool en)
+@@ -303,7 +316,8 @@ mt7996_tm_set_tx_frames(struct mt7996_ph
  		mt7996_tm_set(dev, SET_ID(MAC_HEADER), FRAME_CONTROL);
  		mt7996_tm_set(dev, SET_ID(SEQ_CTRL), 0);
  		mt7996_tm_set(dev, SET_ID(TX_COUNT), td->tx_count);
@@ -1064,7 +1044,7 @@ index acc00134..0782d55b 100644
  		mt7996_tm_set(dev, SET_ID(TX_RATE), td->tx_rate_idx);
  
  		if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER))
-@@ -331,7 +345,8 @@ mt7996_tm_set_tx_frames(struct mt7996_phy *phy, bool en)
+@@ -331,7 +345,8 @@ mt7996_tm_set_tx_frames(struct mt7996_ph
  
  		mt7996_tm_set(dev, SET_ID(MAX_PE), 2);
  		mt7996_tm_set(dev, SET_ID(HW_TX_MODE), 0);
@@ -1074,7 +1054,7 @@ index acc00134..0782d55b 100644
  
  		/* trigger firmware to start TX */
  		mt7996_tm_set(dev, SET_ID(COMMAND), RF_CMD(START_TX));
-@@ -373,7 +388,8 @@ mt7996_tm_set_rx_frames(struct mt7996_phy *phy, bool en)
+@@ -373,7 +388,8 @@ mt7996_tm_set_rx_frames(struct mt7996_ph
  			return;
  		}
  
@@ -1084,7 +1064,7 @@ index acc00134..0782d55b 100644
  
  		if (td->tx_rate_mode >= MT76_TM_TX_MODE_HE_MU) {
  			if (td->aid)
-@@ -381,7 +397,8 @@ mt7996_tm_set_rx_frames(struct mt7996_phy *phy, bool en)
+@@ -381,7 +397,8 @@ mt7996_tm_set_rx_frames(struct mt7996_ph
  			else
  				ret = mt7996_tm_set(dev, SET_ID(RX_MU_AID), RX_MU_DISABLE);
  		}
@@ -1094,7 +1074,7 @@ index acc00134..0782d55b 100644
  		mt7996_tm_set(dev, SET_ID(GI), td->tx_rate_sgi);
  		mt7996_tm_set_antenna(phy, SET_ID(RX_PATH));
  		mt7996_tm_set(dev, SET_ID(MAX_PE), 2);
-@@ -405,7 +422,8 @@ mt7996_tm_set_tx_cont(struct mt7996_phy *phy, bool en)
+@@ -405,7 +422,8 @@ mt7996_tm_set_tx_cont(struct mt7996_phy
  
  	if (en) {
  		mt7996_tm_update_channel(phy);
@@ -1104,7 +1084,7 @@ index acc00134..0782d55b 100644
  		mt7996_tm_set(dev, SET_ID(TX_RATE), td->tx_rate_idx);
  		/* fix payload is OFDM */
  		mt7996_tm_set(dev, SET_ID(CONT_WAVE_MODE), CONT_WAVE_MODE_OFDM);
-@@ -1047,6 +1065,728 @@ mt7996_tm_set_ipi(struct mt7996_phy *phy)
+@@ -1047,6 +1065,728 @@ mt7996_tm_set_ipi(struct mt7996_phy *phy
  	return 0;
  }
  
@@ -1833,7 +1813,7 @@ index acc00134..0782d55b 100644
  static void
  mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
  {
-@@ -1086,6 +1826,16 @@ mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
+@@ -1086,6 +1826,16 @@ mt7996_tm_update_params(struct mt7996_ph
  		mt7996_tm_set_ipi(phy);
  	if (changed & BIT(TM_CHANGED_IPI_RESET))
  		mt7996_tm_ipi_hist_ctrl(phy, NULL, RDD_SET_IPI_HIST_RESET);
@@ -1850,8 +1830,6 @@ index acc00134..0782d55b 100644
  }
  
  static int
-diff --git a/mt7996/testmode.h b/mt7996/testmode.h
-index 78662b2e..f97ccb26 100644
 --- a/mt7996/testmode.h
 +++ b/mt7996/testmode.h
 @@ -27,6 +27,17 @@ enum {
@@ -1893,8 +1871,6 @@ index 78662b2e..f97ccb26 100644
  struct tm_cal_param {
  	__le32 func_data;
  	u8 band_idx;
-diff --git a/testmode.c b/testmode.c
-index 32077f0a..21fc70f3 100644
 --- a/testmode.c
 +++ b/testmode.c
 @@ -555,6 +555,44 @@ out:
@@ -1942,7 +1918,7 @@ index 32077f0a..21fc70f3 100644
  int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  		      void *data, int len)
  {
-@@ -700,6 +738,30 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -700,6 +738,30 @@ int mt76_testmode_cmd(struct ieee80211_h
  		}
  	}
  
@@ -1973,8 +1949,6 @@ index 32077f0a..21fc70f3 100644
  	if (dev->test_ops->set_params) {
  		err = dev->test_ops->set_params(phy, tb, state);
  		if (err)
-diff --git a/testmode.h b/testmode.h
-index 6d79832a..794a74f9 100644
 --- a/testmode.h
 +++ b/testmode.h
 @@ -286,4 +286,57 @@ enum mt76_testmode_eeprom_action {
@@ -2035,11 +2009,9 @@ index 6d79832a..794a74f9 100644
 +};
 +
  #endif
-diff --git a/tools/fields.c b/tools/fields.c
-index 77696ce7..f793d1a5 100644
 --- a/tools/fields.c
 +++ b/tools/fields.c
-@@ -44,6 +44,30 @@ static const char * const testmode_offchan_bw[] = {
+@@ -44,6 +44,30 @@ static const char * const testmode_offch
  	[NL80211_CHAN_WIDTH_160] = "160",
  };
  
@@ -2070,7 +2042,7 @@ index 77696ce7..f793d1a5 100644
  static void print_enum(const struct tm_field *field, struct nlattr *attr)
  {
  	unsigned int i = nla_get_u8(attr);
-@@ -94,6 +118,17 @@ static void print_s8(const struct tm_field *field, struct nlattr *attr)
+@@ -94,6 +118,17 @@ static void print_s8(const struct tm_fie
  	printf("%d", (int8_t)nla_get_u8(attr));
  }
  
@@ -2088,7 +2060,7 @@ index 77696ce7..f793d1a5 100644
  static bool parse_u32(const struct tm_field *field, int idx,
  		      struct nl_msg *msg, const char *val)
  {
-@@ -399,6 +434,8 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
+@@ -399,6 +434,8 @@ static const struct tm_field testdata_fi
  	FIELD(u8, AID, "aid"),
  	FIELD(u8, RU_ALLOC, "ru_alloc"),
  	FIELD(u8, RU_IDX, "ru_idx"),
@@ -2097,6 +2069,3 @@ index 77696ce7..f793d1a5 100644
  	FIELD(u8, OFF_CH_SCAN_CH, "offchan_ch"),
  	FIELD(u8, OFF_CH_SCAN_CENTER_CH, "offchan_center_ch"),
  	FIELD_ENUM(OFF_CH_SCAN_BW, "offchan_bw", testmode_offchan_bw),
--- 
-2.49.0
-

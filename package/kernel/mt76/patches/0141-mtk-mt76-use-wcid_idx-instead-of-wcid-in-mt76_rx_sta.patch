@@ -20,11 +20,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mac.c |  4 +++-
  4 files changed, 34 insertions(+), 20 deletions(-)
 
-diff --git a/agg-rx.c b/agg-rx.c
-index 9875baa8..7c6c3f7c 100644
 --- a/agg-rx.c
 +++ b/agg-rx.c
-@@ -117,11 +117,11 @@ mt76_rx_aggr_reorder_work(struct work_struct *work)
+@@ -117,11 +117,11 @@ mt76_rx_aggr_reorder_work(struct work_st
  }
  
  static void
@@ -38,7 +36,7 @@ index 9875baa8..7c6c3f7c 100644
  	struct mt76_rx_tid *tid;
  	u8 tidno;
  	u16 seqno;
-@@ -146,10 +146,11 @@ mt76_rx_aggr_check_ctl(struct sk_buff *skb, struct sk_buff_head *frames)
+@@ -146,10 +146,11 @@ mt76_rx_aggr_check_ctl(struct sk_buff *s
  	spin_unlock_bh(&tid->lock);
  }
  
@@ -52,7 +50,7 @@ index 9875baa8..7c6c3f7c 100644
  	struct ieee80211_sta *sta;
  	struct mt76_rx_tid *tid;
  	struct mt76_phy *phy;
-@@ -166,7 +167,7 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
+@@ -166,7 +167,7 @@ void mt76_rx_aggr_reorder(struct sk_buff
  
  	if (!status->aggr) {
  		if (!(status->flag & RX_FLAG_8023))
@@ -61,11 +59,9 @@ index 9875baa8..7c6c3f7c 100644
  		return;
  	}
  
-diff --git a/mac80211.c b/mac80211.c
-index 3343ceaa..68335922 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -1167,6 +1167,7 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
+@@ -1167,6 +1167,7 @@ mt76_rx_convert(struct mt76_dev *dev, st
  	struct ieee80211_hdr *hdr = mt76_skb_get_hdr(skb);
  	struct mt76_phy *phy;
  	struct mt76_rx_status mstat;
@@ -73,7 +69,7 @@ index 3343ceaa..68335922 100644
  
  	mstat = *((struct mt76_rx_status *)skb->cb);
  	memset(status, 0, sizeof(*status));
-@@ -1206,12 +1207,13 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
+@@ -1206,12 +1207,13 @@ mt76_rx_convert(struct mt76_dev *dev, st
  	memcpy(status->chain_signal, mstat.chain_signal,
  	       sizeof(mstat.chain_signal));
  
@@ -91,7 +87,7 @@ index 3343ceaa..68335922 100644
  	*hw = mt76_phy_hw(dev, mstat.phy_idx);
  
  	phy = mt76_dev_phy(dev, mstat.phy_idx);
-@@ -1221,10 +1223,10 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
+@@ -1221,10 +1223,10 @@ mt76_rx_convert(struct mt76_dev *dev, st
  }
  
  static void
@@ -121,7 +117,7 @@ index 3343ceaa..68335922 100644
  	struct ieee80211_rx_status info = {
  		.enc_flags = status->enc_flags,
  		.rate_idx = status->rate_idx,
-@@ -1300,6 +1303,7 @@ mt76_airtime_report(struct mt76_dev *dev, struct mt76_rx_status *status,
+@@ -1300,6 +1303,7 @@ mt76_airtime_report(struct mt76_dev *dev
  	dev->cur_cc_bss_rx += airtime;
  	spin_unlock(&dev->cc_lock);
  
@@ -143,7 +139,7 @@ index 3343ceaa..68335922 100644
  	if (!wcid || !wcid->sta) {
  		struct ieee80211_hdr *hdr = mt76_skb_get_hdr(skb);
  
-@@ -1376,16 +1381,21 @@ mt76_check_sta(struct mt76_dev *dev, struct sk_buff *skb)
+@@ -1376,16 +1381,21 @@ mt76_check_sta(struct mt76_dev *dev, str
  	struct ieee80211_hdr *hdr = mt76_skb_get_hdr(skb);
  	struct ieee80211_sta *sta;
  	struct ieee80211_hw *hw;
@@ -168,7 +164,7 @@ index 3343ceaa..68335922 100644
  	}
  
  	mt76_airtime_check(dev, skb);
-@@ -1449,7 +1459,7 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
+@@ -1449,7 +1459,7 @@ void mt76_rx_complete(struct mt76_dev *d
  	while ((skb = __skb_dequeue(frames)) != NULL) {
  		struct sk_buff *nskb = skb_shinfo(skb)->frag_list;
  
@@ -177,7 +173,7 @@ index 3343ceaa..68335922 100644
  		skb_shinfo(skb)->frag_list = NULL;
  		trace_mt76_rx_complete(dev, (struct mt76_rx_status *)skb->cb, 0);
  		mt76_rx_convert(dev, skb, &hw, &sta);
-@@ -1492,7 +1502,7 @@ void mt76_rx_poll_complete(struct mt76_dev *dev, enum mt76_rxq_id q,
+@@ -1492,7 +1502,7 @@ void mt76_rx_poll_complete(struct mt76_d
  		if (mtk_wed_device_active(&dev->mmio.wed))
  			__skb_queue_tail(&frames, skb);
  		else
@@ -186,11 +182,9 @@ index 3343ceaa..68335922 100644
  	}
  
  	mt76_rx_complete(dev, &frames, napi);
-diff --git a/mt76.h b/mt76.h
-index b7ee747c..55a52e6c 100644
 --- a/mt76.h
 +++ b/mt76.h
-@@ -1758,7 +1758,8 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
+@@ -1758,7 +1758,8 @@ void mt76_rx_complete(struct mt76_dev *d
  		      struct napi_struct *napi);
  void mt76_rx_poll_complete(struct mt76_dev *dev, enum mt76_rxq_id q,
  			   struct napi_struct *napi);
@@ -200,11 +194,9 @@ index b7ee747c..55a52e6c 100644
  void mt76_testmode_tx_pending(struct mt76_phy *phy);
  void mt76_queue_tx_complete(struct mt76_dev *dev, struct mt76_queue *q,
  			    struct mt76_queue_entry *e);
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index e67efae2..ae1307b2 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -639,7 +639,9 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -639,7 +639,9 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  
  	trace_mt7996_fill_rx_done(phy, status->seqno, hdr_gap);
  
@@ -215,6 +207,3 @@ index e67efae2..ae1307b2 100644
  		return 0;
  
  	status->aggr = unicast &&
--- 
-2.49.0
-

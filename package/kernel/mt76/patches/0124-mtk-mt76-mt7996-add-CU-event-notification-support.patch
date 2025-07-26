@@ -20,8 +20,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  mt7996/mcu.h      | 28 ++++++++++++++++++++---
  3 files changed, 82 insertions(+), 5 deletions(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 68d7c31d..3a2de052 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1080,6 +1080,7 @@ enum {
@@ -32,15 +30,12 @@ index 68d7c31d..3a2de052 100644
  	MCU_UNI_EVENT_MLD = 0x81,
  };
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index e920cf82..ff374808 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1414,6 +1414,54 @@ mt7996_mcu_mld_event(struct mt7996_dev *dev, struct sk_buff *skb)
- 	}
+@@ -1415,6 +1415,54 @@ mt7996_mcu_mld_event(struct mt7996_dev *
  }
  
-+static void
+ static void
 +mt7996_mcu_bss_bcn_crit_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 +{
 +	struct mt7996_mcu_bss_event *data = priv;
@@ -88,10 +83,11 @@ index e920cf82..ff374808 100644
 +	}
 +}
 +
- static void
++static void
  mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -1445,6 +1493,9 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
+ 	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
+@@ -1445,6 +1493,9 @@ mt7996_mcu_uni_rx_unsolicited_event(stru
  	case MCU_UNI_EVENT_MLD:
  		mt7996_mcu_mld_event(dev, skb);
  		break;
@@ -101,7 +97,7 @@ index e920cf82..ff374808 100644
  #ifdef CONFIG_MTK_DEBUG
  	case MCU_UNI_EVENT_SR:
  		mt7996_mcu_rx_sr_event(dev, skb);
-@@ -3847,6 +3898,7 @@ mt7996_mcu_beacon_crit_update(struct sk_buff *rskb, struct sk_buff *skb,
+@@ -3847,6 +3898,7 @@ mt7996_mcu_beacon_crit_update(struct sk_
  	crit->tim_ie_pos[0] = cpu_to_le16(offs->tim_offset);
  	crit->cap_info_ie_pos[0] = cpu_to_le16(offsetof(struct ieee80211_mgmt,
  							u.beacon.capab_info));
@@ -109,7 +105,7 @@ index e920cf82..ff374808 100644
  }
  
  static void
-@@ -3859,6 +3911,7 @@ mt7996_mcu_beacon_sta_prof_csa(struct sk_buff *rskb,
+@@ -3859,6 +3911,7 @@ mt7996_mcu_beacon_sta_prof_csa(struct sk
  	struct mt7996_bss_conf *cs_mconf;
  	struct bss_bcn_sta_prof_cntdwn_tlv *sta_prof;
  	struct tlv *tlv;
@@ -117,7 +113,7 @@ index e920cf82..ff374808 100644
  
  	if (!ieee80211_vif_is_mld(vif) || !offs->sta_prof_cntdwn_offs[0])
  		return;
-@@ -3869,9 +3922,10 @@ mt7996_mcu_beacon_sta_prof_csa(struct sk_buff *rskb,
+@@ -3869,9 +3922,10 @@ mt7996_mcu_beacon_sta_prof_csa(struct sk
  
  	tlv = mt7996_mcu_add_uni_tlv(rskb, UNI_BSS_INFO_BCN_STA_PROF_CSA, sizeof(*sta_prof));
  
@@ -130,8 +126,6 @@ index e920cf82..ff374808 100644
  }
  
  static void
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 0cfebef5..ae3c9879 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -536,14 +536,16 @@ struct bss_bcn_crit_update_tlv {
@@ -181,6 +175,3 @@ index 0cfebef5..ae3c9879 100644
  struct tx_power_ctrl {
  	u8 _rsv[4];
  
--- 
-2.49.0
-

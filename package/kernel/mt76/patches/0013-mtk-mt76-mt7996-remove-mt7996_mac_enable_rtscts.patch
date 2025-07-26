@@ -16,11 +16,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |  2 --
  3 files changed, 18 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 02d8e52f..cd5f9a6b 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -190,19 +190,6 @@ static void mt7996_mac_sta_poll(struct mt7996_dev *dev)
+@@ -190,19 +190,6 @@ static void mt7996_mac_sta_poll(struct m
  	rcu_read_unlock();
  }
  
@@ -40,11 +38,9 @@ index 02d8e52f..cd5f9a6b 100644
  /* The HW does not translate the mac header to 802.3 for mesh point */
  static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
  {
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 518cb184..98d8e28b 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -596,9 +596,6 @@ static void mt7996_bss_info_changed(struct ieee80211_hw *hw,
+@@ -596,9 +596,6 @@ static void mt7996_bss_info_changed(stru
  				   !!(changed & BSS_CHANGED_BSSID));
  	}
  
@@ -54,11 +50,9 @@ index 518cb184..98d8e28b 100644
  	if (changed & BSS_CHANGED_ERP_SLOT) {
  		int slottime = info->use_short_slot ? 9 : 20;
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 314913a9..37e3bc53 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -622,8 +622,6 @@ bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask);
+@@ -622,8 +622,6 @@ bool mt7996_mac_wtbl_update(struct mt799
  void mt7996_mac_reset_counters(struct mt7996_phy *phy);
  void mt7996_mac_cca_stats_reset(struct mt7996_phy *phy);
  void mt7996_mac_enable_nf(struct mt7996_dev *dev, u8 band);
@@ -67,6 +61,3 @@ index 314913a9..37e3bc53 100644
  void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
  			   struct sk_buff *skb, struct mt76_wcid *wcid,
  			   struct ieee80211_key_conf *key, int pid,
--- 
-2.49.0
-

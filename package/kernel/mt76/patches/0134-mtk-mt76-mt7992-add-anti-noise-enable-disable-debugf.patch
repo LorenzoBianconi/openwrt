@@ -41,11 +41,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mtk_mcu.c       |  84 +++++++++++++++++++++++++++++++++
  5 files changed, 202 insertions(+)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 49ac9454..fbdc12b3 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -7596,6 +7596,12 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
+@@ -7596,6 +7596,12 @@ int mt7996_mcu_set_pp_en(struct mt7996_p
  	phy->punct_bitmap = bitmap;
  	phy->pp_mode = mode;
  
@@ -58,8 +56,6 @@ index 49ac9454..fbdc12b3 100644
  	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
  				 &req, sizeof(req), false);
  }
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 368141b0..68dbcb43 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1586,6 +1586,7 @@ enum {
@@ -70,8 +66,6 @@ index 368141b0..68dbcb43 100644
  };
  
  enum pp_mode {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 92d49727..9be36aeb 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -783,6 +783,7 @@ struct mt7996_phy {
@@ -91,7 +85,7 @@ index 92d49727..9be36aeb 100644
  #endif
  #ifdef CONFIG_MTK_VENDOR
  	u8 cert_mode;
-@@ -1572,6 +1575,9 @@ void mt7996_dump_bmac_txd_info(struct seq_file *s, struct mt7996_dev *dev,
+@@ -1572,6 +1575,9 @@ void mt7996_dump_bmac_txd_info(struct se
  int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir);
  int mt7996_mtk_init_band_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir);
  int mt7996_mcu_mlo_agc(struct mt7996_dev *dev, const void *data, int len);
@@ -101,11 +95,9 @@ index 92d49727..9be36aeb 100644
  #endif
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mtk_debugfs_i.c b/mt7996/mtk_debugfs_i.c
-index c9224eee..d9e1ce8f 100644
 --- a/mt7996/mtk_debugfs_i.c
 +++ b/mt7996/mtk_debugfs_i.c
-@@ -977,6 +977,102 @@ static const struct file_operations fops_mlo_agc_trig = {
+@@ -977,6 +977,102 @@ static const struct file_operations fops
  	.llseek = default_llseek,
  };
  
@@ -208,7 +200,7 @@ index c9224eee..d9e1ce8f 100644
  int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -1003,6 +1099,11 @@ int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *
+@@ -1003,6 +1099,11 @@ int mt7996_mtk_init_dev_debugfs_internal
  	debugfs_create_file("mlo_agc_tx", 0200, dir, dev, &fops_mlo_agc_tx);
  	debugfs_create_file("mlo_agc_trig", 0200, dir, dev, &fops_mlo_agc_trig);
  
@@ -220,7 +212,7 @@ index c9224eee..d9e1ce8f 100644
  	return 0;
  }
  
-@@ -1012,6 +1113,10 @@ int mt7996_mtk_init_band_debugfs_internal(struct mt7996_phy *phy, struct dentry
+@@ -1012,6 +1113,10 @@ int mt7996_mtk_init_band_debugfs_interna
  	debugfs_create_file("rmac_table", 0400, dir, phy, &mt7996_rmac_table_fops);
  	debugfs_create_file("agg_table", 0400, dir, phy, &mt7996_agg_table_fops);
  
@@ -231,11 +223,9 @@ index c9224eee..d9e1ce8f 100644
  	return 0;
  }
  #endif
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index ff4af090..4dcbdd7f 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -1477,4 +1477,88 @@ int mt7996_mcu_set_muru_qos_cfg(struct mt7996_dev *dev, u16 wlan_idx, u8 dir,
+@@ -1477,4 +1477,88 @@ int mt7996_mcu_set_muru_qos_cfg(struct m
  	return mt76_mcu_send_msg(&dev->mt76, MCU_WMWA_UNI_CMD(MURU), &req,
  				 sizeof(req), true);
  }
@@ -324,6 +314,3 @@ index ff4af090..4dcbdd7f 100644
 +				 &req, sizeof(req), false);
 +}
  #endif
--- 
-2.49.0
-

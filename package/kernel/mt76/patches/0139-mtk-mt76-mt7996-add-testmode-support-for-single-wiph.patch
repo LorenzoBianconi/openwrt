@@ -28,8 +28,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  tools/mt76-test.h |  37 +++++++
  7 files changed, 268 insertions(+), 55 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index aea1b38c..df8275bc 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -1033,6 +1033,7 @@ struct mt76_dev {
@@ -40,11 +38,9 @@ index aea1b38c..df8275bc 100644
  
  	struct ieee80211_hw *hw;
  
-diff --git a/mt7996/init.c b/mt7996/init.c
-index bb01a246..9872b2cc 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -484,6 +484,7 @@ mt7996_init_wiphy_band(struct ieee80211_hw *hw, struct mt7996_phy *phy)
+@@ -484,6 +484,7 @@ mt7996_init_wiphy_band(struct ieee80211_
  	}
  
  	dev->radio_phy[n_radios] = phy;
@@ -52,11 +48,9 @@ index bb01a246..9872b2cc 100644
  	radio->freq_range = freq;
  	radio->n_freq_range = 1;
  	radio->iface_combinations = is_mt7996(&dev->mt76) ? &if_comb : &if_comb_7992;
-diff --git a/mt7996/main.c b/mt7996/main.c
-index e9e72099..d67e2c38 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -114,8 +114,6 @@ static int mt7996_start(struct ieee80211_hw *hw)
+@@ -114,8 +114,6 @@ static int mt7996_start(struct ieee80211
  #endif
  	}
  
@@ -65,7 +59,7 @@ index e9e72099..d67e2c38 100644
  	mutex_unlock(&dev->mt76.mutex);
  
  	ieee80211_queue_delayed_work(hw, &dev->scs_work, HZ);
-@@ -508,6 +506,8 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
+@@ -508,6 +506,8 @@ static int mt7996_add_interface(struct i
  		return -EINVAL;
  	}
  
@@ -74,11 +68,9 @@ index e9e72099..d67e2c38 100644
  	for (i = 0; i < MT7996_MAX_RADIOS; i++) {
  		/* FIXME: only set the required radio temporarily for testmode.
  		 * The TX speed of testmode will be affected if the unused radio is enabled.
-diff --git a/testmode.c b/testmode.c
-index 47325cbf..0c698a48 100644
 --- a/testmode.c
 +++ b/testmode.c
-@@ -805,6 +805,19 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -805,6 +805,19 @@ int mt76_testmode_cmd(struct ieee80211_h
  
  	mutex_lock(&dev->mutex);
  
@@ -98,7 +90,7 @@ index 47325cbf..0c698a48 100644
  	if (tb[MT76_TM_ATTR_LM_ACT]) {
  		err = mt76_testmode_set_list_mode(phy, tb);
  		goto out;
-@@ -1043,6 +1056,19 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
+@@ -1043,6 +1056,19 @@ int mt76_testmode_dump(struct ieee80211_
  
  	mutex_lock(&dev->mutex);
  
@@ -118,8 +110,6 @@ index 47325cbf..0c698a48 100644
  	if (tb[MT76_TM_ATTR_PRECAL] || tb[MT76_TM_ATTR_PRECAL_INFO]) {
  		int flag, type;
  
-diff --git a/testmode.h b/testmode.h
-index 3f2f97dd..7043b6d1 100644
 --- a/testmode.h
 +++ b/testmode.h
 @@ -88,6 +88,8 @@
@@ -140,8 +130,6 @@ index 3f2f97dd..7043b6d1 100644
  	/* keep last */
  	NUM_MT76_TM_ATTRS,
  	MT76_TM_ATTR_MAX = NUM_MT76_TM_ATTRS - 1,
-diff --git a/tools/main.c b/tools/main.c
-index aaa17f85..6fd648a9 100644
 --- a/tools/main.c
 +++ b/tools/main.c
 @@ -20,26 +20,143 @@ struct unl unl;
@@ -154,9 +142,17 @@ index aaa17f85..6fd648a9 100644
 -	char buf[128];
 -	FILE *f;
 -	int len;
+-
+-	/* TODO: Handle single wiphy radio index */
+-	snprintf(buf, sizeof(buf), "/sys/class/ieee80211/%s/index", name);
+-	f = fopen(buf, "r");
+-	if (!f)
+-		return -1;
 +	struct nlattr *freq;
 +	int rem;
-+
+ 
+-	len = fread(buf, 1, sizeof(buf) - 1, f);
+-	fclose(f);
 +	nla_for_each_nested(freq, freqs, rem) {
 +		static struct nla_policy freq_policy[NL80211_WIPHY_RADIO_FREQ_ATTR_MAX + 1] = {
 +			[NL80211_WIPHY_RADIO_FREQ_ATTR_START] = { .type = NLA_U32 },
@@ -164,7 +160,9 @@ index aaa17f85..6fd648a9 100644
 +		};
 +		struct nlattr *tb[NL80211_WIPHY_RADIO_FREQ_ATTR_MAX + 1];
 +		uint32_t start, end;
-+
+ 
+-	if (!len)
+-		return -1;
 +		if (nla_type(freq) != NL80211_WIPHY_RADIO_ATTR_FREQ_RANGE)
 +			continue;
 +
@@ -173,17 +171,10 @@ index aaa17f85..6fd648a9 100644
 +		    !tb[NL80211_WIPHY_RADIO_FREQ_ATTR_START] ||
 +		    !tb[NL80211_WIPHY_RADIO_FREQ_ATTR_END])
 +			continue;
- 
--	/* TODO: Handle single wiphy radio index */
--	snprintf(buf, sizeof(buf), "/sys/class/ieee80211/%s/index", name);
--	f = fopen(buf, "r");
--	if (!f)
--		return -1;
++
 +		start = nla_get_u32(tb[NL80211_WIPHY_RADIO_FREQ_ATTR_START]) / 1000;
 +		end = nla_get_u32(tb[NL80211_WIPHY_RADIO_FREQ_ATTR_END]) / 1000;
- 
--	len = fread(buf, 1, sizeof(buf) - 1, f);
--	fclose(f);
++
 +		if (start >= 2400 && end <= 2500) {
 +			radio->band = NL80211_BAND_2GHZ;
 +			radio->parking_freq = 2412;
@@ -200,15 +191,11 @@ index aaa17f85..6fd648a9 100644
 +			return;
 +		}
 +	}
- 
--	if (!len)
--		return -1;
++
 +	radio->band = -1;
 +	radio->parking_freq = 0;
 +}
- 
--	buf[len] = 0;
--	return atoi(buf);
++
 +static void parse_radios(struct wiphy_config *wiphy, struct nlattr *radios)
 +{
 +	struct nlattr *radio;
@@ -224,7 +211,9 @@ index aaa17f85..6fd648a9 100644
 +				     radio, radio_policy) ||
 +		    !tb[NL80211_WIPHY_RADIO_ATTR_INDEX])
 +			continue;
-+
+ 
+-	buf[len] = 0;
+-	return atoi(buf);
 +		radio_idx = nla_get_u32(tb[NL80211_WIPHY_RADIO_ATTR_INDEX]);
 +		parse_radio_config(&wiphy->radio[radio_idx], radio);
 +		wiphy->radio_num++;
@@ -303,7 +292,7 @@ index aaa17f85..6fd648a9 100644
  }
  
  void usage(void)
-@@ -79,16 +196,19 @@ static int mt76_dump_cb(struct nl_msg *msg, void *arg)
+@@ -79,16 +196,19 @@ static int mt76_dump_cb(struct nl_msg *m
  	return NL_SKIP;
  }
  
@@ -325,7 +314,7 @@ index aaa17f85..6fd648a9 100644
  	for (; argc > 0; argc--, argv++) {
  		if (!strcmp(argv[0], "stats"))
  			nla_put_flag(msg, MT76_TM_ATTR_STATS);
-@@ -111,7 +231,7 @@ static inline bool tm_is_changed(uint32_t id)
+@@ -111,7 +231,7 @@ static inline bool tm_is_changed(uint32_
  	return tm_changed[id / 32] & (1U << (id % 32));
  }
  
@@ -334,7 +323,7 @@ index aaa17f85..6fd648a9 100644
  {
  	const struct tm_field *fields = msg_field.fields;
  	struct nl_msg *msg;
-@@ -122,9 +242,13 @@ static int mt76_set(int phy, int argc, char **argv)
+@@ -122,9 +242,13 @@ static int mt76_set(int phy, int argc, c
  		return 1;
  
  	msg = unl_genl_msg(&unl, NL80211_CMD_TESTMODE, false);
@@ -349,7 +338,7 @@ index aaa17f85..6fd648a9 100644
  	for (; argc > 0; argc--, argv++) {
  		char *name = argv[0];
  		char *val = strchr(name, '=');
-@@ -169,34 +293,45 @@ static int mt76_set(int phy, int argc, char **argv)
+@@ -169,34 +293,45 @@ static int mt76_set(int phy, int argc, c
  	return ret;
  }
  
@@ -422,7 +411,7 @@ index aaa17f85..6fd648a9 100644
  {
  	struct nl_msg *msg;
  	char *name, cmd[64];
-@@ -228,10 +363,13 @@ static int mt76_add_iface(int phy, int argc, char **argv)
+@@ -228,10 +363,13 @@ static int mt76_add_iface(int phy, int a
  
  	name = argv[0];
  	msg = unl_genl_msg(&unl, NL80211_CMD_NEW_INTERFACE, false);
@@ -438,7 +427,7 @@ index aaa17f85..6fd648a9 100644
  
  	ret = unl_genl_request(&unl, msg, NULL, NULL);
  	if (ret) {
-@@ -242,12 +380,18 @@ static int mt76_add_iface(int phy, int argc, char **argv)
+@@ -242,12 +380,18 @@ static int mt76_add_iface(int phy, int a
  	sprintf(cmd, "ifconfig %s up", name);
  	system(cmd);
  
@@ -459,7 +448,7 @@ index aaa17f85..6fd648a9 100644
  {
  	unsigned int devidx;
  	struct nl_msg *msg;
-@@ -266,7 +410,7 @@ static int mt76_delete_iface(int phy, int argc, char **argv)
+@@ -266,7 +410,7 @@ static int mt76_delete_iface(int phy, in
  	}
  
  	/* turn off testmode before deleting interface */
@@ -468,7 +457,7 @@ index aaa17f85..6fd648a9 100644
  	if (ret)
  		return ret;
  
-@@ -275,7 +419,7 @@ static int mt76_delete_iface(int phy, int argc, char **argv)
+@@ -275,7 +419,7 @@ static int mt76_delete_iface(int phy, in
  
  	/* delete interface */
  	msg = unl_genl_msg(&unl, NL80211_CMD_DEL_INTERFACE, false);
@@ -477,7 +466,7 @@ index aaa17f85..6fd648a9 100644
  	nla_put_u32(msg, NL80211_ATTR_IFINDEX, devidx);
  
  	ret = unl_genl_request(&unl, msg, NULL, NULL);
-@@ -287,8 +431,8 @@ static int mt76_delete_iface(int phy, int argc, char **argv)
+@@ -287,8 +431,8 @@ static int mt76_delete_iface(int phy, in
  
  int main(int argc, char **argv)
  {
@@ -521,8 +510,6 @@ index aaa17f85..6fd648a9 100644
  	else if (!strcmp(cmd, "fwlog"))
  		ret = mt76_fwlog(phyname, argc, argv);
  	else if (!strcmp(cmd, "idxlog"))
-diff --git a/tools/mt76-test.h b/tools/mt76-test.h
-index b9d508c5..a868d524 100644
 --- a/tools/mt76-test.h
 +++ b/tools/mt76-test.h
 @@ -19,6 +19,14 @@
@@ -576,6 +563,3 @@ index b9d508c5..a868d524 100644
  struct tm_field {
  	const char *name;
  	const char *prefix;
--- 
-2.49.0
-

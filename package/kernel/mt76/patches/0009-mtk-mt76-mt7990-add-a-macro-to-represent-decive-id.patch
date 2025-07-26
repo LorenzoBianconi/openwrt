@@ -19,8 +19,6 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/pci.c      | 15 ++++++++-------
  7 files changed, 28 insertions(+), 22 deletions(-)
 
-diff --git a/mt7996/coredump.c b/mt7996/coredump.c
-index ccab0d7b..303d6e80 100644
 --- a/mt7996/coredump.c
 +++ b/mt7996/coredump.c
 @@ -48,8 +48,8 @@ const struct mt7996_mem_region*
@@ -34,11 +32,9 @@ index ccab0d7b..303d6e80 100644
  		*num = ARRAY_SIZE(mt7996_mem_regions);
  		return &mt7996_mem_regions[0];
  	default:
-diff --git a/mt7996/eeprom.c b/mt7996/eeprom.c
-index da94751d..05f669f5 100644
 --- a/mt7996/eeprom.c
 +++ b/mt7996/eeprom.c
-@@ -13,9 +13,9 @@ static int mt7996_check_eeprom(struct mt7996_dev *dev)
+@@ -13,9 +13,9 @@ static int mt7996_check_eeprom(struct mt
  	u16 val = get_unaligned_le16(eeprom);
  
  	switch (val) {
@@ -50,7 +46,7 @@ index da94751d..05f669f5 100644
  		return is_mt7992(&dev->mt76) ? 0 : -EINVAL;
  	default:
  		return -EINVAL;
-@@ -25,7 +25,7 @@ static int mt7996_check_eeprom(struct mt7996_dev *dev)
+@@ -25,7 +25,7 @@ static int mt7996_check_eeprom(struct mt
  static char *mt7996_eeprom_name(struct mt7996_dev *dev)
  {
  	switch (mt76_chip(&dev->mt76)) {
@@ -59,7 +55,7 @@ index da94751d..05f669f5 100644
  		switch (dev->var.type) {
  		case MT7992_VAR_TYPE_23:
  			if (dev->var.fem == MT7996_FEM_INT)
-@@ -39,7 +39,7 @@ static char *mt7996_eeprom_name(struct mt7996_dev *dev)
+@@ -39,7 +39,7 @@ static char *mt7996_eeprom_name(struct m
  				return MT7992_EEPROM_DEFAULT_MIX;
  			return MT7992_EEPROM_DEFAULT;
  		}
@@ -68,11 +64,9 @@ index da94751d..05f669f5 100644
  	default:
  		switch (dev->var.type) {
  		case MT7996_VAR_TYPE_233:
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 6ec52edd..d0d4c342 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -888,13 +888,13 @@ static int mt7996_variant_type_init(struct mt7996_dev *dev)
+@@ -888,13 +888,13 @@ static int mt7996_variant_type_init(stru
  	u8 var_type;
  
  	switch (mt76_chip(&dev->mt76)) {
@@ -88,8 +82,6 @@ index 6ec52edd..d0d4c342 100644
  		if (val & MT_PAD_GPIO_ADIE_SINGLE)
  			var_type = MT7992_VAR_TYPE_23;
  		else if (u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_7992))
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 6e96bb12..980bddce 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -13,7 +13,7 @@
@@ -110,11 +102,9 @@ index 6e96bb12..980bddce 100644
  	default:						\
  		switch ((_dev)->var.type) {			\
  		case MT7996_VAR_TYPE_233:			\
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index 442f7245..a344030d 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -350,7 +350,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -350,7 +350,7 @@ int mt7996_mmio_wed_init(struct mt7996_d
  				     MT_RXQ_RING_BASE(MT7996_RXQ_BAND0) +
  				     MT7996_RXQ_BAND0 * MT_RING_SIZE;
  
@@ -123,7 +113,7 @@ index 442f7245..a344030d 100644
  		wed->wlan.tx_tbit[0] = ffs(MT_INT_TX_DONE_BAND2) - 1;
  	} else {
  		wed->wlan.hw_rro = dev->has_rro; /* default on */
-@@ -443,13 +443,13 @@ static int mt7996_mmio_init(struct mt76_dev *mdev,
+@@ -443,13 +443,13 @@ static int mt7996_mmio_init(struct mt76_
  	spin_lock_init(&dev->reg_lock);
  
  	switch (device_id) {
@@ -139,8 +129,6 @@ index 442f7245..a344030d 100644
  		dev->reg.base = mt7996_reg_base;
  		dev->reg.offs_rev = mt7992_offs;
  		dev->reg.map = mt7996_reg_map;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index ad10329d..314913a9 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -29,6 +29,11 @@
@@ -169,8 +157,6 @@ index ad10329d..314913a9 100644
  		if (dev->var.type == MT7992_VAR_TYPE_23)
  			return false;
  		break;
-diff --git a/mt7996/pci.c b/mt7996/pci.c
-index 04056181..a4338367 100644
 --- a/mt7996/pci.c
 +++ b/mt7996/pci.c
 @@ -16,14 +16,14 @@ static DEFINE_SPINLOCK(hif_lock);
@@ -192,7 +178,7 @@ index 04056181..a4338367 100644
  	{ },
  };
  
-@@ -63,8 +63,8 @@ static struct mt7996_hif *mt7996_pci_init_hif2(struct pci_dev *pdev)
+@@ -63,8 +63,8 @@ static struct mt7996_hif *mt7996_pci_ini
  {
  	hif_idx++;
  
@@ -203,7 +189,7 @@ index 04056181..a4338367 100644
  		return NULL;
  
  	writel(hif_idx | MT_PCIE_RECOG_ID_SEM,
-@@ -121,7 +121,8 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
+@@ -121,7 +121,8 @@ static int mt7996_pci_probe(struct pci_d
  
  	mt76_pci_disable_aspm(pdev);
  
@@ -213,6 +199,3 @@ index 04056181..a4338367 100644
  		return mt7996_pci_hif2_probe(pdev);
  
  	dev = mt7996_mmio_probe(&pdev->dev, pcim_iomap_table(pdev)[0],
--- 
-2.49.0
-

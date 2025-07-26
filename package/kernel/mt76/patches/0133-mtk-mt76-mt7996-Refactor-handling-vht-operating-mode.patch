@@ -19,11 +19,9 @@ Signed-off-by: Allen Ye <allen.ye@mediatek.com>
  mt7996/mcu.h |  1 +
  3 files changed, 40 insertions(+), 6 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 4b472a67..caf102d5 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2868,9 +2868,12 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2868,9 +2868,12 @@ void mt7996_mac_sta_rc_work(struct work_
  			continue;
  		}
  
@@ -39,11 +37,9 @@ index 4b472a67..caf102d5 100644
  			mt7996_mcu_add_rate_ctrl(dev, conf, mconf, link_sta, mlink, true);
  
  		if (changed & IEEE80211_RC_SMPS_CHANGED)
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 615435b2..49ac9454 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3034,6 +3034,31 @@ int mt7996_mcu_set_fixed_field(struct mt7996_dev *dev,
+@@ -3034,6 +3034,31 @@ int mt7996_mcu_set_fixed_field(struct mt
  	case RATE_PARAM_MMPS_UPDATE:
  		ra->mmps_mode = mt7996_mcu_get_mmps_mode(link_sta->smps_mode);
  		break;
@@ -75,7 +71,7 @@ index 615435b2..49ac9454 100644
  	default:
  		break;
  	}
-@@ -3138,9 +3163,11 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_buff *skb, struct mt7996_dev *dev,
+@@ -3138,9 +3163,11 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_b
  			     struct ieee80211_link_sta *link_sta)
  {
  #define INIT_RCPI 180
@@ -87,7 +83,7 @@ index 615435b2..49ac9454 100644
  	enum nl80211_band band = chandef->chan->band;
  	struct sta_rec_ra_uni *ra;
  	struct tlv *tlv;
-@@ -3154,10 +3181,13 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_buff *skb, struct mt7996_dev *dev,
+@@ -3154,10 +3181,13 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_b
  	ra->auto_rate = true;
  	ra->phy_mode = mt76_connac_get_phy_mode(mphy, conf->vif, band, link_sta);
  	ra->channel = chandef->chan->hw_value;
@@ -104,8 +100,6 @@ index 615435b2..49ac9454 100644
  
  	if (supp_rate) {
  		supp_rate &= mask->control[band].legacy;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index c1dd3a59..368141b0 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -989,6 +989,7 @@ enum {
@@ -116,6 +110,3 @@ index c1dd3a59..368141b0 100644
  	RATE_PARAM_FIXED = 3,
  	RATE_PARAM_MMPS_UPDATE = 5,
  	RATE_PARAM_FIXED_HE_LTF = 7,
--- 
-2.49.0
-

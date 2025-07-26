@@ -28,11 +28,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/testmode.c |  2 +-
  4 files changed, 36 insertions(+), 14 deletions(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 2cb720b0..408192b5 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -671,14 +671,6 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
+@@ -671,14 +671,6 @@ static int mt7996_config(struct ieee8021
  {
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
@@ -47,7 +45,7 @@ index 2cb720b0..408192b5 100644
  
  	mutex_lock(&dev->mt76.mutex);
  
-@@ -959,8 +951,37 @@ static void mt7996_link_info_changed(struct ieee80211_hw *hw,
+@@ -959,8 +951,37 @@ static void mt7996_link_info_changed(str
  	if (changed & BSS_CHANGED_MU_GROUPS)
  		mt7996_update_mu_group(hw, info, mconf);
  
@@ -85,7 +83,7 @@ index 2cb720b0..408192b5 100644
  }
  
  static void
-@@ -1616,7 +1637,6 @@ mt7996_set_antenna(struct ieee80211_hw *hw, u32 tx_ant, u32 rx_ant)
+@@ -1616,7 +1637,6 @@ mt7996_set_antenna(struct ieee80211_hw *
  	mt76_set_stream_caps(phy->mt76, true);
  	mt7996_set_stream_vht_txbf_caps(phy);
  	mt7996_set_stream_he_eht_caps(phy);
@@ -93,7 +91,7 @@ index 2cb720b0..408192b5 100644
  
  	mutex_unlock(&dev->mt76.mutex);
  
-@@ -2617,7 +2637,7 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -2617,7 +2637,7 @@ const struct ieee80211_ops mt7996_ops =
  	.hw_scan = mt7996_hw_scan,
  	.cancel_hw_scan = mt7996_cancel_hw_scan,
  	.release_buffered_frames = mt76_release_buffered_frames,
@@ -102,11 +100,9 @@ index 2cb720b0..408192b5 100644
  	.channel_switch_beacon = mt7996_channel_switch_beacon,
  	.get_stats = mt7996_get_stats,
  	.get_et_sset_count = mt7996_get_et_sset_count,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 63355d02..2964e9a3 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -5533,7 +5533,8 @@ mt7996_update_max_txpower_cur(struct mt7996_phy *phy, int tx_power)
+@@ -5533,7 +5533,8 @@ mt7996_update_max_txpower_cur(struct mt7
  		mphy->txpower_cur = e2p_power_limit;
  }
  
@@ -116,7 +112,7 @@ index 63355d02..2964e9a3 100644
  {
  #define TX_POWER_LIMIT_TABLE_RATE	0
  #define TX_POWER_LIMIT_TABLE_PATH	1
-@@ -5562,7 +5563,7 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy)
+@@ -5562,7 +5563,7 @@ int mt7996_mcu_set_txpower_sku(struct mt
  
  	if (hw->conf.power_level == INT_MIN)
  		hw->conf.power_level = 127;
@@ -125,11 +121,9 @@ index 63355d02..2964e9a3 100644
  
  	if (phy->sku_limit_en) {
  		txpower_limit = mt76_get_rate_power_limits(mphy, mphy->chandef.chan,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 1485b62a..1657f1fc 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -996,7 +996,8 @@ int mt7996_mcu_get_chan_mib_info(struct mt7996_phy *phy, bool chan_switch);
+@@ -996,7 +996,8 @@ int mt7996_mcu_get_chan_mib_info(struct
  int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
  int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state);
  int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
@@ -139,11 +133,9 @@ index 1485b62a..1657f1fc 100644
  int mt7996_mcu_rdd_cmd(struct mt7996_dev *dev, int cmd, u8 index,
  		       u8 rx_sel, u8 val);
  int mt7996_mcu_rdd_background_disable_timer(struct mt7996_dev *dev,
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index 51b3ab46..b542651d 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -1834,7 +1834,7 @@ mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
+@@ -1834,7 +1834,7 @@ mt7996_tm_update_params(struct mt7996_ph
  		mt7996_tm_update_channel(phy);
  		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(SKU_POWER_LIMIT), td->sku_en);
  		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(BACKOFF_POWER_LIMIT), td->sku_en);
@@ -152,6 +144,3 @@ index 51b3ab46..b542651d 100644
  	}
  	if (changed & BIT(TM_CHANGED_TX_LENGTH)) {
  		mt7996_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);
--- 
-2.49.0
-

@@ -59,11 +59,9 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  testmode.h           |  2 +-
  10 files changed, 155 insertions(+), 13 deletions(-)
 
-diff --git a/eeprom.c b/eeprom.c
-index 847ef34b..27a898fa 100644
 --- a/eeprom.c
 +++ b/eeprom.c
-@@ -161,6 +161,31 @@ static int mt76_get_of_eeprom(struct mt76_dev *dev, void *eep, int len)
+@@ -161,6 +161,31 @@ static int mt76_get_of_eeprom(struct mt7
  	return mt76_get_of_data_from_nvmem(dev, eep, "eeprom", len);
  }
  
@@ -95,8 +93,6 @@ index 847ef34b..27a898fa 100644
  void
  mt76_eeprom_override(struct mt76_phy *phy)
  {
-diff --git a/mt76.h b/mt76.h
-index a0b617ec..7c7c7645 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -981,6 +981,8 @@ struct mt76_dev {
@@ -108,7 +104,7 @@ index a0b617ec..7c7c7645 100644
  };
  
  #define MT76_MAX_AMSDU_NUM 8
-@@ -1256,6 +1258,7 @@ void mt76_eeprom_override(struct mt76_phy *phy);
+@@ -1256,6 +1258,7 @@ void mt76_eeprom_override(struct mt76_ph
  int mt76_get_of_data_from_mtd(struct mt76_dev *dev, void *eep, int offset, int len);
  int mt76_get_of_data_from_nvmem(struct mt76_dev *dev, void *eep,
  				const char *cell_name, int len);
@@ -116,11 +112,9 @@ index a0b617ec..7c7c7645 100644
  
  struct mt76_queue *
  mt76_init_queue(struct mt76_dev *dev, int qid, int idx, int n_desc,
-diff --git a/mt7996/eeprom.c b/mt7996/eeprom.c
-index d70f63a4..56c7d8a3 100644
 --- a/mt7996/eeprom.c
 +++ b/mt7996/eeprom.c
-@@ -63,11 +63,8 @@ static int mt7996_check_eeprom(struct mt7996_dev *dev)
+@@ -63,11 +63,8 @@ static int mt7996_check_eeprom(struct mt
  	}
  }
  
@@ -133,7 +127,7 @@ index d70f63a4..56c7d8a3 100644
  	switch (mt76_chip(&dev->mt76)) {
  	case MT7992_DEVICE_ID:
  		switch (dev->var.type) {
-@@ -221,6 +218,7 @@ mt7996_eeprom_check_or_use_default(struct mt7996_dev *dev, bool use_default)
+@@ -221,6 +218,7 @@ mt7996_eeprom_check_or_use_default(struc
  
  	dev_warn(dev->mt76.dev, "eeprom load fail, use default bin\n");
  	memcpy(eeprom, fw->data, MT7996_EEPROM_SIZE);
@@ -141,7 +135,7 @@ index d70f63a4..56c7d8a3 100644
  	dev->flash_mode = true;
  	dev->eeprom_mode = DEFAULT_BIN_MODE;
  	eeprom[MT_EE_TESTMODE_EN] = dev->testmode_enable;
-@@ -346,6 +344,7 @@ static int mt7996_eeprom_load(struct mt7996_dev *dev)
+@@ -346,6 +344,7 @@ static int mt7996_eeprom_load(struct mt7
  				goto out;
  			}
  		}
@@ -149,7 +143,7 @@ index d70f63a4..56c7d8a3 100644
  	}
  
  out:
-@@ -455,18 +454,83 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy)
+@@ -455,18 +454,83 @@ int mt7996_eeprom_parse_hw_cap(struct mt
  	return mt7996_eeprom_parse_band_config(phy);
  }
  
@@ -237,8 +231,6 @@ index d70f63a4..56c7d8a3 100644
  	ret = mt7996_eeprom_parse_hw_cap(dev, &dev->phy);
  	if (ret < 0)
  		return ret;
-diff --git a/mt7996/eeprom.h b/mt7996/eeprom.h
-index 186022b3..5d8deb85 100644
 --- a/mt7996/eeprom.h
 +++ b/mt7996/eeprom.h
 @@ -103,6 +103,13 @@ enum mt7996_eeprom_band {
@@ -255,11 +247,9 @@ index 186022b3..5d8deb85 100644
  static inline int
  mt7996_get_channel_group_5g(int channel)
  {
-diff --git a/mt7996/init.c b/mt7996/init.c
-index f4d5842b..95dc0951 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -1012,7 +1012,7 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
+@@ -1012,7 +1012,7 @@ static int mt7996_init_hardware(struct m
  	if (ret < 0)
  		return ret;
  
@@ -268,11 +258,9 @@ index f4d5842b..95dc0951 100644
  		ret = mt7996_mcu_apply_group_cal(dev);
  		if (ret)
  			return ret;
-diff --git a/mt7996/main.c b/mt7996/main.c
-index bd48024d..e8d0faf7 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -332,7 +332,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
+@@ -332,7 +332,7 @@ int mt7996_set_channel(struct mt76_phy *
  	struct mt7996_phy *phy = mphy->priv;
  	int ret;
  
@@ -281,11 +269,9 @@ index bd48024d..e8d0faf7 100644
  		ret = mt7996_mcu_apply_tx_dpd(phy);
  		if (ret)
  			goto out;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 4b3361cb..fd3c1469 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3538,7 +3538,7 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
+@@ -3538,7 +3538,7 @@ int mt7996_mcu_set_chan_info(struct mt79
  				 &req, sizeof(req), true);
  }
  
@@ -294,8 +280,6 @@ index 4b3361cb..fd3c1469 100644
  {
  #define MAX_PAGE_IDX_MASK	GENMASK(7, 5)
  #define PAGE_IDX_MASK		GENMASK(4, 2)
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 5664117e..3beafc7f 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -420,6 +420,8 @@ struct mt7996_dev {
@@ -307,7 +291,7 @@ index 5664117e..3beafc7f 100644
  
  	bool ibf;
  	u8 fw_debug_wm;
-@@ -567,6 +569,7 @@ irqreturn_t mt7996_irq_handler(int irq, void *dev_instance);
+@@ -567,6 +569,7 @@ irqreturn_t mt7996_irq_handler(int irq,
  u64 __mt7996_get_tsf(struct ieee80211_hw *hw, struct mt7996_vif *mvif);
  int mt7996_register_device(struct mt7996_dev *dev);
  void mt7996_unregister_device(struct mt7996_dev *dev);
@@ -315,11 +299,9 @@ index 5664117e..3beafc7f 100644
  int mt7996_eeprom_init(struct mt7996_dev *dev);
  int mt7996_eeprom_check_fw_mode(struct mt7996_dev *dev);
  int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy);
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 0117699e..450e16bd 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -348,7 +348,6 @@ static int mt7996_dump_version(struct seq_file *s, void *data)
+@@ -348,7 +348,6 @@ static int mt7996_dump_version(struct se
  	u16 adie_chip_id, adie_chip_ver;
  	int adie_idx;
  	static const char * const fem_type[] = {
@@ -327,7 +309,7 @@ index 0117699e..450e16bd 100644
  		[MT7996_FEM_EXT] = "eFEM",
  		[MT7996_FEM_INT] = "iFEM",
  		[MT7996_FEM_MIX] = "mixed FEM",
-@@ -2805,6 +2804,44 @@ static const struct file_operations mt7996_txpower_path_fops = {
+@@ -2805,6 +2804,44 @@ static const struct file_operations mt79
  	.llseek = default_llseek,
  };
  
@@ -372,7 +354,7 @@ index 0117699e..450e16bd 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -2874,6 +2911,9 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -2874,6 +2911,9 @@ int mt7996_mtk_init_debugfs(struct mt799
  	debugfs_create_file("txpower_sku", 0600, dir, phy, &mt7996_txpower_sku_fops);
  	debugfs_create_file("txpower_path", 0600, dir, phy, &mt7996_txpower_path_fops);
  
@@ -382,8 +364,6 @@ index 0117699e..450e16bd 100644
  	debugfs_create_devm_seqfile(dev->mt76.dev, "wtbl_info", dir,
  				    mt7996_wtbl_read);
  
-diff --git a/testmode.h b/testmode.h
-index 3348d0d5..6d79832a 100644
 --- a/testmode.h
 +++ b/testmode.h
 @@ -16,7 +16,7 @@
@@ -395,6 +375,3 @@ index 3348d0d5..6d79832a 100644
   * @MT76_TM_ATTR_MTD_OFFSET: offset of eeprom data within the partition (u32)
   * @MT76_TM_ATTR_BAND_IDX: band idx of the chip (u8)
   *
--- 
-2.49.0
-

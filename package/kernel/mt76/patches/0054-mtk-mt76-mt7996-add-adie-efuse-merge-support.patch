@@ -22,11 +22,9 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  mt7996/testmode.c |   8 ++-
  4 files changed, 200 insertions(+), 5 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 0af35bc7..c9420387 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -907,6 +907,46 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_fw_debug_muru_disable,
+@@ -907,6 +907,46 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_fw_debug_m
  			 mt7996_fw_debug_muru_disable_get,
  			 mt7996_fw_debug_muru_disable_set, "%lld\n");
  
@@ -73,7 +71,7 @@ index 0af35bc7..c9420387 100644
  int mt7996_init_debugfs(struct mt7996_phy *phy)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -933,6 +973,7 @@ int mt7996_init_debugfs(struct mt7996_phy *phy)
+@@ -933,6 +973,7 @@ int mt7996_init_debugfs(struct mt7996_ph
  	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
  				    mt7996_twt_stats);
  	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
@@ -81,11 +79,9 @@ index 0af35bc7..c9420387 100644
  
  	if (phy->mt76->cap.has_5ghz) {
  		debugfs_create_u32("dfs_hw_pattern", 0400, dir,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 51dd9d2f..50f40e97 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3587,6 +3587,150 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
+@@ -3587,6 +3587,150 @@ int mt7996_mcu_set_chan_info(struct mt79
  				 &req, sizeof(req), true);
  }
  
@@ -236,7 +232,7 @@ index 51dd9d2f..50f40e97 100644
  int mt7996_mcu_set_eeprom_flash(struct mt7996_dev *dev)
  {
  #define MAX_PAGE_IDX_MASK	GENMASK(7, 5)
-@@ -3640,12 +3784,17 @@ int mt7996_mcu_set_eeprom(struct mt7996_dev *dev)
+@@ -3640,12 +3784,17 @@ int mt7996_mcu_set_eeprom(struct mt7996_
  		.buffer_mode = EE_MODE_EFUSE,
  		.format = EE_FORMAT_WHOLE
  	};
@@ -257,8 +253,6 @@ index 51dd9d2f..50f40e97 100644
  }
  
  int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_len)
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 79c11c2a..62cac3df 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -914,6 +914,7 @@ enum {
@@ -269,11 +263,9 @@ index 79c11c2a..62cac3df 100644
  };
  
  enum {
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index bb7be96f..10f8f1f7 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -2132,8 +2132,12 @@ mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
+@@ -2132,8 +2132,12 @@ mt7996_tm_write_back_to_efuse(struct mt7
  		memcpy(req.data, eeprom + i, MT76_TM_EEPROM_BLOCK_SIZE);
  
  		ret = mt7996_mcu_get_eeprom(dev, i, read_buf, sizeof(read_buf));
@@ -288,6 +280,3 @@ index bb7be96f..10f8f1f7 100644
  
  		if (!memcmp(req.data, read_buf, MT76_TM_EEPROM_BLOCK_SIZE))
  			continue;
--- 
-2.49.0
-

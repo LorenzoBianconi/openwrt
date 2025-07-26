@@ -19,11 +19,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/init.c   | 37 ++++++++++++++++++++++++++++++++++++-
  2 files changed, 42 insertions(+), 1 deletion(-)
 
-diff --git a/mt7996/eeprom.c b/mt7996/eeprom.c
-index 49474889..0727a598 100644
 --- a/mt7996/eeprom.c
 +++ b/mt7996/eeprom.c
-@@ -424,6 +424,12 @@ static int mt7996_eeprom_parse_band_config(struct mt7996_phy *phy)
+@@ -424,6 +424,12 @@ static int mt7996_eeprom_parse_band_conf
  		break;
  	}
  
@@ -36,11 +34,9 @@ index 49474889..0727a598 100644
  	return ret;
  }
  
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 373e4381..a1a95671 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -32,7 +32,7 @@ static const struct ieee80211_iface_combination if_comb[] = {
+@@ -32,7 +32,7 @@ static const struct ieee80211_iface_comb
  		.limits = if_limits,
  		.n_limits = ARRAY_SIZE(if_limits),
  		.max_interfaces = MT7996_MAX_INTERFACES,
@@ -49,7 +45,7 @@ index 373e4381..a1a95671 100644
  		.beacon_int_infra_match = true,
  		.radar_detect_widths = BIT(NL80211_CHAN_WIDTH_20_NOHT) |
  				       BIT(NL80211_CHAN_WIDTH_20) |
-@@ -43,6 +43,34 @@ static const struct ieee80211_iface_combination if_comb[] = {
+@@ -43,6 +43,34 @@ static const struct ieee80211_iface_comb
  	}
  };
  
@@ -84,7 +80,7 @@ index 373e4381..a1a95671 100644
  static ssize_t mt7996_thermal_temp_show(struct device *dev,
  					struct device_attribute *attr,
  					char *buf)
-@@ -418,6 +446,7 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -418,6 +446,7 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  	ieee80211_hw_set(hw, WANT_MONITOR_VIF);
  	ieee80211_hw_set(hw, SUPPORTS_MULTI_BSSID);
  	ieee80211_hw_set(hw, CHANCTX_STA_CSA);
@@ -92,7 +88,7 @@ index 373e4381..a1a95671 100644
  
  	hw->max_tx_fragments = 4;
  
-@@ -461,6 +490,12 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -461,6 +490,12 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  
  	wiphy->max_scan_ssids = 4;
  	wiphy->max_scan_ie_len = IEEE80211_MAX_DATA_LEN;
@@ -105,6 +101,3 @@ index 373e4381..a1a95671 100644
  }
  
  static void
--- 
-2.49.0
-

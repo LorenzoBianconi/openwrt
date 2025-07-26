@@ -17,11 +17,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mcu.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index d0eae9f0..aa1eb0da 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2084,7 +2084,7 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_buff *skb, struct mt7996_dev *dev,
+@@ -2084,7 +2084,7 @@ mt7996_mcu_sta_rate_ctrl_tlv(struct sk_b
  			cap |= STA_CAP_VHT_TX_STBC;
  		if (sta->deflink.vht_cap.cap & IEEE80211_VHT_CAP_RXSTBC_1)
  			cap |= STA_CAP_VHT_RX_STBC;
@@ -30,6 +28,3 @@ index d0eae9f0..aa1eb0da 100644
  		    (sta->deflink.vht_cap.cap & IEEE80211_VHT_CAP_RXLDPC))
  			cap |= STA_CAP_VHT_LDPC;
  
--- 
-2.49.0
-

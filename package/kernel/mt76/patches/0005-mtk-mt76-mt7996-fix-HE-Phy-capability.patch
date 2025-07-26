@@ -14,11 +14,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/init.c | 6 ++++--
  1 file changed, 4 insertions(+), 2 deletions(-)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 68d6ec01..66c6bc4c 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -1156,6 +1156,9 @@ mt7996_init_he_caps(struct mt7996_phy *phy, enum nl80211_band band,
+@@ -1156,6 +1156,9 @@ mt7996_init_he_caps(struct mt7996_phy *p
  	he_cap_elem->phy_cap_info[2] = IEEE80211_HE_PHY_CAP2_STBC_TX_UNDER_80MHZ |
  				       IEEE80211_HE_PHY_CAP2_STBC_RX_UNDER_80MHZ;
  
@@ -28,7 +26,7 @@ index 68d6ec01..66c6bc4c 100644
  	switch (iftype) {
  	case NL80211_IFTYPE_AP:
  		he_cap_elem->mac_cap_info[0] |= IEEE80211_HE_MAC_CAP0_TWT_RES;
-@@ -1195,8 +1198,7 @@ mt7996_init_he_caps(struct mt7996_phy *phy, enum nl80211_band band,
+@@ -1195,8 +1198,7 @@ mt7996_init_he_caps(struct mt7996_phy *p
  			IEEE80211_HE_PHY_CAP6_PARTIAL_BW_EXT_RANGE |
  			IEEE80211_HE_PHY_CAP6_PPE_THRESHOLD_PRESENT;
  		he_cap_elem->phy_cap_info[7] |=
@@ -38,6 +36,3 @@ index 68d6ec01..66c6bc4c 100644
  		he_cap_elem->phy_cap_info[8] |=
  			IEEE80211_HE_PHY_CAP8_20MHZ_IN_40MHZ_HE_PPDU_IN_2G |
  			IEEE80211_HE_PHY_CAP8_20MHZ_IN_160MHZ_HE_PPDU |
--- 
-2.49.0
-

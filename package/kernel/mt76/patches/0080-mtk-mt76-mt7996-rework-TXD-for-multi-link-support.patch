@@ -53,11 +53,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |   9 ++++
  2 files changed, 101 insertions(+), 32 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 9be8f0a9..ec4d871f 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -615,9 +615,8 @@ mt7996_mac_write_txwi_8023(struct mt7996_dev *dev, __le32 *txwi,
+@@ -615,9 +615,8 @@ mt7996_mac_write_txwi_8023(struct mt7996
  	u32 val;
  
  	if (wcid->sta) {
@@ -68,7 +66,7 @@ index 9be8f0a9..ec4d871f 100644
  		wmm = sta->wme;
  	}
  
-@@ -644,7 +643,8 @@ mt7996_mac_write_txwi_8023(struct mt7996_dev *dev, __le32 *txwi,
+@@ -644,7 +643,8 @@ mt7996_mac_write_txwi_8023(struct mt7996
  
  static void
  mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
@@ -78,7 +76,7 @@ index 9be8f0a9..ec4d871f 100644
  {
  	struct mt76_phy *mphy =
  		mt76_dev_phy(&dev->mt76, le32_get_bits(txwi[1], MT_TXD1_TGID));
-@@ -654,6 +654,7 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
+@@ -654,6 +654,7 @@ mt7996_mac_write_txwi_80211(struct mt799
  	bool multicast = is_multicast_ether_addr(hdr->addr1);
  	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
  	__le16 fc = hdr->frame_control, sc = hdr->seq_ctrl;
@@ -86,7 +84,7 @@ index 9be8f0a9..ec4d871f 100644
  	u8 fc_type, fc_stype;
  	u32 val;
  
-@@ -711,9 +712,13 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
+@@ -711,9 +712,13 @@ mt7996_mac_write_txwi_80211(struct mt799
  		txwi[3] |= cpu_to_le32(MT_TXD3_REM_TX_COUNT);
  	}
  
@@ -102,7 +100,7 @@ index 9be8f0a9..ec4d871f 100644
  		if (ieee80211_is_back_req(hdr->frame_control)) {
  			struct ieee80211_bar *bar;
  
-@@ -726,6 +731,19 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
+@@ -726,6 +731,19 @@ mt7996_mac_write_txwi_80211(struct mt799
  		txwi[3] |= cpu_to_le32(val);
  		txwi[3] &= ~cpu_to_le32(MT_TXD3_HW_AMSDU);
  	}
@@ -122,7 +120,7 @@ index 9be8f0a9..ec4d871f 100644
  }
  
  void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
-@@ -736,10 +754,12 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -736,10 +754,12 @@ void mt7996_mac_write_txwi(struct mt7996
  	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
  	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
  	struct ieee80211_vif *vif = info->control.vif;
@@ -136,7 +134,7 @@ index 9be8f0a9..ec4d871f 100644
  	u16 tx_count = 15;
  	u32 val;
  	bool inband_disc = !!(changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
-@@ -747,11 +767,16 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -747,11 +767,16 @@ void mt7996_mac_write_txwi(struct mt7996
  	bool beacon = !!(changed & (BSS_CHANGED_BEACON |
  				    BSS_CHANGED_BEACON_ENABLED)) && (!inband_disc);
  
@@ -158,7 +156,7 @@ index 9be8f0a9..ec4d871f 100644
  	}
  
  	if (inband_disc) {
-@@ -798,7 +823,10 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -798,7 +823,10 @@ void mt7996_mac_write_txwi(struct mt7996
  		val |= MT_TXD5_TX_STATUS_HOST;
  	txwi[5] = cpu_to_le32(val);
  
@@ -170,7 +168,7 @@ index 9be8f0a9..ec4d871f 100644
  	switch (mt76_chip(&dev->mt76)) {
  	case MT7996_DEVICE_ID:
  		val |= FIELD_PREP(MT_TXD6_MSDU_CNT, 1);
-@@ -816,23 +844,25 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -816,23 +844,25 @@ void mt7996_mac_write_txwi(struct mt7996
  	if (is_8023)
  		mt7996_mac_write_txwi_8023(dev, txwi, skb, wcid);
  	else
@@ -203,7 +201,7 @@ index 9be8f0a9..ec4d871f 100644
  		txwi[6] |= cpu_to_le32(val);
  		txwi[3] |= cpu_to_le32(MT_TXD3_BA_DISABLE);
  	}
-@@ -848,17 +878,48 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -848,17 +878,48 @@ int mt7996_tx_prepare_skb(struct mt76_de
  	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx_info->skb);
  	struct ieee80211_key_conf *key = info->control.hw_key;
  	struct ieee80211_vif *vif = info->control.vif;
@@ -254,7 +252,7 @@ index 9be8f0a9..ec4d871f 100644
  
  	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
  	t->skb = tx_info->skb;
-@@ -871,8 +932,11 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -871,8 +932,11 @@ int mt7996_tx_prepare_skb(struct mt76_de
  #endif
  
  	pid = mt76_tx_status_skb_add(mdev, wcid, tx_info->skb);
@@ -268,7 +266,7 @@ index 9be8f0a9..ec4d871f 100644
  
  	txp = (struct mt76_connac_txp_common *)(txwi + MT_TXD_SIZE);
  	for (i = 0; i < nbuf; i++) {
-@@ -889,8 +953,10 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -889,8 +953,10 @@ int mt7996_tx_prepare_skb(struct mt76_de
  	}
  	txp->fw.nbuf = nbuf;
  
@@ -281,7 +279,7 @@ index 9be8f0a9..ec4d871f 100644
  
  	if (!key)
  		txp->fw.flags |= cpu_to_le16(MT_CT_INFO_NONE_CIPHER_FRAME);
-@@ -898,13 +964,7 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -898,13 +964,7 @@ int mt7996_tx_prepare_skb(struct mt76_de
  	if (!is_8023 && ieee80211_is_mgmt(hdr->frame_control))
  		txp->fw.flags |= cpu_to_le16(MT_CT_INFO_MGMT_FRAME);
  
@@ -296,11 +294,9 @@ index 9be8f0a9..ec4d871f 100644
  	txp->fw.token = cpu_to_le16(id);
  	txp->fw.rept_wds_wcid = cpu_to_le16(sta ? wcid->idx : 0xfff);
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 44208855..1491e952 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -847,6 +847,15 @@ mlink_dereference_protected(struct mt7996_sta *msta, u8 link_id)
+@@ -847,6 +847,15 @@ mlink_dereference_protected(struct mt799
  					 lockdep_is_held(&msta->vif->dev->mt76.mutex));
  }
  
@@ -316,6 +312,3 @@ index 44208855..1491e952 100644
  extern const struct ieee80211_ops mt7996_ops;
  extern struct pci_driver mt7996_pci_driver;
  extern struct pci_driver mt7996_hif_driver;
--- 
-2.49.0
-

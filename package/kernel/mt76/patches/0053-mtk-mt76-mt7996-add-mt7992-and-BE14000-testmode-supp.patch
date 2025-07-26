@@ -56,11 +56,9 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  testmode.c        | 15 ++++++--
  9 files changed, 251 insertions(+), 123 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 0b660093..0af35bc7 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -283,6 +283,11 @@ mt7996_rdd_monitor(struct seq_file *s, void *data)
+@@ -283,6 +283,11 @@ mt7996_rdd_monitor(struct seq_file *s, v
  
  	mutex_lock(&dev->mt76.mutex);
  
@@ -72,11 +70,9 @@ index 0b660093..0af35bc7 100644
  	if (!cfg80211_chandef_valid(chandef)) {
  		ret = -EINVAL;
  		goto out;
-diff --git a/mt7996/eeprom.c b/mt7996/eeprom.c
-index 783c0a99..49474889 100644
 --- a/mt7996/eeprom.c
 +++ b/mt7996/eeprom.c
-@@ -29,12 +29,39 @@ const struct ieee80211_channel dpd_5g_skip_ch_list[] = {
+@@ -29,12 +29,39 @@ const struct ieee80211_channel dpd_5g_sk
  	CHAN5G(96, 5480)
  };
  
@@ -116,7 +112,7 @@ index 783c0a99..49474889 100644
  const struct ieee80211_channel dpd_6g_ch_list_bw160[] = {
  	CHAN6G(15, 6025),
  	CHAN6G(47, 6185),
-@@ -54,12 +81,6 @@ const struct ieee80211_channel dpd_6g_ch_list_bw320[] = {
+@@ -54,12 +81,6 @@ const struct ieee80211_channel dpd_6g_ch
  	CHAN6G(191, 6905)
  };
  
@@ -129,7 +125,7 @@ index 783c0a99..49474889 100644
  static int mt7996_check_eeprom(struct mt7996_dev *dev)
  {
  	u8 *eeprom = dev->mt76.eeprom.data;
-@@ -84,6 +105,8 @@ const char *mt7996_eeprom_name(struct mt7996_dev *dev)
+@@ -84,6 +105,8 @@ const char *mt7996_eeprom_name(struct mt
  			if (dev->var.fem == MT7996_FEM_INT)
  				return MT7992_EEPROM_DEFAULT_23_INT;
  			return MT7992_EEPROM_DEFAULT_23;
@@ -138,7 +134,7 @@ index 783c0a99..49474889 100644
  		case MT7992_VAR_TYPE_44:
  		default:
  			if (dev->var.fem == MT7996_FEM_INT)
-@@ -99,6 +122,8 @@ const char *mt7996_eeprom_name(struct mt7996_dev *dev)
+@@ -99,6 +122,8 @@ const char *mt7996_eeprom_name(struct mt
  			if (dev->var.fem == MT7996_FEM_INT)
  				return MT7996_EEPROM_DEFAULT_233_INT;
  			return MT7996_EEPROM_DEFAULT_233;
@@ -147,7 +143,7 @@ index 783c0a99..49474889 100644
  		case MT7996_VAR_TYPE_444:
  		default:
  			if (dev->var.fem == MT7996_FEM_INT)
-@@ -178,36 +203,6 @@ static bool mt7996_eeprom_variant_valid(struct mt7996_dev *dev, const u8 *def)
+@@ -178,36 +203,6 @@ static bool mt7996_eeprom_variant_valid(
  	return true;
  }
  
@@ -184,7 +180,7 @@ index 783c0a99..49474889 100644
  static int
  mt7996_eeprom_check_or_use_default(struct mt7996_dev *dev, bool use_default)
  {
-@@ -506,6 +501,8 @@ static void mt7996_eeprom_init_precal(struct mt7996_dev *dev)
+@@ -506,6 +501,8 @@ static void mt7996_eeprom_init_precal(st
  	switch (mt76_chip(&dev->mt76)) {
  	case MT7996_DEVICE_ID:
  		dev->prek.rev = mt7996_prek_rev;
@@ -193,8 +189,6 @@ index 783c0a99..49474889 100644
  		/* 5g & 6g bw 80 dpd channel list is not used */
  		dev->prek.dpd_ch_num[DPD_CH_NUM_BW320_6G] = ARRAY_SIZE(dpd_6g_ch_list_bw320);
  		break;
-diff --git a/mt7996/eeprom.h b/mt7996/eeprom.h
-index 8c342102..788c33c8 100644
 --- a/mt7996/eeprom.h
 +++ b/mt7996/eeprom.h
 @@ -33,6 +33,7 @@ enum mt7996_eeprom_field {
@@ -311,11 +305,9 @@ index 8c342102..788c33c8 100644
  
  #define RF_DPD_FLAT_CAL				BIT(28)
  #define RF_PRE_CAL				BIT(29)
-diff --git a/mt7996/init.c b/mt7996/init.c
-index d5e3b0e8..1607480d 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -921,7 +921,7 @@ static int mt7996_variant_type_init(struct mt7996_dev *dev)
+@@ -921,7 +921,7 @@ static int mt7996_variant_type_init(stru
  		else if (u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_7992))
  			var_type = MT7992_VAR_TYPE_44;
  		else
@@ -324,8 +316,6 @@ index d5e3b0e8..1607480d 100644
  		break;
  	default:
  		return -EINVAL;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 38ffb6a8..51dd9d2f 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -18,6 +18,9 @@
@@ -338,7 +328,7 @@ index 38ffb6a8..51dd9d2f 100644
  		default:					\
  			_fw = MT7992_##name;			\
  		}						\
-@@ -3788,13 +3791,11 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
+@@ -3788,13 +3791,11 @@ int mt7996_mcu_apply_tx_dpd(struct mt799
  	enum nl80211_chan_width bw = chandef->width;
  	const struct ieee80211_channel *chan_list;
  	u32 cal_id, chan_list_size, base_offset = 0, offs = MT_EE_DO_PRE_CAL;
@@ -354,7 +344,7 @@ index 38ffb6a8..51dd9d2f 100644
  
  	switch (band) {
  	case NL80211_BAND_2GHZ:
-@@ -3810,27 +3811,35 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
+@@ -3810,27 +3811,35 @@ int mt7996_mcu_apply_tx_dpd(struct mt799
  			return 0;
  		cal_id = RF_DPD_FLAT_CAL;
  		chan_list = dpd_2g_ch_list_bw20;
@@ -396,7 +386,7 @@ index 38ffb6a8..51dd9d2f 100644
  			return 0;
  		break;
  	case NL80211_BAND_6GHZ:
-@@ -3838,20 +3847,27 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
+@@ -3838,20 +3847,27 @@ int mt7996_mcu_apply_tx_dpd(struct mt799
  		cal_id = RF_DPD_FLAT_6G_CAL;
  		chan_list = mphy->sband_6g.sband.channels;
  		chan_list_size = mphy->sband_6g.sband.n_channels;
@@ -429,7 +419,7 @@ index 38ffb6a8..51dd9d2f 100644
  		} else if (bw > NL80211_CHAN_WIDTH_20) {
  			/* apply (center channel - 2)'s dpd cal data for bw 40/80 channels */
  			channel -= 2;
-@@ -3871,9 +3887,8 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
+@@ -3871,9 +3887,8 @@ int mt7996_mcu_apply_tx_dpd(struct mt799
  	if (idx == chan_list_size)
  		return -EINVAL;
  
@@ -441,8 +431,6 @@ index 38ffb6a8..51dd9d2f 100644
  
  	cal += MT_EE_CAL_GROUP_SIZE + base_offset + idx * per_chan_size;
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 1024c293..4b6bd12b 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -43,6 +43,7 @@
@@ -513,7 +501,7 @@ index 1024c293..4b6bd12b 100644
  
  	struct {
  		u16 table_mask;
-@@ -591,6 +613,9 @@ mt7996_band_valid(struct mt7996_dev *dev, u8 band)
+@@ -591,6 +613,9 @@ mt7996_band_valid(struct mt7996_dev *dev
  	if (is_mt7992(&dev->mt76))
  		return band <= MT_BAND1;
  
@@ -523,7 +511,7 @@ index 1024c293..4b6bd12b 100644
  	return band <= MT_BAND2;
  }
  
-@@ -603,7 +628,8 @@ mt7996_has_background_radar(struct mt7996_dev *dev)
+@@ -603,7 +628,8 @@ mt7996_has_background_radar(struct mt799
  			return false;
  		break;
  	case MT7992_DEVICE_ID:
@@ -533,7 +521,7 @@ index 1024c293..4b6bd12b 100644
  			return false;
  		break;
  	default:
-@@ -632,7 +658,6 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy);
+@@ -632,7 +658,6 @@ int mt7996_eeprom_parse_hw_cap(struct mt
  int mt7996_eeprom_get_target_power(struct mt7996_dev *dev,
  				   struct ieee80211_channel *chan);
  s8 mt7996_eeprom_get_power_delta(struct mt7996_dev *dev, int band);
@@ -541,7 +529,7 @@ index 1024c293..4b6bd12b 100644
  int mt7996_dma_init(struct mt7996_dev *dev);
  void mt7996_dma_reset(struct mt7996_dev *dev, bool force);
  void mt7996_dma_prefetch(struct mt7996_dev *dev);
-@@ -642,6 +667,7 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx,
+@@ -642,6 +667,7 @@ int mt7996_init_tx_queues(struct mt7996_
  			  int n_desc, int ring_base, struct mtk_wed_device *wed);
  void mt7996_init_txpower(struct mt7996_phy *phy);
  int mt7996_txbf_init(struct mt7996_dev *dev);
@@ -549,8 +537,6 @@ index 1024c293..4b6bd12b 100644
  void mt7996_reset(struct mt7996_dev *dev);
  void mt7996_coredump(struct mt7996_dev *dev, u8 state);
  int mt7996_run(struct ieee80211_hw *hw);
-diff --git a/mt7996/pci.c b/mt7996/pci.c
-index a4338367..a8abe68e 100644
 --- a/mt7996/pci.c
 +++ b/mt7996/pci.c
 @@ -11,6 +11,9 @@
@@ -563,7 +549,7 @@ index a4338367..a8abe68e 100644
  static LIST_HEAD(hif_list);
  static DEFINE_SPINLOCK(hif_lock);
  static u32 hif_idx;
-@@ -63,6 +66,9 @@ static struct mt7996_hif *mt7996_pci_init_hif2(struct pci_dev *pdev)
+@@ -63,6 +66,9 @@ static struct mt7996_hif *mt7996_pci_ini
  {
  	hif_idx++;
  
@@ -573,7 +559,7 @@ index a4338367..a8abe68e 100644
  	if (!pci_get_device(PCI_VENDOR_ID_MEDIATEK, MT7996_DEVICE_ID_2, NULL) &&
  	    !pci_get_device(PCI_VENDOR_ID_MEDIATEK, MT7992_DEVICE_ID_2, NULL))
  		return NULL;
-@@ -77,6 +83,9 @@ static int mt7996_pci_hif2_probe(struct pci_dev *pdev)
+@@ -77,6 +83,9 @@ static int mt7996_pci_hif2_probe(struct
  {
  	struct mt7996_hif *hif;
  
@@ -583,7 +569,7 @@ index a4338367..a8abe68e 100644
  	hif = devm_kzalloc(&pdev->dev, sizeof(*hif), GFP_KERNEL);
  	if (!hif)
  		return -ENOMEM;
-@@ -101,6 +110,8 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
+@@ -101,6 +110,8 @@ static int mt7996_pci_probe(struct pci_d
  	int irq, hif2_irq, ret;
  	struct mt76_dev *mdev;
  
@@ -592,11 +578,9 @@ index a4338367..a8abe68e 100644
  	ret = pcim_enable_device(pdev);
  	if (ret)
  		return ret;
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index 0ab419cc..bb7be96f 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -440,7 +440,7 @@ mt7996_tm_set_tx_cont(struct mt7996_phy *phy, bool en)
+@@ -440,7 +440,7 @@ mt7996_tm_set_tx_cont(struct mt7996_phy
  static int
  mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
  {
@@ -605,7 +589,7 @@ index 0ab419cc..bb7be96f 100644
  	u32 i, group_size, dpd_size, size, offs, *pre_cal;
  	int ret = 0;
  	struct mt7996_dev *dev = phy->dev;
-@@ -468,6 +468,9 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
+@@ -468,6 +468,9 @@ mt7996_tm_group_prek(struct mt7996_phy *
  	dpd_size = MT_EE_CAL_DPD_SIZE;
  	size = group_size + dpd_size;
  	offs = MT_EE_DO_PRE_CAL;
@@ -615,7 +599,7 @@ index 0ab419cc..bb7be96f 100644
  
  	switch (state) {
  	case MT76_TM_STATE_GROUP_PREK:
-@@ -482,13 +485,10 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
+@@ -482,13 +485,10 @@ mt7996_tm_group_prek(struct mt7996_phy *
  		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == group_size,
  				   30 * HZ);
  
@@ -632,7 +616,7 @@ index 0ab419cc..bb7be96f 100644
  		break;
  	case MT76_TM_STATE_GROUP_PREK_DUMP:
  		pre_cal = (u32 *)dev->cal;
-@@ -526,10 +526,12 @@ mt7996_tm_dpd_prek_send_req(struct mt7996_phy *phy, struct mt7996_tm_req *req,
+@@ -526,10 +526,12 @@ mt7996_tm_dpd_prek_send_req(struct mt799
  	struct mt76_phy *mphy = phy->mt76;
  	struct cfg80211_chan_def chandef_backup, *chandef = &mphy->chandef;
  	struct ieee80211_channel chan_backup;
@@ -646,7 +630,7 @@ index 0ab419cc..bb7be96f 100644
  
  	req->rf_test.op.rf.param.cal_param.func_data = cpu_to_le32(func_data);
  
-@@ -539,7 +541,7 @@ mt7996_tm_dpd_prek_send_req(struct mt7996_phy *phy, struct mt7996_tm_req *req,
+@@ -539,7 +541,7 @@ mt7996_tm_dpd_prek_send_req(struct mt799
  	for (i = 0; i < channel_size; i++) {
  		if (chan_list[i].band == NL80211_BAND_5GHZ &&
  		    chan_list[i].hw_value >= dpd_5g_skip_ch_list[0].hw_value &&
@@ -655,7 +639,7 @@ index 0ab419cc..bb7be96f 100644
  			continue;
  
  		memcpy(chandef->chan, &chan_list[i], sizeof(struct ieee80211_channel));
-@@ -608,11 +610,11 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
+@@ -608,11 +610,11 @@ mt7996_tm_dpd_prek(struct mt7996_phy *ph
  	switch (state) {
  	case MT76_TM_STATE_DPD_2G:
  		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_2g_ch_list_bw20,
@@ -671,7 +655,7 @@ index 0ab419cc..bb7be96f 100644
  
  		do_precal = MT_EE_WIFI_CAL_DPD_2G;
  		break;
-@@ -623,18 +625,27 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
+@@ -623,18 +625,27 @@ mt7996_tm_dpd_prek(struct mt7996_phy *ph
  						  NL80211_CHAN_WIDTH_20, RF_DPD_FLAT_5G_CAL);
  		if (ret)
  			return ret;
@@ -707,7 +691,7 @@ index 0ab419cc..bb7be96f 100644
  
  		do_precal = MT_EE_WIFI_CAL_DPD_5G;
  		break;
-@@ -645,27 +656,37 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
+@@ -645,27 +656,37 @@ mt7996_tm_dpd_prek(struct mt7996_phy *ph
  						  NL80211_CHAN_WIDTH_20, RF_DPD_FLAT_6G_CAL);
  		if (ret)
  			return ret;
@@ -756,7 +740,7 @@ index 0ab419cc..bb7be96f 100644
  
  		do_precal = MT_EE_WIFI_CAL_DPD_6G;
  		break;
-@@ -738,9 +759,9 @@ mt7996_tm_dump_precal(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int
+@@ -738,9 +759,9 @@ mt7996_tm_dump_precal(struct mt76_phy *m
  	eeprom = dev->mt76.eeprom.data;
  	offs = MT_EE_DO_PRE_CAL;
  
@@ -769,7 +753,7 @@ index 0ab419cc..bb7be96f 100644
  
  	switch (type) {
  	case PREK_SYNC_ALL:
-@@ -816,9 +837,9 @@ mt7996_tm_re_cal_event(struct mt7996_dev *dev, struct mt7996_tm_rf_test_result *
+@@ -816,9 +837,9 @@ mt7996_tm_re_cal_event(struct mt7996_dev
  	u8 *pre_cal;
  
  	pre_cal = dev->cal;
@@ -782,11 +766,9 @@ index 0ab419cc..bb7be96f 100644
  
  	cal_idx = le32_to_cpu(data->cal_idx);
  	cal_type = le32_to_cpu(data->cal_type);
-diff --git a/testmode.c b/testmode.c
-index 21fc70f3..8192b98b 100644
 --- a/testmode.c
 +++ b/testmode.c
-@@ -37,6 +37,11 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
+@@ -37,6 +37,11 @@ const struct nla_policy mt76_tm_policy[N
  };
  EXPORT_SYMBOL_GPL(mt76_tm_policy);
  
@@ -798,7 +780,7 @@ index 21fc70f3..8192b98b 100644
  void mt76_testmode_tx_pending(struct mt76_phy *phy)
  {
  	struct mt76_testmode_data *td = &phy->test;
-@@ -386,7 +391,7 @@ mt76_testmode_tx_start(struct mt76_phy *phy)
+@@ -386,7 +391,7 @@ mt76_testmode_tx_start(struct mt76_phy *
  	td->tx_done = 0;
  	td->tx_pending = td->tx_count;
  
@@ -807,7 +789,7 @@ index 21fc70f3..8192b98b 100644
  		mt76_worker_schedule(&dev->tx_worker);
  }
  
-@@ -396,7 +401,7 @@ mt76_testmode_tx_stop(struct mt76_phy *phy)
+@@ -396,7 +401,7 @@ mt76_testmode_tx_stop(struct mt76_phy *p
  	struct mt76_testmode_data *td = &phy->test;
  	struct mt76_dev *dev = phy->dev;
  
@@ -816,7 +798,7 @@ index 21fc70f3..8192b98b 100644
  		dev->test_ops->tx_stop(phy);
  		return;
  	}
-@@ -876,10 +881,12 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
+@@ -876,10 +881,12 @@ int mt76_testmode_dump(struct ieee80211_
  	if (nla_put_u32(msg, MT76_TM_ATTR_STATE, td->state))
  		goto out;
  
@@ -831,6 +813,3 @@ index 21fc70f3..8192b98b 100644
  		goto out;
  
  	if (nla_put_u32(msg, MT76_TM_ATTR_TX_COUNT, td->tx_count) ||
--- 
-2.49.0
-

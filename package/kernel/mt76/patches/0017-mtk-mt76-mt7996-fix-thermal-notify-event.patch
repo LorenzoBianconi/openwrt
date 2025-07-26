@@ -15,11 +15,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mcu.c | 8 ++------
  1 file changed, 2 insertions(+), 6 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index bd8dc7b1..1b3d6c9e 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -576,8 +576,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -576,8 +576,7 @@ mt7996_mcu_rx_all_sta_info_event(struct
  static void
  mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
  {
@@ -29,7 +27,7 @@ index bd8dc7b1..1b3d6c9e 100644
  	struct mt76_phy *mphy = &dev->mt76.phy;
  	struct mt7996_mcu_thermal_notify *n;
  	struct mt7996_phy *phy;
-@@ -587,7 +586,7 @@ mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -587,7 +586,7 @@ mt7996_mcu_rx_thermal_notify(struct mt79
  	if (le16_to_cpu(n->tag) != THERMAL_NOTIFY_TAG)
  		return;
  
@@ -38,7 +36,7 @@ index bd8dc7b1..1b3d6c9e 100644
  		return;
  
  	if (n->band_idx > MT_BAND2)
-@@ -624,9 +623,6 @@ mt7996_mcu_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -624,9 +623,6 @@ mt7996_mcu_rx_unsolicited_event(struct m
  	case MCU_EVENT_EXT:
  		mt7996_mcu_rx_ext_event(dev, skb);
  		break;
@@ -48,6 +46,3 @@ index bd8dc7b1..1b3d6c9e 100644
  	default:
  		break;
  	}
--- 
-2.49.0
-

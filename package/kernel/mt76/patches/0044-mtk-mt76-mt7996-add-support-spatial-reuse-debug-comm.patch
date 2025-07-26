@@ -28,8 +28,6 @@ https://wiki.mediatek.inc/display/APKB/mt76+Phy+feature+debug+Cheetsheet#mt76Phy
  mt7996/mtk_mcu.h     |  56 ++++++++++++++++++++++
  7 files changed, 270 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index e9afc27b..dd63d4a0 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1056,6 +1056,7 @@ enum {
@@ -40,8 +38,6 @@ index e9afc27b..dd63d4a0 100644
  	MCU_UNI_EVENT_ROC = 0x27,
  	MCU_UNI_EVENT_TX_DONE = 0x2d,
  	MCU_UNI_EVENT_BF = 0x33,
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 7838c807..27ce69a6 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
 @@ -6,6 +6,9 @@
@@ -64,11 +60,9 @@ index 7838c807..27ce69a6 100644
  	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
  						dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index b2661d72..11ce227c 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -718,6 +718,14 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -718,6 +718,14 @@ mt7996_mcu_uni_rx_unsolicited_event(stru
  	case MCU_UNI_EVENT_WED_RRO:
  		mt7996_mcu_wed_rro_event(dev, skb);
  		break;
@@ -83,8 +77,6 @@ index b2661d72..11ce227c 100644
  #ifdef CONFIG_NL80211_TESTMODE
  	case MCU_UNI_EVENT_TESTMODE_CTRL:
  		mt7996_tm_rf_test_event(dev, skb);
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index b953216e..365a4caf 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -374,6 +374,10 @@ struct mt7996_phy {
@@ -107,11 +99,9 @@ index b953216e..365a4caf 100644
  #endif
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 450e16bd..a6556bfe 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -2842,6 +2842,83 @@ static int mt7996_show_eeprom_mode(struct seq_file *s, void *data)
+@@ -2842,6 +2842,83 @@ static int mt7996_show_eeprom_mode(struc
  	return 0;
  }
  
@@ -195,7 +185,7 @@ index 450e16bd..a6556bfe 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -2922,6 +2999,11 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -2922,6 +2999,11 @@ int mt7996_mtk_init_debugfs(struct mt799
  	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
  	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
  
@@ -207,11 +197,9 @@ index 450e16bd..a6556bfe 100644
  	return 0;
  }
  
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index 5c54d02c..dbdf8d80 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -146,4 +146,115 @@ int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set)
+@@ -146,4 +146,115 @@ int mt7996_mcu_edcca_threshold_ctrl(stru
  	return 0;
  }
  
@@ -327,8 +315,6 @@ index 5c54d02c..dbdf8d80 100644
 +	}
 +}
  #endif
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 36a58ad6..098e63ae 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
 @@ -121,6 +121,62 @@ enum {
@@ -394,6 +380,3 @@ index 36a58ad6..098e63ae 100644
  #endif
  
  #endif
--- 
-2.49.0
-

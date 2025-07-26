@@ -19,11 +19,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/init.c | 3 +++
  1 file changed, 3 insertions(+)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 9872b2cc..d8c44f90 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -1631,6 +1631,9 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
+@@ -1631,6 +1631,9 @@ mt7996_init_eht_caps(struct mt7996_phy *
  		eht_cap_elem->mac_cap_info[0] |=
  			IEEE80211_EHT_MAC_CAP0_SCS_TRAFFIC_DESC;
  
@@ -33,6 +31,3 @@ index 9872b2cc..d8c44f90 100644
  	eht_cap_elem->phy_cap_info[0] =
  		IEEE80211_EHT_PHY_CAP0_NDP_4_EHT_LFT_32_GI |
  		IEEE80211_EHT_PHY_CAP0_SU_BEAMFORMER |
--- 
-2.49.0
-

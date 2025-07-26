@@ -17,11 +17,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mcu.c | 15 ++++++++++-----
  1 file changed, 10 insertions(+), 5 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index aa1eb0da..b1f07165 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1665,12 +1665,13 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
+@@ -1665,12 +1665,13 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_de
  {
  #define EBF_MODE	BIT(0)
  #define IBF_MODE	BIT(1)
@@ -36,7 +34,7 @@ index aa1eb0da..b1f07165 100644
  		{0, 0, 0, 0},
  		{1, 1, 0, 0},	/* 2x1, 2x2, 2x3, 2x4 */
  		{2, 4, 4, 0},	/* 3x1, 3x2, 3x3, 3x4 */
-@@ -1716,10 +1717,14 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
+@@ -1716,10 +1717,14 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_de
  	else
  		bf->ibf_timeout = 0x18;
  
@@ -55,6 +53,3 @@ index aa1eb0da..b1f07165 100644
  
  	switch (sta->deflink.bandwidth) {
  	case IEEE80211_STA_RX_BW_160:
--- 
-2.49.0
-

@@ -21,8 +21,6 @@ Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
  mt7996/mt7996.h   |   2 +
  5 files changed, 214 insertions(+), 1 deletion(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 4976d944..18758ff2 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1401,6 +1401,7 @@ enum {
@@ -33,8 +31,6 @@ index 4976d944..18758ff2 100644
  };
  
  enum {
-diff --git a/mt7996/main.c b/mt7996/main.c
-index cfb4b293..ccdf2fe2 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
 @@ -3252,6 +3252,19 @@ out:
@@ -57,21 +53,18 @@ index cfb4b293..ccdf2fe2 100644
  static void
  mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  		      const struct ieee80211_event *event)
-@@ -3412,4 +3425,5 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -3412,4 +3425,5 @@ const struct ieee80211_ops mt7996_ops =
  	.change_vif_links = mt7996_change_vif_links,
  	.change_sta_links = mt7996_change_sta_links,
  	.set_qos_map = mt7996_set_qos_map,
 +	.set_attlm = mt7996_set_attlm,
  };
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 6e57387e..a30685e2 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1362,6 +1362,22 @@ mt7996_mcu_mld_reconf_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
- 	ieee80211_links_removed(vif, le16_to_cpu(reconf->link_bitmap));
+@@ -1363,6 +1363,22 @@ mt7996_mcu_mld_reconf_finish(void *priv,
  }
  
-+static void
+ static void
 +mt7996_mcu_mld_attlm_event(void *priv, u8 *mac, struct ieee80211_vif *vif)
 +{
 +	struct mt7996_mld_event_data *data = priv;
@@ -87,10 +80,11 @@ index 6e57387e..a30685e2 100644
 +	ieee80211_attlm_notify(vif, 0, ttlm->event_type, GFP_ATOMIC);
 +}
 +
- static void
++static void
  mt7996_mcu_mld_event(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -1376,9 +1392,15 @@ mt7996_mcu_mld_event(struct mt7996_dev *dev, struct sk_buff *skb)
+ 	struct mt7996_mcu_mld_event *event = (void *)skb->data;
+@@ -1376,9 +1392,15 @@ mt7996_mcu_mld_event(struct mt7996_dev *
  	len = skb->len;
  
  	while (len > 0 && le16_to_cpu(tlv->len) <= len) {
@@ -107,7 +101,7 @@ index 6e57387e..a30685e2 100644
  			ieee80211_iterate_active_interfaces_atomic(dev->mt76.hw,
  					IEEE80211_IFACE_ITER_RESUME_ALL,
  					mt7996_mcu_mld_reconf_finish, &data);
-@@ -3542,6 +3564,91 @@ mt7996_mcu_mld_reconf(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+@@ -3542,6 +3564,91 @@ mt7996_mcu_mld_reconf(struct mt7996_dev
  	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(MLD), true);
  }
  
@@ -199,7 +193,7 @@ index 6e57387e..a30685e2 100644
  static void
  mt7996_mcu_beacon_cntdwn(struct ieee80211_bss_conf *conf, struct sk_buff *rskb,
  			 struct sk_buff *skb,
-@@ -3824,6 +3931,48 @@ mt7996_mcu_beacon_ml_reconf(struct mt7996_dev *dev,
+@@ -3824,6 +3931,48 @@ mt7996_mcu_beacon_ml_reconf(struct mt799
  	}
  }
  
@@ -248,7 +242,7 @@ index 6e57387e..a30685e2 100644
  int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
  			  struct ieee80211_bss_conf *conf,
  			  struct mt7996_bss_conf *mconf, int en)
-@@ -3878,6 +4027,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
+@@ -3878,6 +4027,7 @@ int mt7996_mcu_add_beacon(struct ieee802
  	mt7996_mcu_beacon_sta_prof_csa(rskb, conf, &offs);
  	mt7996_mcu_beacon_crit_update(rskb, skb, conf, mconf, &offs);
  	mt7996_mcu_beacon_ml_reconf(dev, conf, rskb, skb, &offs);
@@ -256,8 +250,6 @@ index 6e57387e..a30685e2 100644
  out:
  	dev_kfree_skb(skb);
  	return mt76_mcu_skb_send_msg(&phy->dev->mt76, rskb,
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 63b58c1e..36a18c69 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -560,6 +560,14 @@ struct bss_bcn_ml_reconf_offset {
@@ -341,11 +333,9 @@ index 63b58c1e..36a18c69 100644
  	UNI_EVENT_MLD_RECONF_AP_REM_TIMER = 0x04,
  };
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 79aac488..aa1d0a5e 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1161,6 +1161,8 @@ int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy,
+@@ -1161,6 +1161,8 @@ int mt7996_mcu_set_vow_drr_ctrl(struct m
  				enum vow_drr_ctrl_id id);
  int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
  void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
@@ -354,6 +344,3 @@ index 79aac488..aa1d0a5e 100644
  
  static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
  {
--- 
-2.49.0
-

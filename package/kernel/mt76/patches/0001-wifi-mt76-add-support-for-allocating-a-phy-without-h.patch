@@ -13,11 +13,9 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
  mt76.h     |  2 ++
  2 files changed, 36 insertions(+), 5 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 303f4385..780b6010 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -411,13 +411,15 @@ mt76_check_sband(struct mt76_phy *phy, struct mt76_sband *msband,
+@@ -411,13 +411,15 @@ mt76_check_sband(struct mt76_phy *phy, s
  	}
  
  	if (found) {
@@ -35,7 +33,7 @@ index 303f4385..780b6010 100644
  }
  
  static int
-@@ -429,6 +431,9 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
+@@ -429,6 +431,9 @@ mt76_phy_init(struct mt76_phy *phy, stru
  	INIT_LIST_HEAD(&phy->tx_list);
  	spin_lock_init(&phy->tx_lock);
  
@@ -45,11 +43,10 @@ index 303f4385..780b6010 100644
  	SET_IEEE80211_DEV(hw, dev->dev);
  	SET_IEEE80211_PERM_ADDR(hw, phy->macaddr);
  
-@@ -480,6 +485,28 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
- 	return 0;
+@@ -481,6 +486,28 @@ mt76_phy_init(struct mt76_phy *phy, stru
  }
  
-+struct mt76_phy *
+ struct mt76_phy *
 +mt76_alloc_radio_phy(struct mt76_dev *dev, unsigned int size,
 +		     u8 band_idx)
 +{
@@ -71,10 +68,11 @@ index 303f4385..780b6010 100644
 +}
 +EXPORT_SYMBOL_GPL(mt76_alloc_radio_phy);
 +
- struct mt76_phy *
++struct mt76_phy *
  mt76_alloc_phy(struct mt76_dev *dev, unsigned int size,
  	       const struct ieee80211_ops *ops, u8 band_idx)
-@@ -552,9 +579,11 @@ int mt76_register_phy(struct mt76_phy *phy, bool vht,
+ {
+@@ -552,9 +579,11 @@ int mt76_register_phy(struct mt76_phy *p
  	mt76_check_sband(phy, &phy->sband_5g, NL80211_BAND_5GHZ);
  	mt76_check_sband(phy, &phy->sband_6g, NL80211_BAND_6GHZ);
  
@@ -89,11 +87,9 @@ index 303f4385..780b6010 100644
  
  	set_bit(MT76_STATE_REGISTERED, &phy->state);
  	phy->dev->phys[phy->band_idx] = phy;
-diff --git a/mt76.h b/mt76.h
-index 19c4f11c..fff78242 100644
 --- a/mt76.h
 +++ b/mt76.h
-@@ -1171,6 +1171,8 @@ void mt76_unregister_device(struct mt76_dev *dev);
+@@ -1171,6 +1171,8 @@ void mt76_unregister_device(struct mt76_
  void mt76_free_device(struct mt76_dev *dev);
  void mt76_unregister_phy(struct mt76_phy *phy);
  
@@ -102,6 +98,3 @@ index 19c4f11c..fff78242 100644
  struct mt76_phy *mt76_alloc_phy(struct mt76_dev *dev, unsigned int size,
  				const struct ieee80211_ops *ops,
  				u8 band_idx);
--- 
-2.49.0
-

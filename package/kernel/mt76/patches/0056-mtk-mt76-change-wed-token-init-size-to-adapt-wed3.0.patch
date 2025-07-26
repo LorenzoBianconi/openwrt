@@ -11,11 +11,9 @@ Signed-off-by: sujuan.chen <sujuan.chen@mediatek.com>
  tx.c | 10 +++++++---
  1 file changed, 7 insertions(+), 3 deletions(-)
 
-diff --git a/tx.c b/tx.c
-index 5aa37f43..330b8d38 100644
 --- a/tx.c
 +++ b/tx.c
-@@ -845,12 +845,16 @@ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked);
+@@ -845,12 +845,16 @@ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked)
  
  int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi)
  {
@@ -35,6 +33,3 @@ index 5aa37f43..330b8d38 100644
  		dev->token_count++;
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
--- 
-2.49.0
-

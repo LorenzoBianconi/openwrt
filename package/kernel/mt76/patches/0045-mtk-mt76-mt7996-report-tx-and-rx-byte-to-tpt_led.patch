@@ -10,11 +10,9 @@ Subject: [PATCH 045/148] mtk: mt76: mt7996: report tx and rx byte to tpt_led
  mt7996/mcu.c | 15 +++++++++++----
  1 file changed, 11 insertions(+), 4 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 11ce227c..cb11964e 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -530,6 +530,8 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -530,6 +530,8 @@ mt7996_mcu_rx_all_sta_info_event(struct
  		u8 ac;
  		u16 wlan_idx;
  		struct mt76_wcid *wcid;
@@ -23,7 +21,7 @@ index 11ce227c..cb11964e 100644
  
  		switch (le16_to_cpu(res->tag)) {
  		case UNI_ALL_STA_TXRX_RATE:
-@@ -549,11 +551,16 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -549,11 +551,16 @@ mt7996_mcu_rx_all_sta_info_event(struct
  			if (!wcid)
  				break;
  
@@ -44,6 +42,3 @@ index 11ce227c..cb11964e 100644
  			}
  			break;
  		case UNI_ALL_STA_TXRX_MSDU_COUNT:
--- 
-2.49.0
-

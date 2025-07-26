@@ -26,8 +26,6 @@ Signed-off-by: Bo Jiao <Bo.Jiao@mediatek.com>
  mt7996/regs.h     |   7 +-
  8 files changed, 283 insertions(+), 85 deletions(-)
 
-diff --git a/mt7996/coredump.c b/mt7996/coredump.c
-index 303d6e80..15e15a1c 100644
 --- a/mt7996/coredump.c
 +++ b/mt7996/coredump.c
 @@ -7,11 +7,11 @@
@@ -44,7 +42,7 @@ index 303d6e80..15e15a1c 100644
  	{
  		.start = 0x00800000,
  		.len = 0x0004ffff,
-@@ -44,27 +44,101 @@ static const struct mt7996_mem_region mt7996_mem_regions[] = {
+@@ -44,27 +44,101 @@ static const struct mt7996_mem_region mt
  	},
  };
  
@@ -151,7 +149,7 @@ index 303d6e80..15e15a1c 100644
  	if (!mem_region)
  		return 0;
  
-@@ -81,14 +155,13 @@ static int mt7996_coredump_get_mem_size(struct mt7996_dev *dev)
+@@ -81,14 +155,13 @@ static int mt7996_coredump_get_mem_size(
  	return size;
  }
  
@@ -169,7 +167,7 @@ index 303d6e80..15e15a1c 100644
  		return NULL;
  
  	guid_gen(&crash_data->guid);
-@@ -98,12 +171,15 @@ struct mt7996_crash_data *mt7996_coredump_new(struct mt7996_dev *dev)
+@@ -98,12 +171,15 @@ struct mt7996_crash_data *mt7996_coredum
  }
  
  static void
@@ -188,7 +186,7 @@ index 303d6e80..15e15a1c 100644
  
  	/* normal mode: driver can manually trigger assert for detail info */
  	if (!count)
-@@ -115,53 +191,59 @@ mt7996_coredump_fw_state(struct mt7996_dev *dev, struct mt7996_coredump *dump,
+@@ -115,53 +191,59 @@ mt7996_coredump_fw_state(struct mt7996_d
  }
  
  static void
@@ -272,7 +270,7 @@ index 303d6e80..15e15a1c 100644
  	struct mt7996_coredump *dump;
  	struct mt7996_coredump_mem *dump_mem;
  	size_t len, sofar = 0, hdr_len = sizeof(*dump);
-@@ -186,20 +268,31 @@ static struct mt7996_coredump *mt7996_coredump_build(struct mt7996_dev *dev)
+@@ -186,20 +268,31 @@ static struct mt7996_coredump *mt7996_co
  
  	dump = (struct mt7996_coredump *)(buf);
  	dump->len = len;
@@ -306,7 +304,7 @@ index 303d6e80..15e15a1c 100644
  
  	/* gather memory content */
  	dump_mem = (struct mt7996_coredump_mem *)(buf + sofar);
-@@ -213,17 +306,19 @@ static struct mt7996_coredump *mt7996_coredump_build(struct mt7996_dev *dev)
+@@ -213,17 +306,19 @@ static struct mt7996_coredump *mt7996_co
  	return dump;
  }
  
@@ -328,7 +326,7 @@ index 303d6e80..15e15a1c 100644
  
  	return 0;
  }
-@@ -231,38 +326,51 @@ int mt7996_coredump_submit(struct mt7996_dev *dev)
+@@ -231,38 +326,51 @@ int mt7996_coredump_submit(struct mt7996
  int mt7996_coredump_register(struct mt7996_dev *dev)
  {
  	struct mt7996_crash_data *crash_data;
@@ -338,29 +336,32 @@ index 303d6e80..15e15a1c 100644
 +		crash_data = vzalloc(sizeof(*dev->coredump.crash_data[i]));
 +		if (!crash_data)
 +			goto nomem;
- 
--	crash_data = vzalloc(sizeof(*dev->coredump.crash_data));
--	if (!crash_data)
--		return -ENOMEM;
++
 +		dev->coredump.crash_data[i] = crash_data;
 +		crash_data->supported = false;
- 
--	dev->coredump.crash_data = crash_data;
++
 +		if (coredump_memdump) {
 +			crash_data->memdump_buf_len = mt7996_coredump_get_mem_size(dev, i);
 +			if (!crash_data->memdump_buf_len)
 +				/* no memory content */
 +				continue;
++
++			crash_data->memdump_buf = vzalloc(crash_data->memdump_buf_len);
++			if (!crash_data->memdump_buf)
++				goto nomem;
  
+-	crash_data = vzalloc(sizeof(*dev->coredump.crash_data));
+-	if (!crash_data)
+-		return -ENOMEM;
+-
+-	dev->coredump.crash_data = crash_data;
+-
 -	if (coredump_memdump) {
 -		crash_data->memdump_buf_len = mt7996_coredump_get_mem_size(dev);
 -		if (!crash_data->memdump_buf_len)
 -			/* no memory content */
 -			return 0;
-+			crash_data->memdump_buf = vzalloc(crash_data->memdump_buf_len);
-+			if (!crash_data->memdump_buf)
-+				goto nomem;
- 
+-
 -		crash_data->memdump_buf = vzalloc(crash_data->memdump_buf_len);
 -		if (!crash_data->memdump_buf) {
 -			vfree(crash_data);
@@ -400,8 +401,6 @@ index 303d6e80..15e15a1c 100644
 +	}
  }
  
-diff --git a/mt7996/coredump.h b/mt7996/coredump.h
-index af2ba219..01ed3731 100644
 --- a/mt7996/coredump.h
 +++ b/mt7996/coredump.h
 @@ -6,10 +6,13 @@
@@ -493,11 +492,9 @@ index af2ba219..01ed3731 100644
  {
  	return NULL;
  }
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 968989c5..f820441b 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -108,15 +108,25 @@ mt7996_sys_recovery_set(struct file *file, const char __user *user_buf,
+@@ -108,15 +108,25 @@ mt7996_sys_recovery_set(struct file *fil
  	/* enable full chip reset */
  	case UNI_CMD_SER_SET_RECOVER_FULL:
  		mt76_set(dev, MT_WFDMA0_MCU_HOST_INT_ENA, MT_MCU_CMD_WDT_MASK);
@@ -524,11 +521,9 @@ index 968989c5..f820441b 100644
  		break;
  	case UNI_CMD_SER_SET_HW_BIT_DETECT_ONLY:
  		ret = mt7996_mcu_set_ser(dev, UNI_CMD_SER_SET, BIT(0), band);
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index ac55d150..50cacad2 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2000,28 +2000,25 @@ void mt7996_mac_reset_work(struct work_struct *work)
+@@ -2000,28 +2000,25 @@ void mt7996_mac_reset_work(struct work_s
  }
  
  /* firmware coredump */
@@ -561,7 +556,7 @@ index ac55d150..50cacad2 100644
  	if (!mem_region || !crash_data->memdump_buf_len) {
  		mutex_unlock(&dev->dump_mutex);
  		goto skip_memdump;
-@@ -2031,6 +2028,9 @@ void mt7996_mac_dump_work(struct work_struct *work)
+@@ -2031,6 +2028,9 @@ void mt7996_mac_dump_work(struct work_st
  	buf_len = crash_data->memdump_buf_len;
  
  	/* dumping memory content... */
@@ -571,7 +566,7 @@ index ac55d150..50cacad2 100644
  	memset(buf, 0, buf_len);
  	for (i = 0; i < num; i++) {
  		if (mem_region->len > buf_len) {
-@@ -2047,6 +2047,7 @@ void mt7996_mac_dump_work(struct work_struct *work)
+@@ -2047,6 +2047,7 @@ void mt7996_mac_dump_work(struct work_st
  		mt7996_memcpy_fromio(dev, buf, mem_region->start,
  				     mem_region->len);
  
@@ -579,7 +574,7 @@ index ac55d150..50cacad2 100644
  		hdr->start = mem_region->start;
  		hdr->len = mem_region->len;
  
-@@ -2063,11 +2064,44 @@ void mt7996_mac_dump_work(struct work_struct *work)
+@@ -2063,11 +2064,44 @@ void mt7996_mac_dump_work(struct work_st
  	mutex_unlock(&dev->dump_mutex);
  
  skip_memdump:
@@ -587,8 +582,8 @@ index ac55d150..50cacad2 100644
 -skip_coredump:
 -	queue_work(dev->mt76.wq, &dev->reset_work);
 +	mt7996_coredump_submit(dev, type);
-+}
-+
+ }
+ 
 +void mt7996_mac_dump_work(struct work_struct *work)
 +{
 +	struct mt7996_dev *dev;
@@ -606,8 +601,8 @@ index ac55d150..50cacad2 100644
 +		queue_work(dev->mt76.wq, &dev->reset_work);
 +
 +	dev->dump_state = MT7996_COREDUMP_IDLE;
- }
- 
++}
++
 +void mt7996_coredump(struct mt7996_dev *dev, u8 state)
 +{
 +	if (state == MT7996_COREDUMP_IDLE ||
@@ -627,7 +622,7 @@ index ac55d150..50cacad2 100644
  void mt7996_reset(struct mt7996_dev *dev)
  {
  	if (!dev->recovery.hw_init_done)
-@@ -2085,6 +2119,7 @@ void mt7996_reset(struct mt7996_dev *dev)
+@@ -2085,6 +2119,7 @@ void mt7996_reset(struct mt7996_dev *dev
  
  		mt7996_irq_disable(dev, MT_INT_MCU_CMD);
  		queue_work(dev->mt76.wq, &dev->dump_work);
@@ -635,11 +630,9 @@ index ac55d150..50cacad2 100644
  		return;
  	}
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index e97fff8b..b8b319f4 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2738,6 +2738,8 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
+@@ -2738,6 +2738,8 @@ static int mt7996_load_patch(struct mt79
  
  	dev_info(dev->mt76.dev, "HW/SW Version: 0x%x, Build Time: %.16s\n",
  		 be32_to_cpu(hdr->hw_sw_ver), hdr->build_date);
@@ -648,7 +641,7 @@ index e97fff8b..b8b319f4 100644
  
  	for (i = 0; i < be32_to_cpu(hdr->desc.n_region); i++) {
  		struct mt7996_patch_sec *sec;
-@@ -2864,6 +2866,9 @@ static int __mt7996_load_ram(struct mt7996_dev *dev, const char *fw_type,
+@@ -2864,6 +2866,9 @@ static int __mt7996_load_ram(struct mt79
  	}
  
  	hdr = (const void *)(fw->data + fw->size - sizeof(*hdr));
@@ -658,8 +651,6 @@ index e97fff8b..b8b319f4 100644
  	dev_info(dev->mt76.dev, "%s Firmware Version: %.10s, Build Time: %.15s\n",
  		 fw_type, hdr->fw_ver, hdr->build_date);
  
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 8e680ff2..fc215d43 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -910,7 +910,11 @@ enum {
@@ -674,8 +665,6 @@ index 8e680ff2..fc215d43 100644
  	/*hw bit detect only*/
  	UNI_CMD_SER_SET_HW_BIT_DETECT_ONLY,
  	/* action */
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 929e500f..276c6a0e 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -94,6 +94,8 @@
@@ -734,7 +723,7 @@ index 929e500f..276c6a0e 100644
  
  	struct list_head sta_rc_list;
  	struct list_head twt_list;
-@@ -505,6 +520,7 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx,
+@@ -505,6 +520,7 @@ int mt7996_init_tx_queues(struct mt7996_
  void mt7996_init_txpower(struct mt7996_phy *phy);
  int mt7996_txbf_init(struct mt7996_dev *dev);
  void mt7996_reset(struct mt7996_dev *dev);
@@ -742,8 +731,6 @@ index 929e500f..276c6a0e 100644
  int mt7996_run(struct ieee80211_hw *hw);
  int mt7996_mcu_init(struct mt7996_dev *dev);
  int mt7996_mcu_init_firmware(struct mt7996_dev *dev);
-diff --git a/mt7996/regs.h b/mt7996/regs.h
-index 06e307b5..3450a2fc 100644
 --- a/mt7996/regs.h
 +++ b/mt7996/regs.h
 @@ -597,7 +597,8 @@ enum offs_rev {
@@ -772,6 +759,3 @@ index 06e307b5..3450a2fc 100644
  #define MT_MCU_WM_EXCP_LR_LOG			MT_MCU_WM_EXCP(0x204)
  
  /* CONN AFE CTL CON */
--- 
-2.49.0
-

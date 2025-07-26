@@ -13,11 +13,9 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  mt7996/mac.c | 6 ------
  1 file changed, 6 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 0c1fdd5b..3303d32b 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1877,12 +1877,6 @@ void mt7996_mac_reset_work(struct work_struct *work)
+@@ -1877,12 +1877,6 @@ void mt7996_mac_reset_work(struct work_s
  	dev_info(dev->mt76.dev,"\n%s L1 SER recovery start.",
  		 wiphy_name(dev->mt76.hw->wiphy));
  
@@ -30,6 +28,3 @@ index 0c1fdd5b..3303d32b 100644
  	ieee80211_stop_queues(mt76_hw(dev));
  	if (phy2)
  		ieee80211_stop_queues(phy2->mt76->hw);
--- 
-2.49.0
-

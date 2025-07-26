@@ -37,8 +37,6 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mcu.h      |  8 +++++
  3 files changed, 97 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 1dcd1696..f6b472ef 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -834,6 +834,7 @@ enum {
@@ -49,11 +47,9 @@ index 1dcd1696..f6b472ef 100644
  	STA_REC_MAX_NUM
  };
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 9297cd67..dfd28022 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1357,6 +1357,85 @@ mt7996_mcu_sta_ba(struct mt7996_dev *dev, struct mt76_vif *mvif,
+@@ -1357,6 +1357,85 @@ mt7996_mcu_sta_ba(struct mt7996_dev *dev
  				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
  }
  
@@ -139,7 +135,7 @@ index 9297cd67..dfd28022 100644
  /** starec & wtbl **/
  int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
  			 struct ieee80211_ampdu_params *params,
-@@ -1366,6 +1445,7 @@ int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
+@@ -1366,6 +1445,7 @@ int mt7996_mcu_add_tx_ba(struct mt7996_d
  	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
  	unsigned long valid_links = sta->valid_links ?: BIT(0);
  	unsigned int link_id;
@@ -147,7 +143,7 @@ index 9297cd67..dfd28022 100644
  
  	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
  		struct mt7996_link_sta *mlink =
-@@ -1384,6 +1464,12 @@ int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
+@@ -1384,6 +1464,12 @@ int mt7996_mcu_add_tx_ba(struct mt7996_d
  					&mlink->wcid, enable, true);
  		if (ret)
  			return ret;
@@ -160,7 +156,7 @@ index 9297cd67..dfd28022 100644
  	}
  
  	return 0;
-@@ -1595,6 +1681,8 @@ mt7996_mcu_sta_amsdu_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
+@@ -1595,6 +1681,8 @@ mt7996_mcu_sta_amsdu_tlv(struct mt7996_d
  	switch (link_sta->agg.max_amsdu_len) {
  	case IEEE80211_MAX_MPDU_LEN_VHT_11454:
  		amsdu->max_mpdu_size =
@@ -169,8 +165,6 @@ index 9297cd67..dfd28022 100644
  			IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454;
  		return;
  	case IEEE80211_MAX_MPDU_LEN_HT_7935:
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 3248cdb4..7510207c 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -573,6 +573,13 @@ struct sta_rec_ba_uni {
@@ -195,6 +189,3 @@ index 3248cdb4..7510207c 100644
  					 sizeof(struct tlv))
  
  #define MT7996_MAX_BEACON_SIZE		1338
--- 
-2.49.0
-

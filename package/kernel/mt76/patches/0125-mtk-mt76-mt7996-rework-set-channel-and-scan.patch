@@ -18,11 +18,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |  3 +-
  6 files changed, 26 insertions(+), 71 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 06b54dfe..0e897fef 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -908,7 +908,7 @@ bool mt76_has_tx_pending(struct mt76_phy *phy)
+@@ -908,7 +908,7 @@ bool mt76_has_tx_pending(struct mt76_phy
  }
  EXPORT_SYMBOL_GPL(mt76_has_tx_pending);
  
@@ -31,7 +29,7 @@ index 06b54dfe..0e897fef 100644
  mt76_channel_state(struct mt76_phy *phy, struct ieee80211_channel *c)
  {
  	struct mt76_sband *msband;
-@@ -924,7 +924,6 @@ mt76_channel_state(struct mt76_phy *phy, struct ieee80211_channel *c)
+@@ -924,7 +924,6 @@ mt76_channel_state(struct mt76_phy *phy,
  	idx = c - &msband->sband.channels[0];
  	return &msband->chan[idx];
  }
@@ -39,7 +37,7 @@ index 06b54dfe..0e897fef 100644
  
  void mt76_update_survey_active_time(struct mt76_phy *phy, ktime_t time)
  {
-@@ -999,6 +998,7 @@ int mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
+@@ -999,6 +998,7 @@ int mt76_set_channel(struct mt76_phy *ph
  
  	return ret;
  }
@@ -47,11 +45,9 @@ index 06b54dfe..0e897fef 100644
  
  int mt76_update_channel(struct mt76_phy *phy)
  {
-diff --git a/mt76.h b/mt76.h
-index b2a06ecf..c1cf16e5 100644
 --- a/mt76.h
 +++ b/mt76.h
-@@ -1581,8 +1581,6 @@ void mt76_release_buffered_frames(struct ieee80211_hw *hw,
+@@ -1581,8 +1581,6 @@ void mt76_release_buffered_frames(struct
  				  bool more_data);
  bool mt76_has_tx_pending(struct mt76_phy *phy);
  int mt76_update_channel(struct mt76_phy *phy);
@@ -60,11 +56,9 @@ index b2a06ecf..c1cf16e5 100644
  void mt76_update_survey(struct mt76_phy *phy);
  void mt76_update_survey_active_time(struct mt76_phy *phy, ktime_t time);
  int mt76_get_survey(struct ieee80211_hw *hw, int idx,
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 17e63781..67bdb5ee 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -3345,6 +3345,7 @@ mt7996_scan_send_probe(struct mt7996_phy *phy, struct cfg80211_ssid *ssid,
+@@ -3345,6 +3345,7 @@ mt7996_scan_send_probe(struct mt7996_phy
  	}
  
  	info = IEEE80211_SKB_CB(skb);
@@ -72,7 +66,7 @@ index 17e63781..67bdb5ee 100644
  	if (req->no_cck)
  		info->flags |= IEEE80211_TX_CTL_NO_CCK_RATE;
  
-@@ -3393,9 +3394,9 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3393,9 +3394,9 @@ void mt7996_scan_work(struct work_struct
  		mutex_unlock(&phy->dev->mt76.mutex);
  
  		if (phy->chanctx)
@@ -84,7 +78,7 @@ index 17e63781..67bdb5ee 100644
  
  		return;
  	}
-@@ -3408,9 +3409,9 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3408,9 +3409,9 @@ void mt7996_scan_work(struct work_struct
  		mutex_unlock(&phy->dev->mt76.mutex);
  
  		if (phy->chanctx)
@@ -96,7 +90,7 @@ index 17e63781..67bdb5ee 100644
  
  		ieee80211_queue_delayed_work(hw, &phy->scan_work, HZ / 10);
  
-@@ -3431,7 +3432,7 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3431,7 +3432,7 @@ void mt7996_scan_work(struct work_struct
  	cfg80211_chandef_create(&chandef, phy->scan_chan, NL80211_CHAN_HT20);
  	mutex_unlock(&phy->dev->mt76.mutex);
  
@@ -105,8 +99,6 @@ index 17e63781..67bdb5ee 100644
  
  	if (active_scan) {
  		int i;
-diff --git a/mt7996/main.c b/mt7996/main.c
-index ef90346a..6fb5bb49 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
 @@ -627,46 +627,12 @@ out:
@@ -160,7 +152,7 @@ index ef90346a..6fb5bb49 100644
  		ret = mt7996_mcu_apply_tx_dpd(phy);
  		if (ret)
  			goto out;
-@@ -692,28 +658,17 @@ static int __mt7996_set_channel(struct mt7996_phy *phy,
+@@ -692,28 +658,17 @@ static int __mt7996_set_channel(struct m
  	phy->noise = 0;
  
  out:
@@ -194,7 +186,7 @@ index ef90346a..6fb5bb49 100644
  }
  
  static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
-@@ -1181,7 +1136,7 @@ mt7996_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -1181,7 +1136,7 @@ mt7996_post_channel_switch(struct ieee80
  	if (ret <= 0)
  		return ret;
  
@@ -203,7 +195,7 @@ index ef90346a..6fb5bb49 100644
  }
  
  static void mt7996_remove_link_sta(struct mt7996_dev *dev,
-@@ -2818,7 +2773,7 @@ void mt7996_roc_complete_work(struct work_struct *work)
+@@ -2818,7 +2773,7 @@ void mt7996_roc_complete_work(struct wor
  	chandef = phy->chanctx ? &phy->chanctx->chandef : &phy->mt76->chandef;
  	wiphy_info(hw->wiphy, "finish roc work, go back to freq=%u\n",
  			chandef->chan->center_freq);
@@ -212,7 +204,7 @@ index ef90346a..6fb5bb49 100644
  	ieee80211_remain_on_channel_expired(hw);
  }
  
-@@ -2906,7 +2861,7 @@ mt7996_remain_on_channel(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2906,7 +2861,7 @@ mt7996_remain_on_channel(struct ieee8021
  	mutex_unlock(&phy->dev->mt76.mutex);
  
  	cfg80211_chandef_create(&chandef, chan, NL80211_CHAN_HT20);
@@ -221,7 +213,7 @@ index ef90346a..6fb5bb49 100644
  	ieee80211_ready_on_channel(hw);
  
  	ieee80211_queue_delayed_work(phy->mt76->hw, &phy->roc_complete_work,
-@@ -2983,7 +2938,7 @@ mt7996_add_chanctx(struct ieee80211_hw *hw, struct ieee80211_chanctx_conf *conf)
+@@ -2983,7 +2938,7 @@ mt7996_add_chanctx(struct ieee80211_hw *
  	if (ret)
  		return ret;
  
@@ -230,7 +222,7 @@ index ef90346a..6fb5bb49 100644
  }
  
  static void
-@@ -3021,7 +2976,7 @@ mt7996_change_chanctx(struct ieee80211_hw *hw, struct ieee80211_chanctx_conf *co
+@@ -3021,7 +2976,7 @@ mt7996_change_chanctx(struct ieee80211_h
  		ctx->chandef = conf->def;
  		phy->mt76->radar_enabled = conf->radar_enabled;
  
@@ -239,7 +231,7 @@ index ef90346a..6fb5bb49 100644
  
  		mt7996_dbg(dev, MT7996_DBG_CHAN, "%s: change to %u, 0x%x\n",
  			   __func__, conf->def.chan->hw_value, changed);
-@@ -3164,7 +3119,7 @@ mt7996_switch_vif_chanctx(struct ieee80211_hw *hw,
+@@ -3164,7 +3119,7 @@ mt7996_switch_vif_chanctx(struct ieee802
  		if (ret)
  			goto out;
  
@@ -248,11 +240,9 @@ index ef90346a..6fb5bb49 100644
  		if (ret)
  			goto out;
  	}
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index 9badbf6b..6a7a6280 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -662,7 +662,7 @@ struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
+@@ -662,7 +662,7 @@ struct mt7996_dev *mt7996_mmio_probe(str
  		.sta_event = mt7996_mac_sta_event,
  		.sta_remove = mt7996_mac_sta_remove,
  		.update_survey = mt7996_update_channel,
@@ -261,11 +251,9 @@ index 9badbf6b..6a7a6280 100644
  	};
  	struct mt7996_dev *dev;
  	struct mt76_dev *mdev;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index b6bef675..363b7510 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1145,7 +1145,8 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev,
+@@ -1145,7 +1145,8 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  			     struct mt7996_link_sta *mlink, bool changed);
  int mt7996_mcu_add_mld_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
  			   struct ieee80211_sta *sta, unsigned long add);
@@ -275,6 +263,3 @@ index b6bef675..363b7510 100644
  int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag, bool sta);
  int mt7996_mcu_set_tx(struct mt7996_dev *dev, struct mt7996_bss_conf *mconf);
  int mt7996_mcu_set_fixed_rate_ctrl(struct mt7996_dev *dev,
--- 
-2.49.0
-

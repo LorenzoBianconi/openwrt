@@ -71,11 +71,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/vendor.h      |   9 ++--
  9 files changed, 197 insertions(+), 61 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 68cb9b76..57a662b3 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2428,6 +2428,16 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2428,6 +2428,16 @@ void mt7996_mac_sta_rc_work(struct work_
  		if (changed & IEEE80211_RC_SMPS_CHANGED)
  			mt7996_mcu_set_fixed_field(dev, mconf, link_sta, mlink, NULL,
  						   RATE_PARAM_MMPS_UPDATE);
@@ -92,11 +90,9 @@ index 68cb9b76..57a662b3 100644
  
  		spin_lock_bh(&dev->mt76.sta_poll_lock);
  	}
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 1bfb783f..8ceb0208 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2681,6 +2681,7 @@ int mt7996_mcu_set_fixed_field(struct mt7996_dev *dev,
+@@ -2681,6 +2681,7 @@ int mt7996_mcu_set_fixed_field(struct mt
  	case RATE_PARAM_FIXED_MCS:
  	case RATE_PARAM_FIXED_GI:
  	case RATE_PARAM_FIXED_HE_LTF:
@@ -104,7 +100,7 @@ index 1bfb783f..8ceb0208 100644
  		if (phy)
  			ra->phy = *phy;
  		break;
-@@ -2906,6 +2907,12 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev,
+@@ -2906,6 +2907,12 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  	if (IS_ERR(skb))
  		return PTR_ERR(skb);
  
@@ -117,8 +113,6 @@ index 1bfb783f..8ceb0208 100644
  	/* firmware rc algorithm refers to sta_rec_he for HE control.
  	 * once dev->rc_work changes the settings driver should also
  	 * update sta_rec_he here.
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 3aee186e..ebc3bd41 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -924,6 +924,7 @@ enum {
@@ -129,8 +123,6 @@ index 3aee186e..ebc3bd41 100644
  	RATE_PARAM_AUTO = 20,
  #ifdef CONFIG_MTK_VENDOR
  	RATE_PARAM_FIXED_MIMO = 30,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index f5bb9885..a33ec041 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -535,6 +535,8 @@ struct csi_data {
@@ -152,7 +144,7 @@ index f5bb9885..a33ec041 100644
  #endif
  
  #if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
-@@ -1297,8 +1300,8 @@ int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
+@@ -1297,8 +1300,8 @@ int mt7996_vendor_amnt_sta_remove(struct
  				  struct ieee80211_sta *sta);
  void mt7996_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en);
  void mt7996_mcu_set_mimo(struct mt7996_phy *phy);
@@ -163,7 +155,7 @@ index f5bb9885..a33ec041 100644
  void mt7996_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
  int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
  		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
-@@ -1326,14 +1329,15 @@ int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx, boo
+@@ -1326,14 +1329,15 @@ int mt7996_mcu_set_txbf_internal(struct
  void mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb);
  int mt7996_mcu_set_muru_fixed_rate_enable(struct mt7996_dev *dev, u8 action, int val);
  int mt7996_mcu_set_muru_fixed_rate_parameter(struct mt7996_dev *dev, u8 action, void *para);
@@ -185,11 +177,9 @@ index f5bb9885..a33ec041 100644
  void mt7996_tm_update_channel(struct mt7996_phy *phy);
  
  int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val);
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index f01242de..b6bdd68a 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -2936,7 +2936,7 @@ mt7996_bf_txsnd_info_set(struct file *file,
+@@ -2936,7 +2936,7 @@ mt7996_bf_txsnd_info_set(struct file *fi
  	else
  		buf[count] = '\0';
  
@@ -198,11 +188,9 @@ index f01242de..b6bdd68a 100644
  
  	if (ret) return -EFAULT;
  
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index 82e3f721..22bf6d98 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -352,7 +352,7 @@ int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx, boo
+@@ -352,7 +352,7 @@ int mt7996_mcu_set_txbf_internal(struct
  	return mt76_mcu_skb_send_msg(&phy->dev->mt76, skb, MCU_WM_UNI_CMD(BF), false);
  }
  
@@ -211,7 +199,7 @@ index 82e3f721..22bf6d98 100644
  {
  	char *buf = (char *)para;
  	__le16 input[5] = {0};
-@@ -365,7 +365,7 @@ int mt7996_mcu_set_txbf_snd_info(struct mt7996_phy *phy, void *para)
+@@ -365,7 +365,7 @@ int mt7996_mcu_set_txbf_snd_info(struct
  
  	memset(&hdr, 0, sizeof(hdr));
  
@@ -220,7 +208,7 @@ index 82e3f721..22bf6d98 100644
  	if (!skb)
  		return -ENOMEM;
  
-@@ -428,7 +428,7 @@ int mt7996_mcu_set_txbf_snd_info(struct mt7996_phy *phy, void *para)
+@@ -428,7 +428,7 @@ int mt7996_mcu_set_txbf_snd_info(struct
  		return -EINVAL;
  	}
  
@@ -237,7 +225,7 @@ index 82e3f721..22bf6d98 100644
   */
  int mt7996_mcu_set_muru_cmd(struct mt7996_dev *dev, u16 action, int val)
  {
-@@ -1081,11 +1082,10 @@ int mt7996_mcu_muru_set_prot_frame_thr(struct mt7996_dev *dev, u32 val)
+@@ -1081,11 +1082,10 @@ int mt7996_mcu_muru_set_prot_frame_thr(s
  				 false);
  }
  
@@ -250,7 +238,7 @@ index 82e3f721..22bf6d98 100644
  	struct {
  		u8 _rsv[4];
  
-@@ -1100,21 +1100,20 @@ int mt7996_mcu_set_bypass_smthint(struct mt7996_phy *phy, u8 val)
+@@ -1100,21 +1100,20 @@ int mt7996_mcu_set_bypass_smthint(struct
  		.tag = cpu_to_le16(BF_CFG_PHY),
  		.len = cpu_to_le16(sizeof(data) - 4),
  		.action = BF_PHY_SMTH_INT_BYPASS,
@@ -275,7 +263,7 @@ index 82e3f721..22bf6d98 100644
  	struct {
  		u8 _rsv[4];
  
-@@ -1140,13 +1139,16 @@ int mt7996_mcu_set_bsrp_ctrl(struct mt7996_phy *phy, u16 interval,
+@@ -1140,13 +1139,16 @@ int mt7996_mcu_set_bsrp_ctrl(struct mt79
  			       GENMASK(2, 0) : GENMASK(1, 0),
  	};
  
@@ -294,7 +282,7 @@ index 82e3f721..22bf6d98 100644
  	int ret = 0;
  	char buf[] = "01:00:00:1B";
  
-@@ -1158,22 +1160,21 @@ int mt7996_mcu_set_rfeature_trig_type(struct mt7996_phy *phy, u8 enable, u8 trig
+@@ -1158,22 +1160,21 @@ int mt7996_mcu_set_rfeature_trig_type(st
  
  	switch (trig_type) {
  	case CAPI_BASIC:
@@ -321,7 +309,7 @@ index 82e3f721..22bf6d98 100644
  	struct mt7996_muru *muru;
  	struct {
  		u8 _rsv[4];
-@@ -1199,7 +1200,7 @@ int mt7996_mcu_set_muru_cfg(struct mt7996_phy *phy, void *data)
+@@ -1199,7 +1200,7 @@ int mt7996_mcu_set_muru_cfg(struct mt799
  				 sizeof(req), false);
  }
  
@@ -330,7 +318,7 @@ index 82e3f721..22bf6d98 100644
  {
  	struct mt7996_muru *muru;
  	struct mt7996_muru_dl *dl;
-@@ -1219,7 +1220,7 @@ int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val)
+@@ -1219,7 +1220,7 @@ int mt7996_set_muru_cfg(struct mt7996_ph
  		comm->sch_type = MURU_OFDMA_SCH_TYPE_DL;
  		muru->cfg_comm = cpu_to_le32(MURU_COMM_SET);
  		muru->cfg_dl = cpu_to_le32(MURU_FIXED_DL_TOTAL_USER_CNT);
@@ -339,7 +327,7 @@ index 82e3f721..22bf6d98 100644
  		break;
  	case MU_CTRL_UL_USER_CNT:
  		ul->user_num = val;
-@@ -1227,7 +1228,7 @@ int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val)
+@@ -1227,7 +1228,7 @@ int mt7996_set_muru_cfg(struct mt7996_ph
  		comm->sch_type = MURU_OFDMA_SCH_TYPE_UL;
  		muru->cfg_comm = cpu_to_le32(MURU_COMM_SET);
  		muru->cfg_ul = cpu_to_le32(MURU_FIXED_UL_TOTAL_USER_CNT);
@@ -348,7 +336,7 @@ index 82e3f721..22bf6d98 100644
  		break;
  	default:
  		break;
-@@ -1237,16 +1238,15 @@ int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val)
+@@ -1237,16 +1238,15 @@ int mt7996_set_muru_cfg(struct mt7996_ph
  	return ret;
  }
  
@@ -367,7 +355,7 @@ index 82e3f721..22bf6d98 100644
  		break;
  	case CAPI_MU:
  		enable_su = 0;
-@@ -1257,16 +1257,35 @@ void mt7996_mcu_set_ppdu_tx_type(struct mt7996_phy *phy, u8 ppdu_type)
+@@ -1257,16 +1257,35 @@ void mt7996_mcu_set_ppdu_tx_type(struct
  	}
  }
  
@@ -407,7 +395,7 @@ index 82e3f721..22bf6d98 100644
  }
  
  void mt7996_mcu_set_mimo(struct mt7996_phy *phy)
-@@ -1297,9 +1316,8 @@ void mt7996_mcu_set_mimo(struct mt7996_phy *phy)
+@@ -1297,9 +1316,8 @@ void mt7996_mcu_set_mimo(struct mt7996_p
  	mt7996_mcu_set_muru_cmd(dev, UNI_CMD_MURU_SET_FORCE_MU, force_mu);
  }
  
@@ -418,7 +406,7 @@ index 82e3f721..22bf6d98 100644
  	struct {
  		u8 _rsv[4];
  
-@@ -1310,7 +1328,7 @@ void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type)
+@@ -1310,7 +1328,7 @@ void mt7996_mcu_set_cert(struct mt7996_p
  	} __packed req = {
  		.tag = cpu_to_le16(UNI_CMD_CERT_CFG),
  		.len = cpu_to_le16(sizeof(req) - 4),
@@ -427,7 +415,7 @@ index 82e3f721..22bf6d98 100644
  	};
  
  	mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(WSYS_CONFIG), &req,
-@@ -1371,3 +1389,43 @@ int mt7996_mcu_mlo_agc(struct mt7996_dev *dev, const void *data, int len)
+@@ -1371,3 +1389,43 @@ int mt7996_mcu_mlo_agc(struct mt7996_dev
  	                        len, true);
  }
  #endif
@@ -471,8 +459,6 @@ index 82e3f721..22bf6d98 100644
 +	return 0;
 +}
 +#endif
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 2cffc893..8ba261a7 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
 @@ -133,6 +133,7 @@ enum {
@@ -483,11 +469,9 @@ index 2cffc893..8ba261a7 100644
  };
  
  struct bf_pfmu_tag {
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index 585c4e28..158f6855 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -31,6 +31,7 @@ wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
+@@ -31,6 +31,7 @@ wireless_ctrl_policy[NUM_MTK_VENDOR_ATTR
  	[MTK_VENDOR_ATTR_WIRELESS_CTRL_NUSERS_OFDMA] = {.type = NLA_U8 },
  	[MTK_VENDOR_ATTR_WIRELESS_CTRL_MIMO] = {.type = NLA_U8 },
  	[MTK_VENDOR_ATTR_WIRELESS_CTRL_BA_BUFFER_SIZE] = {.type = NLA_U16 },
@@ -495,7 +479,7 @@ index 585c4e28..158f6855 100644
  };
  
  static const struct nla_policy
-@@ -107,6 +108,9 @@ rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
+@@ -107,6 +108,9 @@ rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTR
  	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE] = { .type = NLA_U8 },
  	[MTK_VENDOR_ATTR_RFEATURE_CTRL_ACK_PLCY] = { .type = NLA_U8 },
  	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TXBF] = { .type = NLA_U8 },
@@ -505,7 +489,7 @@ index 585c4e28..158f6855 100644
  };
  
  static const struct nla_policy
-@@ -179,7 +183,7 @@ static int mt7996_vendor_mu_ctrl(struct wiphy *wiphy,
+@@ -179,7 +183,7 @@ static int mt7996_vendor_mu_ctrl(struct
  		nla_memcpy(muru, tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT],
  			   sizeof(struct mt7996_muru));
  
@@ -514,7 +498,7 @@ index 585c4e28..158f6855 100644
  		kfree(muru);
  	}
  
-@@ -864,16 +868,33 @@ static int mt7996_vendor_rfeature_ctrl(struct wiphy *wiphy,
+@@ -864,16 +868,33 @@ static int mt7996_vendor_rfeature_ctrl(s
  	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
  	struct mt7996_dev *dev = phy->dev;
@@ -550,7 +534,7 @@ index 585c4e28..158f6855 100644
  
  	if (tb[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_CFG]) {
  		u8 enable, trig_type;
-@@ -893,7 +914,7 @@ static int mt7996_vendor_rfeature_ctrl(struct wiphy *wiphy,
+@@ -893,7 +914,7 @@ static int mt7996_vendor_rfeature_ctrl(s
  			};
  		}
  
@@ -559,7 +543,7 @@ index 585c4e28..158f6855 100644
  		if (err)
  			return err;
  	} else if (tb[MTK_VENDOR_ATTR_RFEATURE_CTRL_ACK_PLCY]) {
-@@ -907,6 +928,19 @@ static int mt7996_vendor_rfeature_ctrl(struct wiphy *wiphy,
+@@ -907,6 +928,19 @@ static int mt7996_vendor_rfeature_ctrl(s
  		default:
  			return 0;
  		}
@@ -579,7 +563,7 @@ index 585c4e28..158f6855 100644
  	}
  
  	return 0;
-@@ -920,23 +954,47 @@ static int mt7996_vendor_wireless_ctrl(struct wiphy *wiphy,
+@@ -920,23 +954,47 @@ static int mt7996_vendor_wireless_ctrl(s
  	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
  	struct mt7996_dev *dev = phy->dev;
@@ -631,7 +615,7 @@ index 585c4e28..158f6855 100644
  		ieee80211_iterate_active_interfaces_atomic(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
  			mt7996_set_wireless_vif, &val32);
  		if (val8 == 3) /* DL20and80 */
-@@ -947,24 +1005,22 @@ static int mt7996_vendor_wireless_ctrl(struct wiphy *wiphy,
+@@ -947,24 +1005,22 @@ static int mt7996_vendor_wireless_ctrl(s
  		hw->max_rx_aggregation_subframes = val16;
  	} else if (tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_PPDU_TX_TYPE]) {
  		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_PPDU_TX_TYPE]);
@@ -663,8 +647,6 @@ index 585c4e28..158f6855 100644
  	} else if (tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU]) {
  		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU]);
  		mt7996_set_wireless_amsdu(hw, val8);
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index f6fcb623..714f0b3e 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -78,11 +78,6 @@ enum mtk_vendor_attr_mu_ctrl {
@@ -697,6 +679,3 @@ index f6fcb623..714f0b3e 100644
  
  	/* keep last */
  	NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL,
--- 
-2.49.0
-

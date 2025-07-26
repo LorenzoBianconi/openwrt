@@ -33,11 +33,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/main.c | 49 ++++++++++++++++++++++++++++++++++++++++++++++---
  2 files changed, 83 insertions(+), 4 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index a1034214..34579d53 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -805,7 +805,8 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -805,7 +805,8 @@ void mt7996_mac_write_txwi(struct mt7996
  	txwi[5] = cpu_to_le32(val);
  
  	val = MT_TXD6_DAS;
@@ -47,7 +45,7 @@ index a1034214..34579d53 100644
  		val |= MT_TXD6_DIS_MAT;
  
  	switch (mt76_chip(&dev->mt76)) {
-@@ -919,6 +920,41 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -919,6 +920,41 @@ int mt7996_tx_prepare_skb(struct mt76_de
  		mt7996_mac_write_txwi(dev, txwi_ptr, tx_info->skb, wcid, key,
  				      pid, qid, 0);
  
@@ -89,11 +87,9 @@ index a1034214..34579d53 100644
  	txp = (struct mt76_connac_txp_common *)(txwi + MT_TXD_SIZE);
  	for (i = 0; i < nbuf; i++) {
  		u16 len;
-diff --git a/mt7996/main.c b/mt7996/main.c
-index b00aefa8..2cb720b0 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1308,14 +1308,56 @@ static void mt7996_tx(struct ieee80211_hw *hw,
+@@ -1308,14 +1308,56 @@ static void mt7996_tx(struct ieee80211_h
  
  	rcu_read_lock();
  	if (mvif && msta) {
@@ -104,7 +100,9 @@ index b00aefa8..2cb720b0 100644
  		u8 link_id = u32_get_bits(info->control.flags,
  					  IEEE80211_TX_CTRL_MLO_LINK);
 +		struct ieee80211_sta *sta = ieee80211_find_sta(vif, hdr->addr1);
-+
+ 
+-		if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+-			link_id = mvif->master_link_id;
 +		if (link_id >= IEEE80211_LINK_UNSPECIFIED) {
 +			if (sta) {
 +				struct mt7996_sta *peer;
@@ -115,9 +113,7 @@ index b00aefa8..2cb720b0 100644
 +				link_id = mvif->master_link_id;
 +			}
 +		}
- 
--		if (link_id >= IEEE80211_LINK_UNSPECIFIED)
--			link_id = mvif->master_link_id;
++
 +		/* translate mld addr to link addr */
 +		if (ieee80211_vif_is_mld(vif)) {
 +			struct ieee80211_bss_conf *conf;
@@ -153,7 +149,7 @@ index b00aefa8..2cb720b0 100644
  
  		mconf = rcu_dereference(mvif->link[link_id]);
  		mlink = rcu_dereference(msta->link[link_id]);
-@@ -1333,6 +1375,7 @@ static void mt7996_tx(struct ieee80211_hw *hw,
+@@ -1333,6 +1375,7 @@ static void mt7996_tx(struct ieee80211_h
  	}
  
  	mt76_tx(mphy, control->sta, wcid, skb);
@@ -161,6 +157,3 @@ index b00aefa8..2cb720b0 100644
  	rcu_read_unlock();
  }
  
--- 
-2.49.0
-

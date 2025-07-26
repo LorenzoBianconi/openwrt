@@ -49,8 +49,6 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h    |   7 +-
  8 files changed, 320 insertions(+), 224 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index 34437ba5..4c9774ee 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -363,12 +363,17 @@ struct mt76_sta_stats {
@@ -79,8 +77,6 @@ index 34437ba5..4c9774ee 100644
  	unsigned long ampdu_state;
  
  	u16 idx;
-diff --git a/mt76_connac3_mac.h b/mt76_connac3_mac.h
-index 487ad716..48f1339a 100644
 --- a/mt76_connac3_mac.h
 +++ b/mt76_connac3_mac.h
 @@ -204,6 +204,11 @@ enum tx_frag_idx {
@@ -95,8 +91,6 @@ index 487ad716..48f1339a 100644
  #define MT_CT_INFO_APPLY_TXD		BIT(0)
  #define MT_CT_INFO_COPY_HOST_TXD_ALL	BIT(1)
  #define MT_CT_INFO_MGMT_FRAME		BIT(2)
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 1971c7bf..81d00c1a 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1406,6 +1406,8 @@ enum {
@@ -125,11 +119,9 @@ index 1971c7bf..81d00c1a 100644
  	UNI_ALL_STA_MAX_NUM
  };
  
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 2ccbf6b8..dc9ddf82 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -481,6 +481,13 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -481,6 +481,13 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  		status->chain_signal[2] = to_rssi(MT_PRXV_RCPI2, v3);
  		status->chain_signal[3] = to_rssi(MT_PRXV_RCPI3, v3);
  
@@ -143,7 +135,7 @@ index 2ccbf6b8..dc9ddf82 100644
  		/* RXD Group 5 - C-RXV */
  		if (rxd1 & MT_RXD1_NORMAL_GROUP_5) {
  			rxd += 24;
-@@ -1220,19 +1227,9 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1220,19 +1227,9 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  			spin_unlock_bh(&mdev->sta_poll_lock);
  			continue;
  		} else if (info & MT_TXFREE_INFO_HEADER) {
@@ -163,7 +155,7 @@ index 2ccbf6b8..dc9ddf82 100644
  			if (FIELD_GET(MT_TXFREE_INFO_STAT, info) == 2) {
  				struct mt7996_phy *mphy =
  					__mt7996_phy(dev, wcid->phy_idx);
-@@ -1270,25 +1267,24 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1270,25 +1267,24 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  
  static bool
  mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
@@ -197,7 +189,7 @@ index 2ccbf6b8..dc9ddf82 100644
  		skb = mt76_tx_status_skb_get(mdev, wcid, pid, &list);
  		if (skb) {
  			struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
-@@ -1317,6 +1313,15 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
+@@ -1317,6 +1313,15 @@ mt7996_mac_add_txs_skb(struct mt7996_dev
  				mvif->probe_send_count[wcid->phy_idx] = 0;
  			}
  		}
@@ -213,7 +205,7 @@ index 2ccbf6b8..dc9ddf82 100644
  	}
  
  	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta) {
-@@ -1329,107 +1334,26 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
+@@ -1329,107 +1334,26 @@ mt7996_mac_add_txs_skb(struct mt7996_dev
  	}
  
  	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
@@ -289,6 +281,8 @@ index 2ccbf6b8..dc9ddf82 100644
 -	default:
 -		goto out;
 -	}
+-
+-	stats->tx_mode[mode]++;
 +	mcs = FIELD_GET(MT_TX_RATE_IDX, txrate);
 +	nss = FIELD_GET(MT_TX_RATE_NSS, txrate) + 1;
 +	if (le32_get_bits(txs_data[3], MT_TXS3_RATE_STBC) && nss > 1)
@@ -303,8 +297,6 @@ index 2ccbf6b8..dc9ddf82 100644
 +	if (bw < ARRAY_SIZE(stats->tx_bw))
 +		stats->tx_bw[bw]++;
  
--	stats->tx_mode[mode]++;
--
 -	switch (FIELD_GET(MT_TXS0_BW, txs)) {
 -	case IEEE80211_STA_RX_BW_320:
 -		rate.bw = RATE_INFO_BW_320;
@@ -353,7 +345,7 @@ index 2ccbf6b8..dc9ddf82 100644
  	pid = le32_get_bits(txs_data[3], MT_TXS3_PID);
  
  	if (pid < MT_PACKET_ID_NO_SKB)
-@@ -1458,17 +1382,19 @@ static void mt7996_mac_add_txs(struct mt7996_dev *dev, void *data)
+@@ -1458,17 +1382,19 @@ static void mt7996_mac_add_txs(struct mt
  	if (!wcid)
  		goto out;
  
@@ -379,7 +371,7 @@ index 2ccbf6b8..dc9ddf82 100644
  out:
  	rcu_read_unlock();
  }
-@@ -2510,6 +2436,39 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2510,6 +2436,39 @@ void mt7996_mac_sta_rc_work(struct work_
  	rcu_read_unlock();
  }
  
@@ -419,7 +411,7 @@ index 2ccbf6b8..dc9ddf82 100644
  void mt7996_mac_work(struct work_struct *work)
  {
  	struct mt76_phy *mphy = (struct mt76_phy *)container_of(work, struct mt76_phy,
-@@ -2532,11 +2491,12 @@ void mt7996_mac_work(struct work_struct *work)
+@@ -2532,11 +2491,12 @@ void mt7996_mac_work(struct work_struct
  			if (i == mphy->band_idx) {
  				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_RATE);
  				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_AIRTIME);
@@ -433,11 +425,9 @@ index 2ccbf6b8..dc9ddf82 100644
  
  				if (mt7996_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
  				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))
-diff --git a/mt7996/main.c b/mt7996/main.c
-index b40db025..1437cce2 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1826,32 +1826,24 @@ static void mt7996_sta_statistics(struct ieee80211_hw *hw,
+@@ -1826,32 +1826,24 @@ static void mt7996_sta_statistics(struct
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
  	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
  	struct mt7996_link_sta *mlink;
@@ -480,11 +470,9 @@ index b40db025..1437cce2 100644
  
  	sinfo->tx_failed = mlink->wcid.stats.tx_failed;
  	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_FAILED);
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 874dbab7..f7ee27f9 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -535,42 +535,164 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -535,42 +535,164 @@ mt7996_mcu_ie_countdown(struct mt7996_de
  }
  
  static int
@@ -659,7 +647,7 @@ index 874dbab7..f7ee27f9 100644
  static inline void __mt7996_stat_to_netdev(struct mt76_phy *mphy,
  					   struct mt76_wcid *wcid,
  					   u32 tx_bytes, u32 rx_bytes,
-@@ -621,8 +743,8 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -621,8 +743,8 @@ mt7996_mcu_rx_all_sta_info_event(struct
  			if (!wcid)
  				break;
  
@@ -670,7 +658,7 @@ index 874dbab7..f7ee27f9 100644
  			break;
  		case UNI_ALL_STA_TXRX_ADM_STAT:
  			wlan_idx = le16_to_cpu(res->adm_stat[i].wlan_idx);
-@@ -684,6 +806,16 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -684,6 +806,16 @@ mt7996_mcu_rx_all_sta_info_event(struct
  				                               tx_airtime, rx_airtime);
  			}
  			break;
@@ -687,7 +675,7 @@ index 874dbab7..f7ee27f9 100644
  		default:
  			break;
  		}
-@@ -5850,14 +5982,14 @@ int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val)
+@@ -5850,14 +5982,14 @@ int mt7996_mcu_set_rro(struct mt7996_dev
  }
  
  int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
@@ -705,7 +693,7 @@ index 874dbab7..f7ee27f9 100644
  	struct {
  		u8 __rsv1;
  		u8 unsolicit;
-@@ -5896,27 +6028,45 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
+@@ -5896,27 +6028,45 @@ int mt7996_mcu_get_per_sta_info(struct m
  	switch (tag) {
  	case UNI_PER_STA_RSSI:
  		for (i = 0; i < sta_num; ++i) {
@@ -822,8 +810,6 @@ index 874dbab7..f7ee27f9 100644
  int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag)
  {
  	struct {
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 29b356c7..3aee186e 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -202,7 +202,20 @@ struct mt7996_mcu_mib {
@@ -871,8 +857,6 @@ index 29b356c7..3aee186e 100644
  	} __packed;
  } __packed;
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 858c6947..f5bb9885 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -331,9 +331,15 @@ struct mt7996_link_sta {
@@ -891,7 +875,7 @@ index 858c6947..f5bb9885 100644
  	unsigned long changed;
  
  	struct mt76_connac_sta_key_conf bip;
-@@ -1129,7 +1135,6 @@ void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
+@@ -1129,7 +1135,6 @@ void mt7996_mcu_rx_event(struct mt7996_d
  void mt7996_mcu_exit(struct mt7996_dev *dev);
  int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
  	                        u16 sta_num, u16 *sta_list);
@@ -899,6 +883,3 @@ index 858c6947..f5bb9885 100644
  int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
  int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
  int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);
--- 
-2.49.0
-

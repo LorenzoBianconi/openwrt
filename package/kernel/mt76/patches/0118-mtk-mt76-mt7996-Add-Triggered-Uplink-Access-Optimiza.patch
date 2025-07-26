@@ -19,11 +19,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/vendor.h  | 17 +++++++++++
  6 files changed, 165 insertions(+), 6 deletions(-)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 907f6f08..cdd6e9fa 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -94,16 +94,16 @@ static const u8 mt7996_if_types_ext_capa_sta[] = {
+@@ -94,16 +94,16 @@ static const u8 mt7996_if_types_ext_capa
  static const struct wiphy_iftype_ext_capab mt7996_iftypes_ext_capa[] = {
  	{
  		.iftype = NL80211_IFTYPE_STATION,
@@ -46,7 +44,7 @@ index 907f6f08..cdd6e9fa 100644
  		.eml_capabilities = IEEE80211_EML_CAP_EMLSR_SUPP,
  		.mld_capa_and_ops = 2,
  		/* the max number of simultaneous links is defined as the
-@@ -1616,6 +1616,10 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
+@@ -1616,6 +1616,10 @@ mt7996_init_eht_caps(struct mt7996_phy *
  		u8_encode_bits(IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_11454,
  			       IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_MASK);
  
@@ -57,8 +55,6 @@ index 907f6f08..cdd6e9fa 100644
  	eht_cap_elem->phy_cap_info[0] =
  		IEEE80211_EHT_PHY_CAP0_NDP_4_EHT_LFT_32_GI |
  		IEEE80211_EHT_PHY_CAP0_SU_BEAMFORMER |
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index ea116d88..ed2d7b57 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -537,6 +537,9 @@ struct csi_data {
@@ -71,11 +67,9 @@ index ea116d88..ed2d7b57 100644
  #endif
  
  struct mt7996_rro_ba_session {
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index 22bf6d98..e120a41e 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -1428,4 +1428,53 @@ int mt7996_set_coding_type(struct ieee80211_hw *hw, u8 coding_type, u8 link_id)
+@@ -1428,4 +1428,53 @@ int mt7996_set_coding_type(struct ieee80
  
  	return 0;
  }
@@ -129,8 +123,6 @@ index 22bf6d98..e120a41e 100644
 +				 sizeof(req), true);
 +}
  #endif
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 8ba261a7..711903e0 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
 @@ -134,6 +134,7 @@ enum {
@@ -152,11 +144,9 @@ index 8ba261a7..711903e0 100644
 +};
 +
  #endif
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index af21a2cb..48df3373 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -132,6 +132,17 @@ eml_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EML_CTRL] = {
+@@ -132,6 +132,17 @@ eml_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EML
  	[MTK_VENDOR_ATTR_EML_CTRL_STRUCT] = { .type = NLA_BINARY },
  };
  
@@ -174,7 +164,7 @@ index af21a2cb..48df3373 100644
  static const struct nla_policy
  csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
  	[MTK_VENDOR_ATTR_CSI_CTRL_BAND_IDX] = { .type = NLA_U8 },
-@@ -1169,6 +1180,63 @@ static int mt7996_vendor_eml_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev
+@@ -1169,6 +1180,63 @@ static int mt7996_vendor_eml_ctrl(struct
  
  	return err;
  }
@@ -238,7 +228,7 @@ index af21a2cb..48df3373 100644
  
  static int mt7996_vendor_csi_ctrl(struct wiphy *wiphy,
  				  struct wireless_dev *wdev,
-@@ -1649,6 +1717,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
+@@ -1649,6 +1717,17 @@ static const struct wiphy_vendor_command
  		.policy = txpower_ctrl_policy,
  		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
  	},
@@ -256,8 +246,6 @@ index af21a2cb..48df3373 100644
  };
  
  static const struct nl80211_vendor_cmd_info mt7996_vendor_events[] = {
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index 515f77a6..71800590 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -19,6 +19,7 @@ enum mtk_nl80211_vendor_subcmds {
@@ -291,6 +279,3 @@ index 515f77a6..71800590 100644
  enum mtk_vendor_attr_csi_ctrl {
  	MTK_VENDOR_ATTR_CSI_CTRL_UNSPEC,
  
--- 
-2.49.0
-

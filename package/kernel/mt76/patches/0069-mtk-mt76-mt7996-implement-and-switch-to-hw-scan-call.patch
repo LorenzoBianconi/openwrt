@@ -32,11 +32,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |  11 +++-
  8 files changed, 256 insertions(+), 11 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 4010535d..3f14f943 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -890,7 +890,7 @@ bool mt76_has_tx_pending(struct mt76_phy *phy)
+@@ -890,7 +890,7 @@ bool mt76_has_tx_pending(struct mt76_phy
  }
  EXPORT_SYMBOL_GPL(mt76_has_tx_pending);
  
@@ -45,7 +43,7 @@ index 4010535d..3f14f943 100644
  mt76_channel_state(struct mt76_phy *phy, struct ieee80211_channel *c)
  {
  	struct mt76_sband *msband;
-@@ -906,6 +906,7 @@ mt76_channel_state(struct mt76_phy *phy, struct ieee80211_channel *c)
+@@ -906,6 +906,7 @@ mt76_channel_state(struct mt76_phy *phy,
  	idx = c - &msband->sband.channels[0];
  	return &msband->chan[idx];
  }
@@ -53,11 +51,9 @@ index 4010535d..3f14f943 100644
  
  void mt76_update_survey_active_time(struct mt76_phy *phy, ktime_t time)
  {
-diff --git a/mt76.h b/mt76.h
-index b8c04239..171069f2 100644
 --- a/mt76.h
 +++ b/mt76.h
-@@ -1485,6 +1485,8 @@ void mt76_release_buffered_frames(struct ieee80211_hw *hw,
+@@ -1485,6 +1485,8 @@ void mt76_release_buffered_frames(struct
  				  bool more_data);
  bool mt76_has_tx_pending(struct mt76_phy *phy);
  int mt76_update_channel(struct mt76_phy *phy);
@@ -66,11 +62,9 @@ index b8c04239..171069f2 100644
  void mt76_update_survey(struct mt76_phy *phy);
  void mt76_update_survey_active_time(struct mt76_phy *phy, ktime_t time);
  int mt76_get_survey(struct ieee80211_hw *hw, int idx,
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 951c81e4..40a6469b 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -456,6 +456,9 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -456,6 +456,9 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  
  	wiphy->available_antennas_rx = phy->mt76->antenna_mask;
  	wiphy->available_antennas_tx = phy->mt76->antenna_mask;
@@ -80,7 +74,7 @@ index 951c81e4..40a6469b 100644
  }
  
  static void
-@@ -676,6 +679,7 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
+@@ -676,6 +679,7 @@ static int mt7996_register_phy(struct mt
  	mphy->dev->phys[band] = mphy;
  
  	INIT_DELAYED_WORK(&mphy->mac_work, mt7996_mac_work);
@@ -88,7 +82,7 @@ index 951c81e4..40a6469b 100644
  
  	ret = mt7996_eeprom_parse_hw_cap(dev, phy);
  	if (ret)
-@@ -1612,6 +1616,7 @@ int mt7996_register_device(struct mt7996_dev *dev)
+@@ -1612,6 +1616,7 @@ int mt7996_register_device(struct mt7996
  	dev->mt76.phy.priv = &dev->phy;
  	INIT_WORK(&dev->rc_work, mt7996_mac_sta_rc_work);
  	INIT_DELAYED_WORK(&dev->mphy.mac_work, mt7996_mac_work);
@@ -96,11 +90,9 @@ index 951c81e4..40a6469b 100644
  	INIT_DELAYED_WORK(&dev->scs_work, mt7996_mcu_scs_sta_poll);
  	INIT_LIST_HEAD(&dev->sta_rc_list);
  	INIT_LIST_HEAD(&dev->twt_list);
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 4a851430..3a567b8f 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2695,3 +2695,144 @@ void mt7996_mac_twt_teardown_flow(struct mt7996_dev *dev,
+@@ -2695,3 +2695,144 @@ void mt7996_mac_twt_teardown_flow(struct
  	dev->twt.table_mask &= ~BIT(flow->table_id);
  	dev->twt.n_agrt--;
  }
@@ -245,11 +237,9 @@ index 4a851430..3a567b8f 100644
 +
 +	ieee80211_queue_delayed_work(hw, &phy->scan_work, duration);
 +}
-diff --git a/mt7996/main.c b/mt7996/main.c
-index cda45622..2923143f 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -312,6 +312,8 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
+@@ -312,6 +312,8 @@ static void mt7996_remove_interface(stru
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
  	int idx = msta->wcid.idx;
  
@@ -258,7 +248,7 @@ index cda45622..2923143f 100644
  	mt7996_mcu_add_sta(dev, vif, NULL, false, false);
  	mt7996_mcu_add_bss_info(phy, vif, false);
  
-@@ -323,6 +325,10 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
+@@ -323,6 +325,10 @@ static void mt7996_remove_interface(stru
  	rcu_assign_pointer(dev->mt76.wcid[idx], NULL);
  
  	mutex_lock(&dev->mt76.mutex);
@@ -269,7 +259,7 @@ index cda45622..2923143f 100644
  	dev->mt76.vif_mask &= ~BIT_ULL(mvif->mt76.idx);
  	phy->omac_mask &= ~BIT_ULL(mvif->mt76.omac_idx);
  	mutex_unlock(&dev->mt76.mutex);
-@@ -335,11 +341,44 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
+@@ -335,11 +341,44 @@ static void mt7996_remove_interface(stru
  	mt76_wcid_cleanup(&dev->mt76, &msta->wcid);
  }
  
@@ -336,7 +326,7 @@ index cda45622..2923143f 100644
  static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
  			  struct ieee80211_vif *vif, struct ieee80211_sta *sta,
  			  struct ieee80211_key_conf *key)
-@@ -468,9 +520,7 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
+@@ -468,9 +520,7 @@ static int mt7996_config(struct ieee8021
  		if (ret)
  			return ret;
  
@@ -347,7 +337,7 @@ index cda45622..2923143f 100644
  	}
  
  	if (changed & (IEEE80211_CONF_CHANGE_POWER |
-@@ -1634,6 +1684,42 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -1634,6 +1684,42 @@ mt7996_net_fill_forward_path(struct ieee
  
  #endif
  
@@ -390,7 +380,7 @@ index cda45622..2923143f 100644
  const struct ieee80211_ops mt7996_ops = {
  	.add_chanctx = ieee80211_emulate_add_chanctx,
  	.remove_chanctx = ieee80211_emulate_remove_chanctx,
-@@ -1656,8 +1742,8 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -1656,8 +1742,8 @@ const struct ieee80211_ops mt7996_ops =
  	.ampdu_action = mt7996_ampdu_action,
  	.set_rts_threshold = mt7996_set_rts_threshold,
  	.wake_tx_queue = mt76_wake_tx_queue,
@@ -401,11 +391,9 @@ index cda45622..2923143f 100644
  	.release_buffered_frames = mt76_release_buffered_frames,
  	.get_txpower = mt76_get_txpower,
  	.channel_switch_beacon = mt7996_channel_switch_beacon,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 92eb76ba..37ad97cf 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3806,7 +3806,8 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
+@@ -3806,7 +3806,8 @@ int mt7996_mcu_set_chan_info(struct mt79
  	if (phy->mt76->hw->conf.flags & IEEE80211_CONF_MONITOR)
  		req.switch_reason = CH_SWITCH_NORMAL;
  	else if (phy->mt76->offchannel ||
@@ -415,11 +403,9 @@ index 92eb76ba..37ad97cf 100644
  		req.switch_reason = CH_SWITCH_SCAN_BYPASS_DPD;
  	else if (!cfg80211_reg_can_beacon(phy->mt76->hw->wiphy, chandef,
  					  NL80211_IFTYPE_AP))
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index 63b2fb4c..8fa63edb 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -659,7 +659,7 @@ struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
+@@ -659,7 +659,7 @@ struct mt7996_dev *mt7996_mmio_probe(str
  		.sta_add = mt7996_mac_sta_add,
  		.sta_remove = mt7996_mac_sta_remove,
  		.update_survey = mt7996_update_channel,
@@ -428,8 +414,6 @@ index 63b2fb4c..8fa63edb 100644
  	};
  	struct mt7996_dev *dev;
  	struct mt76_dev *mdev;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index d5fc1b31..6d8e2d65 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -472,6 +472,13 @@ struct mt7996_phy {
@@ -446,7 +430,7 @@ index d5fc1b31..6d8e2d65 100644
  	struct mt7996_scs_ctrl scs_ctrl;
  	u32 red_drop;
  
-@@ -820,7 +827,7 @@ int mt7996_mcu_add_obss_spr(struct mt7996_phy *phy, struct ieee80211_vif *vif,
+@@ -820,7 +827,7 @@ int mt7996_mcu_add_obss_spr(struct mt799
  			    struct ieee80211_he_obss_pd *he_obss_pd);
  int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev, struct ieee80211_vif *vif,
  			     struct ieee80211_sta *sta, bool changed);
@@ -455,7 +439,7 @@ index d5fc1b31..6d8e2d65 100644
  int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag);
  int mt7996_mcu_set_tx(struct mt7996_dev *dev, struct ieee80211_vif *vif);
  int mt7996_mcu_set_fixed_rate_ctrl(struct mt7996_dev *dev,
-@@ -976,6 +983,8 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
+@@ -976,6 +983,8 @@ void mt7996_queue_rx_skb(struct mt76_dev
  			 struct sk_buff *skb, u32 *info);
  bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
  void mt7996_stats_work(struct work_struct *work);
@@ -464,6 +448,3 @@ index d5fc1b31..6d8e2d65 100644
  int mt76_dfs_start_rdd(struct mt7996_dev *dev, bool force);
  int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy);
  void mt7996_set_stream_he_eht_caps(struct mt7996_phy *phy);
--- 
-2.49.0
-

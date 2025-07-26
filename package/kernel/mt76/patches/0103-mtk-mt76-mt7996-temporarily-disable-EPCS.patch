@@ -13,11 +13,9 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  mt7996/init.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 8b2050d3..43467f42 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -1601,7 +1601,7 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
+@@ -1601,7 +1601,7 @@ mt7996_init_eht_caps(struct mt7996_phy *
  	eht_cap->has_eht = true;
  
  	eht_cap_elem->mac_cap_info[0] =
@@ -26,6 +24,3 @@ index 8b2050d3..43467f42 100644
  		IEEE80211_EHT_MAC_CAP0_OM_CONTROL |
  		u8_encode_bits(IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_11454,
  			       IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_MASK);
--- 
-2.49.0
-

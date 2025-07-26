@@ -20,11 +20,9 @@ Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
  mt7996/mcu.c | 26 +++++++++++++++-----------
  1 file changed, 15 insertions(+), 11 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index b1f07165..bd8dc7b1 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2544,7 +2544,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
+@@ -2544,7 +2544,7 @@ int mt7996_mcu_add_beacon(struct ieee802
  	struct sk_buff *skb, *rskb;
  	struct tlv *tlv;
  	struct bss_bcn_content_tlv *bcn;
@@ -33,7 +31,7 @@ index b1f07165..bd8dc7b1 100644
  
  	if (vif->bss_conf.nontransmitted)
  		return 0;
-@@ -2555,28 +2555,32 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
+@@ -2555,28 +2555,32 @@ int mt7996_mcu_add_beacon(struct ieee802
  		return PTR_ERR(rskb);
  
  	skb = ieee80211_beacon_get_template(hw, vif, &offs, 0);
@@ -76,6 +74,3 @@ index b1f07165..bd8dc7b1 100644
  	mt7996_mcu_beacon_cont(dev, vif, rskb, skb, bcn, &offs);
  	mt7996_mcu_beacon_mbss(rskb, skb, vif, bcn, &offs);
  	mt7996_mcu_beacon_cntdwn(vif, rskb, skb, &offs);
--- 
-2.49.0
-

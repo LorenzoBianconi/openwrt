@@ -17,11 +17,9 @@ Subject: [PATCH 057/148] mtk: mt76: add random early drop support
  mt7996/mtk_mcu.h     | 24 +++++++++++++
  8 files changed, 167 insertions(+), 4 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index c9420387..494aedf3 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -654,6 +654,7 @@ mt7996_tx_stats_show(struct seq_file *file, void *data)
+@@ -654,6 +654,7 @@ mt7996_tx_stats_show(struct seq_file *fi
  	seq_printf(file, "Tx attempts: %8u (MPDUs)\n", attempts);
  	seq_printf(file, "Tx success: %8u (MPDUs)\n", success);
  	seq_printf(file, "Tx PER: %u%%\n", per);
@@ -29,11 +27,9 @@ index c9420387..494aedf3 100644
  
  	mt7996_txbf_stat_read_phy(phy, file);
  
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index f4ff6b63..ae115ead 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1181,6 +1181,13 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1181,6 +1181,13 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  
  			wcid->stats.tx_retries += tx_retries;
  			wcid->stats.tx_failed += tx_failed;
@@ -47,11 +43,9 @@ index f4ff6b63..ae115ead 100644
  			continue;
  		}
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 50f40e97..b6e06720 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3177,8 +3177,8 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
+@@ -3177,8 +3177,8 @@ int mt7996_mcu_init_firmware(struct mt79
  	if (ret)
  		return ret;
  
@@ -146,8 +140,6 @@ index 50f40e97..b6e06720 100644
  int mt7996_mcu_set_hdr_trans(struct mt7996_dev *dev, bool hdr_trans)
  {
  	struct {
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 62cac3df..d0a0c595 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -346,8 +346,9 @@ enum {
@@ -169,8 +161,6 @@ index 62cac3df..d0a0c595 100644
  };
  
  enum {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 4b6bd12b..541345ba 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -368,6 +368,7 @@ struct mt7996_phy {
@@ -181,7 +171,7 @@ index 4b6bd12b..541345ba 100644
  
  	bool sku_limit_en;
  	bool sku_path_en;
-@@ -737,6 +738,7 @@ int mt7996_mcu_rf_regval(struct mt7996_dev *dev, u32 regidx, u32 *val, bool set)
+@@ -737,6 +738,7 @@ int mt7996_mcu_rf_regval(struct mt7996_d
  int mt7996_mcu_set_hdr_trans(struct mt7996_dev *dev, bool hdr_trans);
  int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val);
  int mt7996_mcu_wa_cmd(struct mt7996_dev *dev, int cmd, u32 a1, u32 a2, u32 a3);
@@ -189,7 +179,7 @@ index 4b6bd12b..541345ba 100644
  int mt7996_mcu_fw_log_2_host(struct mt7996_dev *dev, u8 type, u8 ctrl);
  int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level);
  int mt7996_mcu_trigger_assert(struct mt7996_dev *dev);
-@@ -908,11 +910,12 @@ void mt7996_mcu_set_ppdu_tx_type(struct mt7996_phy *phy, u8 ppdu_type);
+@@ -908,11 +910,12 @@ void mt7996_mcu_set_ppdu_tx_type(struct
  void mt7996_mcu_set_nusers_ofdma(struct mt7996_phy *phy, u8 type, u8 ofdma_user_cnt);
  void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type);
  void mt7996_tm_update_channel(struct mt7996_phy *phy);
@@ -203,11 +193,9 @@ index 4b6bd12b..541345ba 100644
  
 -
  #endif
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 6dd701ae..104050a8 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -3040,6 +3040,27 @@ static int mt7996_muru_prot_thr_set(void *data, u64 val)
+@@ -3040,6 +3040,27 @@ static int mt7996_muru_prot_thr_set(void
  DEFINE_DEBUGFS_ATTRIBUTE(fops_muru_prot_thr, NULL,
  			 mt7996_muru_prot_thr_set, "%lld\n");
  
@@ -235,7 +223,7 @@ index 6dd701ae..104050a8 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -3116,6 +3137,8 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -3116,6 +3137,8 @@ int mt7996_mtk_init_debugfs(struct mt799
  				    mt7996_wtbl_read);
  
  	debugfs_create_devm_seqfile(dev->mt76.dev, "token", dir, mt7996_token_read);
@@ -244,11 +232,9 @@ index 6dd701ae..104050a8 100644
  
  	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
  	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index b46a66bb..967ee874 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -1317,4 +1317,30 @@ void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type)
+@@ -1317,4 +1317,30 @@ void mt7996_mcu_set_cert(struct mt7996_p
  			  sizeof(req), false);
  }
  
@@ -279,8 +265,6 @@ index b46a66bb..967ee874 100644
 +}
 +
  #endif
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 58d61c51..2cffc893 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
 @@ -1138,6 +1138,30 @@ enum muru_vendor_ctrl {
@@ -314,6 +298,3 @@ index 58d61c51..2cffc893 100644
  #endif
  
  #endif
--- 
-2.49.0
-

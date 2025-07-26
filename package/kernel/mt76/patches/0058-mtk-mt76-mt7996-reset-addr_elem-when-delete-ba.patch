@@ -25,8 +25,6 @@ Signed-off-by: sujuan.chen <sujuan.chen@mediatek.com>
  mt7996/mcu.h | 4 +++-
  2 files changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/mt76.h b/mt76.h
-index 76c79346..38addcea 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -453,6 +453,7 @@ struct mt76_rx_tid {
@@ -37,11 +35,9 @@ index 76c79346..38addcea 100644
  
  	u8 started:1, stopped:1, timer_pending:1;
  
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index d0a0c595..3802699e 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
-@@ -273,7 +273,9 @@ struct mt7996_mcu_wed_rro_ba_delete_event {
+@@ -273,7 +273,9 @@ struct mt7996_mcu_wed_rro_ba_delete_even
  	__le16 len;
  
  	__le16 session_id;
@@ -52,6 +48,3 @@ index d0a0c595..3802699e 100644
  } __packed;
  
  enum  {
--- 
-2.49.0
-

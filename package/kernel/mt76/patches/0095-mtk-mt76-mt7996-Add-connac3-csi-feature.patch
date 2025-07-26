@@ -24,8 +24,6 @@ Signed-off-by: mtk20656 <chank.chen@mediatek.com>
  mt7996/vendor.h   |  52 ++++++
  8 files changed, 951 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index f6b472ef..11c147cd 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1066,6 +1066,7 @@ enum {
@@ -44,8 +42,6 @@ index f6b472ef..11c147cd 100644
  	MCU_UNI_CMD_THERMAL_CAL = 0x4c,
  	MCU_UNI_CMD_RRO = 0x57,
  	MCU_UNI_CMD_OFFCH_SCAN_CTRL = 0x58,
-diff --git a/mt7996/init.c b/mt7996/init.c
-index ab001f2d..30c787e2 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
 @@ -879,12 +879,34 @@ error:
@@ -83,11 +79,9 @@ index ab001f2d..30c787e2 100644
  	mt7996_unregister_thermal(phy);
  }
  
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 510aba6f..889aa174 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1377,6 +1377,9 @@ void mt7996_mac_sta_remove(struct mt76_dev *mdev, struct ieee80211_vif *vif,
+@@ -1377,6 +1377,9 @@ void mt7996_mac_sta_remove(struct mt76_d
  	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
  	unsigned long rem = sta->valid_links ?: BIT(0);
  
@@ -97,11 +91,9 @@ index 510aba6f..889aa174 100644
  	mt7996_mac_sta_remove_links(dev, vif, sta, rem);
  }
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index dfd28022..39f4cc54 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -670,6 +670,263 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -670,6 +670,263 @@ mt7996_mcu_rx_all_sta_info_event(struct
  	}
  }
  
@@ -365,19 +357,19 @@ index dfd28022..39f4cc54 100644
  static void
  mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -909,6 +1166,11 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
- 	case MCU_UNI_EVENT_BF:
+@@ -910,6 +1167,11 @@ mt7996_mcu_uni_rx_unsolicited_event(stru
  		mt7996_mcu_rx_bf_event(dev, skb);
  		break;
-+#endif
+ #endif
 +#ifdef CONFIG_MTK_VENDOR
 +	case MCU_UNI_EVENT_CSI_REPORT:
 +		mt7996_mcu_csi_report_event(dev, skb);
 +		break;
- #endif
++#endif
  	default:
  		break;
-@@ -6224,4 +6486,207 @@ void mt7996_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
+ 	}
+@@ -6224,4 +6486,207 @@ void mt7996_set_beacon_vif(void *data, u
  
  	mt7996_mcu_add_beacon(hw, &vif->bss_conf, &mvif->deflink, val);
  }
@@ -585,8 +577,6 @@ index dfd28022..39f4cc54 100644
 +	}
 +}
  #endif
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 7510207c..bb3e6b1d 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1157,4 +1157,109 @@ struct fixed_rate_table_ctrl {
@@ -699,8 +689,6 @@ index 7510207c..bb3e6b1d 100644
 +#endif
 +
  #endif
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index a93bd891..ca5bfb12 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -461,6 +461,47 @@ struct mt7996_air_monitor_ctrl {
@@ -770,7 +758,7 @@ index a93bd891..ca5bfb12 100644
  #endif
  #ifdef CONFIG_MTK_DEBUG
  	bool sr_enable:1;
-@@ -1196,6 +1249,8 @@ void mt7996_mcu_set_mimo(struct mt7996_phy *phy);
+@@ -1196,6 +1249,8 @@ void mt7996_mcu_set_mimo(struct mt7996_p
  int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val);
  int mt7996_mcu_set_muru_cfg(struct mt7996_phy *phy, void *data);
  void mt7996_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
@@ -779,11 +767,9 @@ index a93bd891..ca5bfb12 100644
  #endif
  
  int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index 64ef5515..84b50ab2 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -119,6 +119,19 @@ beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
+@@ -119,6 +119,19 @@ beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_
  	[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
  };
  
@@ -803,7 +789,7 @@ index 64ef5515..84b50ab2 100644
  struct mt7996_amnt_data {
  	u8 idx;
  	u8 addr[ETH_ALEN];
-@@ -1000,7 +1013,226 @@ static int mt7996_vendor_beacon_ctrl(struct wiphy *wiphy,
+@@ -1000,7 +1013,226 @@ static int mt7996_vendor_beacon_ctrl(str
  
  	return 0;
  }
@@ -927,7 +913,7 @@ index 64ef5515..84b50ab2 100644
 +			return -ENOENT;
 +		(*storage)--;
 +	}
-+
+ 
 +	if (data) {
 +		err = nla_parse(tb, MTK_VENDOR_ATTR_CSI_CTRL_MAX, data, data_len,
 +				csi_ctrl_policy, NULL);
@@ -940,7 +926,7 @@ index 64ef5515..84b50ab2 100644
 +
 +	if (!mt7996_band_valid(dev, band_idx))
 +		return -EINVAL;
- 
++
 +	mphy = dev->mt76.phys[band_idx];
 +	if (!mphy)
 +		return -EINVAL;
@@ -1030,7 +1016,7 @@ index 64ef5515..84b50ab2 100644
  
  static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
  	{
-@@ -1129,6 +1361,18 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
+@@ -1129,6 +1361,18 @@ static const struct wiphy_vendor_command
  		.policy = beacon_ctrl_policy,
  		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
  	},
@@ -1049,7 +1035,7 @@ index 64ef5515..84b50ab2 100644
  };
  
  void mt7996_vendor_register(struct mt7996_phy *phy)
-@@ -1136,6 +1380,9 @@ void mt7996_vendor_register(struct mt7996_phy *phy)
+@@ -1136,6 +1380,9 @@ void mt7996_vendor_register(struct mt799
  	phy->mt76->hw->wiphy->vendor_commands = mt7996_vendor_commands;
  	phy->mt76->hw->wiphy->n_vendor_commands = ARRAY_SIZE(mt7996_vendor_commands);
  
@@ -1059,8 +1045,6 @@ index 64ef5515..84b50ab2 100644
  	spin_lock_init(&phy->amnt_lock);
  }
  #endif
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index 32346775..834b3d08 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -7,6 +7,7 @@
@@ -1129,6 +1113,3 @@ index 32346775..834b3d08 100644
  #endif
  
  #endif
--- 
-2.49.0
-

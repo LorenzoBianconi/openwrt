@@ -25,8 +25,6 @@ Signed-off-by: Yi-Chia Hsieh <yi-chia.hsieh@mediatek.com>
  mt7996/regs.h        |   2 +
  9 files changed, 332 insertions(+), 142 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index ccaa9a50..b8c04239 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -336,11 +336,13 @@ struct mt76_sta_stats {
@@ -43,7 +41,7 @@ index ccaa9a50..b8c04239 100644
  };
  
  enum mt76_wcid_flags {
-@@ -1341,6 +1343,22 @@ static inline int mt76_decr(int val, int size)
+@@ -1341,6 +1343,22 @@ static inline int mt76_decr(int val, int
  
  u8 mt76_ac_to_hwq(u8 ac);
  
@@ -66,8 +64,6 @@ index ccaa9a50..b8c04239 100644
  static inline struct ieee80211_txq *
  mtxq_to_txq(struct mt76_txq *mtxq)
  {
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index db152167..adecb0ed 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1387,11 +1387,23 @@ enum {
@@ -95,11 +91,9 @@ index db152167..adecb0ed 100644
  	UNI_ALL_STA_DATA_TX_RETRY_COUNT,
  	UNI_ALL_STA_GI_MODE,
  	UNI_ALL_STA_TXRX_MSDU_COUNT,
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 01bc780e..986c8b37 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -1000,12 +1000,11 @@ mt7996_airtime_read(struct seq_file *s, void *data)
+@@ -1000,12 +1000,11 @@ mt7996_airtime_read(struct seq_file *s,
  {
  	struct mt7996_dev *dev = dev_get_drvdata(s->private);
  	struct mt76_dev *mdev = &dev->mt76;
@@ -113,7 +107,7 @@ index 01bc780e..986c8b37 100644
  	u16 i;
  
  	seq_printf(s, "VoW Airtime Information:\n");
-@@ -1017,16 +1016,16 @@ mt7996_airtime_read(struct seq_file *s, void *data)
+@@ -1017,16 +1016,16 @@ mt7996_airtime_read(struct seq_file *s,
  
  		msta = container_of(wcid, struct mt7996_sta, wcid);
  		sta = container_of((void *)msta, struct ieee80211_sta, drv_priv);
@@ -137,8 +131,6 @@ index 01bc780e..986c8b37 100644
  	}
  	rcu_read_unlock();
  
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 5bcde8df..ea893559 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
 @@ -12,8 +12,6 @@
@@ -150,7 +142,7 @@ index 5bcde8df..ea893559 100644
  static const struct mt7996_dfs_radar_spec etsi_radar_specs = {
  	.pulse_th = { 110, -10, -80, 40, 5200, 128, 5200 },
  	.radar_pattern = {
-@@ -93,110 +91,6 @@ u32 mt7996_mac_wtbl_lmac_addr(struct mt7996_dev *dev, u16 wcid, u8 dw)
+@@ -93,110 +91,6 @@ u32 mt7996_mac_wtbl_lmac_addr(struct mt7
  	return MT_WTBL_LMAC_OFFS(wcid, dw);
  }
  
@@ -261,7 +253,7 @@ index 5bcde8df..ea893559 100644
  /* The HW does not translate the mac header to 802.3 for mesh point */
  static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
  {
-@@ -1211,8 +1105,6 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1211,8 +1105,6 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  		}
  	}
  
@@ -270,7 +262,7 @@ index 5bcde8df..ea893559 100644
  	if (wake)
  		mt76_set_tx_blocked(&dev->mt76, false);
  
-@@ -2381,31 +2273,42 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2381,31 +2273,42 @@ void mt7996_mac_sta_rc_work(struct work_
  
  void mt7996_mac_work(struct work_struct *work)
  {
@@ -326,11 +318,9 @@ index 5bcde8df..ea893559 100644
  
  	ieee80211_queue_delayed_work(mphy->hw, &mphy->mac_work,
  				     MT7996_WATCHDOG_TIME);
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index e7249d83..96c486e0 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -566,7 +566,8 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -566,7 +566,8 @@ mt7996_mcu_rx_all_sta_info_event(struct
  		u16 wlan_idx;
  		struct mt76_wcid *wcid;
  		struct mt76_phy *mphy;
@@ -340,7 +330,7 @@ index e7249d83..96c486e0 100644
  
  		switch (le16_to_cpu(res->tag)) {
  		case UNI_ALL_STA_TXRX_RATE:
-@@ -587,7 +588,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -587,7 +588,7 @@ mt7996_mcu_rx_all_sta_info_event(struct
  				break;
  
  			mphy = mt76_dev_phy(&dev->mt76, wcid->phy_idx);
@@ -349,7 +339,7 @@ index e7249d83..96c486e0 100644
  				tx_bytes = le32_to_cpu(res->adm_stat[i].tx_bytes[ac]);
  				rx_bytes = le32_to_cpu(res->adm_stat[i].rx_bytes[ac]);
  
-@@ -619,6 +620,24 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -619,6 +620,24 @@ mt7996_mcu_rx_all_sta_info_event(struct
  			__mt7996_stat_to_netdev(mphy, wcid, 0, 0,
  						tx_packets, rx_packets);
  			break;
@@ -374,7 +364,7 @@ index e7249d83..96c486e0 100644
  		default:
  			break;
  		}
-@@ -2265,8 +2284,6 @@ mt7996_mcu_sta_init_vow(struct mt7996_phy *phy, struct mt7996_sta *msta)
+@@ -2265,8 +2284,6 @@ mt7996_mcu_sta_init_vow(struct mt7996_ph
  	vow->drr_quantum[IEEE80211_AC_VI] = VOW_DRR_QUANTUM_IDX1;
  	vow->drr_quantum[IEEE80211_AC_BE] = VOW_DRR_QUANTUM_IDX2;
  	vow->drr_quantum[IEEE80211_AC_BK] = VOW_DRR_QUANTUM_IDX2;
@@ -383,7 +373,7 @@ index e7249d83..96c486e0 100644
  
  	ret = mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_BSS_GROUP);
  	if (ret)
-@@ -5050,9 +5067,135 @@ int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val)
+@@ -5050,9 +5067,135 @@ int mt7996_mcu_set_rro(struct mt7996_dev
  				 sizeof(req), true);
  }
  
@@ -521,7 +511,7 @@ index e7249d83..96c486e0 100644
  	struct {
  		u8 _rsv[4];
  
-@@ -5063,7 +5206,7 @@ int mt7996_mcu_get_all_sta_info(struct mt7996_phy *phy, u16 tag)
+@@ -5063,7 +5206,7 @@ int mt7996_mcu_get_all_sta_info(struct m
  		.len = cpu_to_le16(sizeof(req) - 4),
  	};
  
@@ -530,8 +520,6 @@ index e7249d83..96c486e0 100644
  				 &req, sizeof(req), false);
  }
  
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 96fb7fb6..2b952411 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -199,6 +199,23 @@ struct mt7996_mcu_mib {
@@ -572,8 +560,6 @@ index 96fb7fb6..2b952411 100644
  	} __packed;
  } __packed;
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index b09f48d4..de6ade17 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -141,6 +141,8 @@
@@ -632,7 +618,7 @@ index b09f48d4..de6ade17 100644
  	} dbg;
  	const struct mt7996_dbg_reg_desc *dbg_reg;
  #endif
-@@ -843,7 +858,10 @@ int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level);
+@@ -843,7 +858,10 @@ int mt7996_mcu_fw_dbg_ctrl(struct mt7996
  int mt7996_mcu_trigger_assert(struct mt7996_dev *dev);
  void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
  void mt7996_mcu_exit(struct mt7996_dev *dev);
@@ -644,8 +630,6 @@ index b09f48d4..de6ade17 100644
  int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
  int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data);
  int mt7996_mcu_get_tx_power_info(struct mt7996_phy *phy, u8 category, void *event);
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 0d11057d..44a358c6 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
 @@ -3072,6 +3072,69 @@ mt7996_vow_drr_dbg(void *data, u64 val)
@@ -718,7 +702,7 @@ index 0d11057d..44a358c6 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -3170,6 +3233,14 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -3170,6 +3233,14 @@ int mt7996_mtk_init_debugfs(struct mt799
  
  	debugfs_create_file("muru_prot_thr", 0200, dir, phy, &fops_muru_prot_thr);
  
@@ -733,8 +717,6 @@ index 0d11057d..44a358c6 100644
  	return 0;
  }
  
-diff --git a/mt7996/regs.h b/mt7996/regs.h
-index 7c7e8cb2..a0b57e59 100644
 --- a/mt7996/regs.h
 +++ b/mt7996/regs.h
 @@ -122,6 +122,8 @@ enum offs_rev {
@@ -746,6 +728,3 @@ index 7c7e8cb2..a0b57e59 100644
  /* PLE */
  #define MT_PLE_BASE				0x820c0000
  #define MT_PLE(ofs)				(MT_PLE_BASE + (ofs))
--- 
-2.49.0
-

@@ -17,11 +17,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mt7996.h |  2 ++
  4 files changed, 12 insertions(+), 9 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 5df2c4b7..3343ceaa 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -1661,6 +1661,8 @@ void mt76_wcid_cleanup(struct mt76_dev *dev, struct mt76_wcid *wcid)
+@@ -1661,6 +1661,8 @@ void mt76_wcid_cleanup(struct mt76_dev *
  		hw = mt76_tx_status_get_hw(dev, skb);
  		ieee80211_free_txskb(hw, skb);
  	}
@@ -30,8 +28,6 @@ index 5df2c4b7..3343ceaa 100644
  }
  EXPORT_SYMBOL_GPL(mt76_wcid_cleanup);
  
-diff --git a/mt76.h b/mt76.h
-index df8275bc..b7ee747c 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -450,7 +450,7 @@ struct mt76_wcid {
@@ -56,11 +52,9 @@ index df8275bc..b7ee747c 100644
  }
  
  static inline struct mt76_tx_cb *mt76_tx_skb_cb(struct sk_buff *skb)
-diff --git a/mt7996/main.c b/mt7996/main.c
-index d67e2c38..8c2f61ad 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -301,10 +301,10 @@ static void mt7996_remove_bss_conf(struct ieee80211_vif *vif,
+@@ -301,10 +301,10 @@ static void mt7996_remove_bss_conf(struc
  	mt76_wcid_cleanup(&dev->mt76, &mlink->wcid);
  
  	if (mlink != &mvif->sta.deflink)
@@ -73,7 +67,7 @@ index d67e2c38..8c2f61ad 100644
  }
  
  static int mt7996_add_bss_conf(struct mt7996_phy *phy,
-@@ -396,7 +396,7 @@ static int mt7996_add_bss_conf(struct mt7996_phy *phy,
+@@ -396,7 +396,7 @@ static int mt7996_add_bss_conf(struct mt
  	mlink->wcid.phy_idx = band_idx;
  	mlink->wcid.hw_key_idx = -1;
  	mlink->wcid.tx_info |= MT_WCID_TX_INFO_SET;
@@ -82,7 +76,7 @@ index d67e2c38..8c2f61ad 100644
  	mlink->wcid.link_id = link_id;
  	mlink->wcid.link_valid = ieee80211_vif_is_mld(vif);
  	mlink->sta = &mvif->sta;
-@@ -1210,7 +1210,7 @@ static void mt7996_remove_link_sta(struct mt7996_dev *dev,
+@@ -1210,7 +1210,7 @@ static void mt7996_remove_link_sta(struc
  	mt76_wcid_mask_clear(dev->mt76.wcid_phy_mask, mlink->wcid.idx);
  
  	if (mlink != &msta->deflink)
@@ -91,7 +85,7 @@ index d67e2c38..8c2f61ad 100644
  }
  
  static int mt7996_add_link_sta(struct mt7996_dev *dev,
-@@ -1246,7 +1246,7 @@ static int mt7996_add_link_sta(struct mt7996_dev *dev,
+@@ -1246,7 +1246,7 @@ static int mt7996_add_link_sta(struct mt
  		mlink->wcid.idx = idx;
  		mlink->wcid.phy_idx = mconf->phy->mt76->band_idx;
  		mlink->wcid.tx_info |= MT_WCID_TX_INFO_SET;
@@ -100,8 +94,6 @@ index d67e2c38..8c2f61ad 100644
  		mlink->sta = msta;
  		if (sta->valid_links) {
  			mlink->wcid.link_valid = true;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 2e8c6b0b..18bf315e 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -391,6 +391,7 @@ struct mt7996_vow_sta_ctrl {
@@ -120,6 +112,3 @@ index 2e8c6b0b..18bf315e 100644
  
  	struct mt7996_vif *vif;
  	struct mt7996_phy *phy;
--- 
-2.49.0
-

@@ -31,8 +31,6 @@ Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
  mt7996/mt7996.h   |  2 ++
  5 files changed, 97 insertions(+), 2 deletions(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 69c8389f..68d7c31d 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1327,6 +1327,7 @@ enum {
@@ -43,11 +41,9 @@ index 69c8389f..68d7c31d 100644
  };
  
  enum {
-diff --git a/mt7996/main.c b/mt7996/main.c
-index f39e6ece..0837b79e 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1003,6 +1003,10 @@ static void mt7996_vif_cfg_changed(struct ieee80211_hw *hw,
+@@ -1003,6 +1003,10 @@ static void mt7996_vif_cfg_changed(struc
  		}
  	}
  
@@ -58,7 +54,7 @@ index f39e6ece..0837b79e 100644
  	mutex_unlock(&dev->mt76.mutex);
  }
  
-@@ -3177,7 +3181,7 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -3177,7 +3181,7 @@ mt7996_change_vif_links(struct ieee80211
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
  	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
@@ -67,7 +63,7 @@ index f39e6ece..0837b79e 100644
  	unsigned int link_id;
  	int ret = 0;
  
-@@ -3235,6 +3239,7 @@ mt7996_change_sta_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -3235,6 +3239,7 @@ mt7996_change_sta_links(struct ieee80211
  	unsigned long add = new_links & ~old_links;
  	unsigned long rem = old_links & ~new_links;
  	int ret = 0;
@@ -75,7 +71,7 @@ index f39e6ece..0837b79e 100644
  
  	mt7996_dbg(dev, MT7996_DBG_STA, "%s: STA %pM old=0x%x, new=0x%x\n",
  		   __func__, sta->addr, old_links, new_links);
-@@ -3249,7 +3254,8 @@ mt7996_change_sta_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -3249,7 +3254,8 @@ mt7996_change_sta_links(struct ieee80211
  		/* 	goto remove; */
  	}
  
@@ -85,11 +81,9 @@ index f39e6ece..0837b79e 100644
  	if (ret)
  		goto remove;
  
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index db855b3b..1cc65098 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3649,6 +3649,70 @@ int mt7996_mcu_mld_set_attlm(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+@@ -3649,6 +3649,70 @@ int mt7996_mcu_mld_set_attlm(struct mt79
  	return ret;
  }
  
@@ -160,8 +154,6 @@ index db855b3b..1cc65098 100644
  static void
  mt7996_mcu_beacon_cntdwn(struct ieee80211_bss_conf *conf, struct sk_buff *rskb,
  			 struct sk_buff *skb,
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index d3f1f169..4e394fe9 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1244,6 +1244,28 @@ enum {
@@ -193,11 +185,9 @@ index d3f1f169..4e394fe9 100644
  struct tx_power_ctrl {
  	u8 _rsv[4];
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index ba38c2b8..cf8d9773 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1218,6 +1218,8 @@ int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
+@@ -1218,6 +1218,8 @@ int mt7996_mcu_set_vow_feature_ctrl(stru
  void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
  int mt7996_mcu_mld_set_attlm(struct mt7996_dev *dev, struct ieee80211_vif *vif,
  			     u16 disabled_links, u16 switch_time, u32 duration);
@@ -206,6 +196,3 @@ index ba38c2b8..cf8d9773 100644
  
  static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
  {
--- 
-2.49.0
-

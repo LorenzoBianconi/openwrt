@@ -18,11 +18,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  tx.c          | 10 +++++++++-
  2 files changed, 16 insertions(+), 1 deletion(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 7bdccdf7..4dbda52f 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1057,9 +1057,16 @@ static void mt7996_link_sta_rc_update(struct ieee80211_hw *hw,
+@@ -1057,9 +1057,16 @@ static void mt7996_link_sta_rc_update(st
  				      u32 changed)
  {
  	struct ieee80211_sta *sta = link_sta->sta;
@@ -39,11 +37,9 @@ index 7bdccdf7..4dbda52f 100644
  	mt7996_sta_rc_work(&changed, sta);
  	ieee80211_queue_work(hw, &dev->rc_work);
  }
-diff --git a/tx.c b/tx.c
-index ce193e62..c24729d6 100644
 --- a/tx.c
 +++ b/tx.c
-@@ -352,8 +352,16 @@ mt76_tx(struct mt76_phy *phy, struct ieee80211_sta *sta,
+@@ -352,8 +352,16 @@ mt76_tx(struct mt76_phy *phy, struct iee
  	if ((info->flags & IEEE80211_TX_CTL_TX_OFFCHAN) ||
  	    (info->control.flags & IEEE80211_TX_CTRL_DONT_USE_RATE_MASK))
  		head = &wcid->tx_offchannel;
@@ -61,6 +57,3 @@ index ce193e62..c24729d6 100644
  
  	spin_lock_bh(&head->lock);
  	__skb_queue_tail(head, skb);
--- 
-2.49.0
-

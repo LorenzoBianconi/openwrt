@@ -13,11 +13,9 @@ Signed-off-by: Bo Jiao <Bo.Jiao@mediatek.com>
  mt7996/mt7996.h |  2 ++
  3 files changed, 21 insertions(+)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index cc1b53ff..b4b8398e 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1896,6 +1896,7 @@ void mt7996_mac_reset_work(struct work_struct *work)
+@@ -1896,6 +1896,7 @@ void mt7996_mac_reset_work(struct work_s
  	if (!(READ_ONCE(dev->recovery.state) & MT_MCU_CMD_STOP_DMA))
  		return;
  
@@ -25,7 +23,7 @@ index cc1b53ff..b4b8398e 100644
  	dev_info(dev->mt76.dev,"\n%s L1 SER recovery start.",
  		 wiphy_name(dev->mt76.hw->wiphy));
  
-@@ -1907,6 +1908,10 @@ void mt7996_mac_reset_work(struct work_struct *work)
+@@ -1907,6 +1908,10 @@ void mt7996_mac_reset_work(struct work_s
  
  	set_bit(MT76_RESET, &dev->mphy.state);
  	set_bit(MT76_MCU_RESET, &dev->mphy.state);
@@ -36,7 +34,7 @@ index cc1b53ff..b4b8398e 100644
  	wake_up(&dev->mt76.mcu.wait);
  
  	mt76_worker_disable(&dev->mt76.tx_worker);
-@@ -2102,6 +2107,9 @@ void mt7996_coredump(struct mt7996_dev *dev, u8 state)
+@@ -2102,6 +2107,9 @@ void mt7996_coredump(struct mt7996_dev *
  
  void mt7996_reset(struct mt7996_dev *dev)
  {
@@ -46,7 +44,7 @@ index cc1b53ff..b4b8398e 100644
  	if (!dev->recovery.hw_init_done)
  		return;
  
-@@ -2121,6 +2129,9 @@ void mt7996_reset(struct mt7996_dev *dev)
+@@ -2121,6 +2129,9 @@ void mt7996_reset(struct mt7996_dev *dev
  		return;
  	}
  
@@ -56,11 +54,9 @@ index cc1b53ff..b4b8398e 100644
  	queue_work(dev->mt76.wq, &dev->reset_work);
  	wake_up(&dev->reset_wait);
  }
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index f6fa059c..d374ccc9 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -252,6 +252,14 @@ mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+@@ -252,6 +252,14 @@ mt7996_mcu_send_message(struct mt76_dev
  	u32 val;
  	u8 seq;
  
@@ -75,8 +71,6 @@ index f6fa059c..d374ccc9 100644
  	mdev->mcu.timeout = 20 * HZ;
  
  	seq = ++dev->mt76.mcu.msg_seq & 0xf;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 2dcd1bd7..d5494f80 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -411,6 +411,8 @@ struct mt7996_dev {
@@ -88,6 +82,3 @@ index 2dcd1bd7..d5494f80 100644
  		u32 wa_reset_count;
  		u32 wm_reset_count;
  		bool hw_full_reset:1;
--- 
-2.49.0
-

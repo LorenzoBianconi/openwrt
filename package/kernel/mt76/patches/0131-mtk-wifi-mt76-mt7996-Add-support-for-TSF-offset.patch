@@ -19,8 +19,6 @@ Signed-off-by: MeiChia Chiu <MeiChia.Chiu@mediatek.com>
  mt7996/mt7996.h   |  5 ++++
  5 files changed, 130 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 8bfc1688..0198945d 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1296,6 +1296,7 @@ enum {
@@ -31,11 +29,9 @@ index 8bfc1688..0198945d 100644
  	MCU_UNI_CMD_GET_MIB_INFO = 0x22,
  	MCU_UNI_CMD_GET_STAT_INFO = 0x23,
  	MCU_UNI_CMD_SNIFFER = 0x24,
-diff --git a/mt7996/main.c b/mt7996/main.c
-index b21aea79..6b4e0aab 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -384,6 +384,7 @@ static int mt7996_add_bss_conf(struct mt7996_phy *phy,
+@@ -384,6 +384,7 @@ static int mt7996_add_bss_conf(struct mt
  	mconf->mt76.wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 3;
  	mconf->link_id = link_id;
  	mconf->bpcc = 0;
@@ -43,7 +39,7 @@ index b21aea79..6b4e0aab 100644
  
  	ret = mt7996_mcu_add_dev_info(phy, conf, mconf, true);
  	if (ret)
-@@ -968,6 +969,33 @@ static void mt7996_vif_cfg_changed(struct ieee80211_hw *hw,
+@@ -968,6 +969,33 @@ static void mt7996_vif_cfg_changed(struc
  	mutex_unlock(&dev->mt76.mutex);
  }
  
@@ -77,7 +73,7 @@ index b21aea79..6b4e0aab 100644
  static void mt7996_link_info_changed(struct ieee80211_hw *hw,
  				     struct ieee80211_vif *vif,
  				     struct ieee80211_bss_conf *info,
-@@ -1033,6 +1061,9 @@ static void mt7996_link_info_changed(struct ieee80211_hw *hw,
+@@ -1033,6 +1061,9 @@ static void mt7996_link_info_changed(str
  		/* The CSA beacon will be set in channel_switch_beacon */
  		if (!info->csa_active)
  			mt7996_mcu_add_beacon(hw, info, mconf, info->enable_beacon);
@@ -87,8 +83,6 @@ index b21aea79..6b4e0aab 100644
  	}
  
  	if (changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 7b5af86b..a1ddaa94 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -2024,6 +2024,69 @@ out:
@@ -161,8 +155,6 @@ index 7b5af86b..a1ddaa94 100644
  int mt7996_mcu_set_timing(struct mt7996_phy *phy, struct mt7996_bss_conf *mconf)
  {
  	struct mt7996_dev *dev = phy->dev;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index adf31bac..b05b2fef 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1180,6 +1180,36 @@ enum {
@@ -202,8 +194,6 @@ index adf31bac..b05b2fef 100644
  struct mld_req_hdr {
  	u8 ver;
  	u8 mld_addr[ETH_ALEN];
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index d53234a3..8e161391 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -441,6 +441,8 @@ struct mt7996_bss_conf {
@@ -215,7 +205,7 @@ index d53234a3..8e161391 100644
  };
  
  struct mt7996_vif {
-@@ -1447,6 +1449,8 @@ int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy, struct cfg80211_chan_def
+@@ -1447,6 +1449,8 @@ int mt7996_mcu_set_pp_sta_dscb(struct mt
  int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action);
  int mt7996_mcu_set_eml_omn(struct ieee80211_hw *hw, struct ieee80211_vif *vif, u8 link_id,
  			   struct ieee80211_sta *sta, struct mt7996_eml_omn *eml_omn);
@@ -224,7 +214,7 @@ index d53234a3..8e161391 100644
  #ifdef CONFIG_MAC80211_DEBUGFS
  void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  			    struct ieee80211_sta *sta, struct dentry *dir);
-@@ -1476,6 +1480,7 @@ int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
+@@ -1476,6 +1480,7 @@ int mt7996_mcu_set_csi(struct mt7996_phy
  		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
  int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
  int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable);
@@ -232,6 +222,3 @@ index d53234a3..8e161391 100644
  #endif
  
  int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
--- 
-2.49.0
-

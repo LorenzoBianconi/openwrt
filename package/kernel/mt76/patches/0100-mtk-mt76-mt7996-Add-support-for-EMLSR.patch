@@ -20,8 +20,6 @@ Signed-off-by: MeiChia Chiu <MeiChia.Chiu@mediatek.com>
  mt7996/vendor.h   | 15 +++++++++++
  6 files changed, 166 insertions(+), 1 deletion(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 860c4b82..73cf311a 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -629,6 +629,13 @@ struct sta_rec_tx_proc {
@@ -46,11 +44,9 @@ index 860c4b82..73cf311a 100644
  	STA_REC_HDR_TRANS = 0x2B,
  	STA_REC_TX_CAP = 0x2f,
  	STA_REC_MAX_NUM
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 377ee257..8b2050d3 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -104,6 +104,7 @@ static const struct wiphy_iftype_ext_capab mt7996_iftypes_ext_capa[] = {
+@@ -104,6 +104,7 @@ static const struct wiphy_iftype_ext_cap
  		.extended_capabilities = mt7996_if_types_ext_capa,
  		.extended_capabilities_mask = mt7996_if_types_ext_capa,
  		.extended_capabilities_len = sizeof(mt7996_if_types_ext_capa),
@@ -58,11 +54,9 @@ index 377ee257..8b2050d3 100644
  		.mld_capa_and_ops = 2,
  		/* the max number of simultaneous links is defined as the
  		 * maximum number of affiliated APs minus 1.
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index bb94e472..e0b5e51c 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2957,9 +2957,10 @@ mt7996_mcu_sta_eht_mld_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
+@@ -2957,9 +2957,10 @@ mt7996_mcu_sta_eht_mld_tlv(struct mt7996
  
  	for (i = 0; i < ARRAY_SIZE(eht_mld->str_cap); i++)
  		eht_mld->str_cap[i] = 0x7;
@@ -74,7 +68,7 @@ index bb94e472..e0b5e51c 100644
  	*/
  }
  
-@@ -6565,6 +6566,63 @@ int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy)
+@@ -6565,6 +6566,63 @@ int mt7996_mcu_set_vow_feature_ctrl(stru
  	                         &req, sizeof(req), true);
  }
  
@@ -138,8 +132,6 @@ index bb94e472..e0b5e51c 100644
  #ifdef CONFIG_MTK_VENDOR
  void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
  {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 3d888032..6db64f44 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -421,6 +421,23 @@ enum {
@@ -166,7 +158,7 @@ index 3d888032..6db64f44 100644
  struct mt7996_wed_rro_addr {
  	u32 head_low;
  	u32 head_high : 4;
-@@ -1246,6 +1263,8 @@ int mt7996_mcu_wtbl_update_hdr_trans(struct mt7996_dev *dev,
+@@ -1246,6 +1263,8 @@ int mt7996_mcu_wtbl_update_hdr_trans(str
  				     struct mt7996_link_sta *mlink);
  int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode);
  int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
@@ -175,25 +167,23 @@ index 3d888032..6db64f44 100644
  #ifdef CONFIG_MAC80211_DEBUGFS
  void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  			    struct ieee80211_sta *sta, struct dentry *dir);
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index 84b50ab2..585c4e28 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -119,6 +119,13 @@ beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
- 	[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
+@@ -120,6 +120,13 @@ beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_
  };
  
-+static const struct nla_policy
+ static const struct nla_policy
 +eml_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EML_CTRL] = {
 +	[MTK_VENDOR_ATTR_EML_LINK_ID] = { .type = NLA_U8 },
 +	[MTK_VENDOR_ATTR_EML_STA_ADDR] = { .type = NLA_BINARY },
 +	[MTK_VENDOR_ATTR_EML_CTRL_STRUCT] = { .type = NLA_BINARY },
 +};
 +
- static const struct nla_policy
++static const struct nla_policy
  csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
  	[MTK_VENDOR_ATTR_CSI_CTRL_BAND_IDX] = { .type = NLA_U8 },
-@@ -1013,6 +1020,52 @@ static int mt7996_vendor_beacon_ctrl(struct wiphy *wiphy,
+ 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG] = {.type = NLA_NESTED },
+@@ -1013,6 +1020,52 @@ static int mt7996_vendor_beacon_ctrl(str
  
  	return 0;
  }
@@ -246,7 +236,7 @@ index 84b50ab2..585c4e28 100644
  static int mt7996_vendor_csi_ctrl(struct wiphy *wiphy,
  				  struct wireless_dev *wdev,
  				  const void *data,
-@@ -1373,6 +1426,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
+@@ -1373,6 +1426,17 @@ static const struct wiphy_vendor_command
  		.policy = csi_ctrl_policy,
  		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
  	},
@@ -264,8 +254,6 @@ index 84b50ab2..585c4e28 100644
  };
  
  void mt7996_vendor_register(struct mt7996_phy *phy)
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index 834b3d08..f6fcb623 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -18,6 +18,7 @@ enum mtk_nl80211_vendor_subcmds {
@@ -297,6 +285,3 @@ index 834b3d08..f6fcb623 100644
  enum mtk_vendor_attr_csi_ctrl {
  	MTK_VENDOR_ATTR_CSI_CTRL_UNSPEC,
  
--- 
-2.49.0
-

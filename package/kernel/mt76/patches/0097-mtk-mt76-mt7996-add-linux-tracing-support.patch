@@ -22,8 +22,6 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  create mode 100644 mt7996/mt7996_trace.h
  create mode 100644 mt7996/trace.c
 
-diff --git a/agg-rx.c b/agg-rx.c
-index 6fa37de0..9875baa8 100644
 --- a/agg-rx.c
 +++ b/agg-rx.c
 @@ -3,6 +3,7 @@
@@ -34,7 +32,7 @@ index 6fa37de0..9875baa8 100644
  
  static unsigned long mt76_aggr_tid_to_timeo(u8 tidno)
  {
-@@ -190,6 +191,7 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
+@@ -190,6 +191,7 @@ void mt76_rx_aggr_reorder(struct sk_buff
  	seqno = status->seqno;
  	size = tid->size;
  	sn_less = ieee80211_sn_less(seqno, head);
@@ -42,8 +40,6 @@ index 6fa37de0..9875baa8 100644
  
  	if (!tid->started) {
  		if (sn_less)
-diff --git a/mac80211.c b/mac80211.c
-index d1f4382d..20aabdd1 100644
 --- a/mac80211.c
 +++ b/mac80211.c
 @@ -5,6 +5,7 @@
@@ -54,7 +50,7 @@ index d1f4382d..20aabdd1 100644
  
  static const struct ieee80211_channel mt76_channels_2ghz[] = {
  	CHAN2G(1, 2412),
-@@ -1445,6 +1446,7 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
+@@ -1445,6 +1446,7 @@ void mt76_rx_complete(struct mt76_dev *d
  
  		mt76_check_ccmp_pn(skb);
  		skb_shinfo(skb)->frag_list = NULL;
@@ -62,7 +58,7 @@ index d1f4382d..20aabdd1 100644
  		mt76_rx_convert(dev, skb, &hw, &sta);
  		ieee80211_rx_list(hw, sta, skb, &list);
  
-@@ -1454,6 +1456,7 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
+@@ -1454,6 +1456,7 @@ void mt76_rx_complete(struct mt76_dev *d
  			nskb = nskb->next;
  			skb->next = NULL;
  
@@ -70,18 +66,14 @@ index d1f4382d..20aabdd1 100644
  			mt76_rx_convert(dev, skb, &hw, &sta);
  			ieee80211_rx_list(hw, sta, skb, &list);
  		}
-diff --git a/mt7996/Makefile b/mt7996/Makefile
-index 443fcf9a..c9299490 100644
 --- a/mt7996/Makefile
 +++ b/mt7996/Makefile
-@@ -13,4 +13,4 @@ mt7996e-y := pci.o init.o dma.o eeprom.o main.o mcu.o mac.o \
+@@ -13,4 +13,4 @@ mt7996e-y := pci.o init.o dma.o eeprom.o
  mt7996e-$(CONFIG_DEV_COREDUMP) += coredump.o
  mt7996e-$(CONFIG_NL80211_TESTMODE) += testmode.o
  
 -mt7996e-y += mtk_debugfs.o mtk_mcu.o mtk_debugfs_i.o
 +mt7996e-y += mtk_debugfs.o mtk_mcu.o mtk_debugfs_i.o trace.o
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index ae995c28..7f4b5daa 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
 @@ -11,6 +11,7 @@
@@ -92,7 +84,7 @@ index ae995c28..7f4b5daa 100644
  
  static const struct mt7996_dfs_radar_spec etsi_radar_specs = {
  	.pulse_th = { 110, -10, -80, 40, 5200, 128, 5200 },
-@@ -332,6 +333,8 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -332,6 +333,8 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  	phy = mphy->priv;
  	status->phy_idx = mphy->band_idx;
  
@@ -101,7 +93,7 @@ index ae995c28..7f4b5daa 100644
  	if (!test_bit(MT76_STATE_RUNNING, &mphy->state))
  		return -EINVAL;
  
-@@ -609,6 +612,8 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -609,6 +612,8 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  		}
  	}
  
@@ -110,7 +102,7 @@ index ae995c28..7f4b5daa 100644
  	if (!status->wcid || !ieee80211_is_data_qos(fc) || hw_aggr)
  		return 0;
  
-@@ -1045,6 +1050,7 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
+@@ -1045,6 +1050,7 @@ int mt7996_tx_prepare_skb(struct mt76_de
  		mt7996_packet_log_to_host(dev, t->skb->data, t->skb->len, PKT_BIN_DEBUG_TX, 0);
  	mt7996_dump_bmac_txd_info(NULL, dev, (__le32 *)txwi, true, false);
  #endif
@@ -118,8 +110,6 @@ index ae995c28..7f4b5daa 100644
  
  	return 0;
  }
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 5017bcbd..c73c30a3 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -9,6 +9,7 @@
@@ -130,7 +120,7 @@ index 5017bcbd..c73c30a3 100644
  
  #define fw_name(_dev, name, ...)	({			\
  	char *_fw;						\
-@@ -309,6 +310,9 @@ mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+@@ -309,6 +310,9 @@ mt7996_mcu_send_message(struct mt76_dev
  		else if (cmd & __MCU_CMD_FIELD_WM)
  			uni_txd->s2d_index = MCU_S2D_H2N;
  
@@ -140,7 +130,7 @@ index 5017bcbd..c73c30a3 100644
  		goto exit;
  	}
  
-@@ -336,6 +340,8 @@ mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+@@ -336,6 +340,8 @@ mt7996_mcu_send_message(struct mt76_dev
  	else
  		mcu_txd->s2d_index = MCU_S2D_H2N;
  
@@ -149,7 +139,7 @@ index 5017bcbd..c73c30a3 100644
  exit:
  #ifdef CONFIG_MTK_DEBUG
  	if (dev->dbg.dump_mcu_pkt)
-@@ -1190,6 +1196,8 @@ void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -1190,6 +1196,8 @@ void mt7996_mcu_rx_event(struct mt7996_d
  {
  	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
  
@@ -158,9 +148,6 @@ index 5017bcbd..c73c30a3 100644
  	if (rxd->option & MCU_UNI_CMD_UNSOLICITED_EVENT) {
  		mt7996_mcu_uni_rx_unsolicited_event(dev, skb);
  		return;
-diff --git a/mt7996/mt7996_trace.h b/mt7996/mt7996_trace.h
-new file mode 100644
-index 00000000..5fa73482
 --- /dev/null
 +++ b/mt7996/mt7996_trace.h
 @@ -0,0 +1,141 @@
@@ -305,9 +292,6 @@ index 00000000..5fa73482
 +#define TRACE_INCLUDE_FILE mt7996_trace
 +
 +#include <trace/define_trace.h>
-diff --git a/mt7996/trace.c b/mt7996/trace.c
-new file mode 100644
-index 00000000..ba36f79a
 --- /dev/null
 +++ b/mt7996/trace.c
 @@ -0,0 +1,12 @@
@@ -323,8 +307,6 @@ index 00000000..ba36f79a
 +#include "mt7996_trace.h"
 +
 +#endif
-diff --git a/trace.h b/trace.h
-index c3d0ef8e..57c94c6b 100644
 --- a/trace.h
 +++ b/trace.h
 @@ -101,6 +101,64 @@ DEFINE_EVENT(dev_txid_evt, mac_txdone,
@@ -392,6 +374,3 @@ index c3d0ef8e..57c94c6b 100644
  #endif
  
  #undef TRACE_INCLUDE_PATH
--- 
-2.49.0
-

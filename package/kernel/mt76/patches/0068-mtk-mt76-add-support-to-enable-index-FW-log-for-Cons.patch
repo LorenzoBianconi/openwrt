@@ -40,11 +40,9 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  tools/mt76-test.h |   3 +
  8 files changed, 295 insertions(+), 69 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 986c8b37..1a2668c5 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -451,8 +451,8 @@ create_buf_file_cb(const char *filename, struct dentry *parent, umode_t mode,
+@@ -451,8 +451,8 @@ create_buf_file_cb(const char *filename,
  {
  	struct dentry *f;
  
@@ -55,11 +53,10 @@ index 986c8b37..1a2668c5 100644
  	if (IS_ERR(f))
  		return NULL;
  
-@@ -543,6 +543,53 @@ mt7996_fw_debug_bin_get(void *data, u64 *val)
- DEFINE_DEBUGFS_ATTRIBUTE(fops_fw_debug_bin, mt7996_fw_debug_bin_get,
+@@ -544,6 +544,53 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_fw_debug_b
  			 mt7996_fw_debug_bin_set, "%lld\n");
  
-+static int
+ static int
 +mt7996_idxlog_enable_get(void *data, u64 *val)
 +{
 +	struct mt7996_dev *dev = data;
@@ -106,10 +103,11 @@ index 986c8b37..1a2668c5 100644
 +DEFINE_DEBUGFS_ATTRIBUTE(fops_idxlog_enable, mt7996_idxlog_enable_get,
 +	                 mt7996_idxlog_enable_set, "%llu\n");
 +
- static int
++static int
  mt7996_fw_util_wa_show(struct seq_file *file, void *data)
  {
-@@ -1050,6 +1097,7 @@ int mt7996_init_debugfs(struct mt7996_phy *phy)
+ 	struct mt7996_dev *dev = file->private;
+@@ -1050,6 +1097,7 @@ int mt7996_init_debugfs(struct mt7996_ph
  	debugfs_create_file("fw_debug_wm", 0600, dir, dev, &fops_fw_debug_wm);
  	debugfs_create_file("fw_debug_wa", 0600, dir, dev, &fops_fw_debug_wa);
  	debugfs_create_file("fw_debug_bin", 0600, dir, dev, &fops_fw_debug_bin);
@@ -117,7 +115,7 @@ index 986c8b37..1a2668c5 100644
  	/* TODO: wm fw cpu utilization */
  	debugfs_create_file("fw_util_wa", 0400, dir, dev,
  			    &mt7996_fw_util_wa_fops);
-@@ -1116,6 +1164,32 @@ mt7996_debugfs_write_fwlog(struct mt7996_dev *dev, const void *hdr, int hdrlen,
+@@ -1116,6 +1164,32 @@ mt7996_debugfs_write_fwlog(struct mt7996
  	spin_unlock_irqrestore(&lock, flags);
  }
  
@@ -150,7 +148,7 @@ index 986c8b37..1a2668c5 100644
  void mt7996_debugfs_rx_fw_monitor(struct mt7996_dev *dev, const void *data, int len)
  {
  	struct {
-@@ -1140,11 +1214,15 @@ void mt7996_debugfs_rx_fw_monitor(struct mt7996_dev *dev, const void *data, int
+@@ -1140,11 +1214,15 @@ void mt7996_debugfs_rx_fw_monitor(struct
  
  bool mt7996_debugfs_rx_log(struct mt7996_dev *dev, const void *data, int len)
  {
@@ -170,11 +168,9 @@ index 986c8b37..1a2668c5 100644
  
  	return true;
  }
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index c4b9bb8c..4a851430 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2281,11 +2281,9 @@ void mt7996_mac_work(struct work_struct *work)
+@@ -2281,11 +2281,9 @@ void mt7996_mac_work(struct work_struct
  	mutex_lock(&mdev->mutex);
  
  	mt76_update_survey(mphy);
@@ -187,7 +183,7 @@ index c4b9bb8c..4a851430 100644
  		mt7996_mac_update_stats(phy);
  
  		/* Update DEV-wise information only in
-@@ -2304,6 +2302,12 @@ void mt7996_mac_work(struct work_struct *work)
+@@ -2304,6 +2302,12 @@ void mt7996_mac_work(struct work_struct
  				if (mt7996_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
  				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))
  					dev_err(mdev->dev, "Failed to query per-AC-queue packet counts.\n");
@@ -200,8 +196,6 @@ index c4b9bb8c..4a851430 100644
  			} else if (mt7996_band_valid(phy->dev, i) &&
  			           test_bit(MT76_STATE_RUNNING, &mdev->phys[i]->state))
  				break;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 9c721b6a..92eb76ba 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -403,6 +403,7 @@ static void
@@ -212,7 +206,7 @@ index 9c721b6a..92eb76ba 100644
  	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
  	const char *data = (char *)&rxd[1] + 4, *type;
  	struct tlv *tlv = (struct tlv *)data;
-@@ -414,7 +415,8 @@ mt7996_mcu_rx_log_message(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -414,7 +415,8 @@ mt7996_mcu_rx_log_message(struct mt7996_
  		goto out;
  	}
  
@@ -222,7 +216,7 @@ index 9c721b6a..92eb76ba 100644
  		return;
  
  	data += sizeof(*tlv) + 4;
-@@ -3214,6 +3216,36 @@ int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level)
+@@ -3214,6 +3216,36 @@ int mt7996_mcu_fw_dbg_ctrl(struct mt7996
  				 sizeof(data), false);
  }
  
@@ -259,8 +253,6 @@ index 9c721b6a..92eb76ba 100644
  static int mt7996_mcu_set_mwds(struct mt7996_dev *dev, bool enabled)
  {
  	struct {
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 1b779939..25d44f5d 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -351,7 +351,8 @@ enum {
@@ -281,8 +273,6 @@ index 1b779939..25d44f5d 100644
  };
  
  enum {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 6db74893..d5fc1b31 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -602,9 +602,11 @@ struct mt7996_dev {
@@ -297,7 +287,7 @@ index 6db74893..d5fc1b31 100644
  
  	void *cal;
  	u32 cur_prek_offset;
-@@ -859,6 +861,7 @@ int mt7996_mcu_wa_cmd(struct mt7996_dev *dev, int cmd, u32 a1, u32 a2, u32 a3);
+@@ -859,6 +861,7 @@ int mt7996_mcu_wa_cmd(struct mt7996_dev
  int mt7996_mcu_red_config(struct mt7996_dev *dev, bool enable);
  int mt7996_mcu_fw_log_2_host(struct mt7996_dev *dev, u8 type, u8 ctrl);
  int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level);
@@ -305,11 +295,9 @@ index 6db74893..d5fc1b31 100644
  int mt7996_mcu_trigger_assert(struct mt7996_dev *dev);
  void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
  void mt7996_mcu_exit(struct mt7996_dev *dev);
-diff --git a/tools/fwlog.c b/tools/fwlog.c
-index 3c6a61d7..0e2de2dc 100644
 --- a/tools/fwlog.c
 +++ b/tools/fwlog.c
-@@ -29,10 +29,9 @@ static const char *debugfs_path(const char *phyname, const char *file)
+@@ -29,10 +29,9 @@ static const char *debugfs_path(const ch
  static int mt76_set_fwlog_en(const char *phyname, bool en, char *val)
  {
  	FILE *f = fopen(debugfs_path(phyname, "fw_debug_bin"), "w");
@@ -322,7 +310,7 @@ index 3c6a61d7..0e2de2dc 100644
  	}
  
  	if (en && val)
-@@ -47,6 +46,21 @@ static int mt76_set_fwlog_en(const char *phyname, bool en, char *val)
+@@ -47,6 +46,21 @@ static int mt76_set_fwlog_en(const char
  	return 0;
  }
  
@@ -364,13 +352,13 @@ index 3c6a61d7..0e2de2dc 100644
 -	int ret = 0;
 -	/* int yes = 1; */
 -	int s, fd;
--
++	int s, ret;
+ 
 -	if (argc < 1) {
 -		fprintf(stderr, "need destination address\n");
 -		return 1;
 -	}
-+	int s, ret;
- 
+-
 -	if (!inet_aton(argv[0], &remote.sin_addr)) {
 -		fprintf(stderr, "invalid destination address\n");
 -		return 1;
@@ -497,7 +485,9 @@ index 3c6a61d7..0e2de2dc 100644
 +	}
 +
 +	free(buf);
-+
+ 
+-		/* send buf */
+-		sendto(s, buf, len, 0, (struct sockaddr *)&remote, sizeof(remote));
 +	return ret;
 +}
 +
@@ -509,8 +499,9 @@ index 3c6a61d7..0e2de2dc 100644
 +	if (argc < 1) {
 +		fprintf(stderr, "need destination address\n");
 +		return -EINVAL;
-+	}
-+
+ 	}
+ 
+-	close(fd);
 +	out_fd = mt76_log_socket(&remote, argv[0]);
 +	if (out_fd < 0)
 +		return out_fd;
@@ -518,21 +509,18 @@ index 3c6a61d7..0e2de2dc 100644
 +	ret = mt76_set_fwlog_en(phyname, true, argv[1]);
 +	if (ret)
 +		goto close;
- 
--		/* send buf */
--		sendto(s, buf, len, 0, (struct sockaddr *)&remote, sizeof(remote));
++
 +	in_fd = open(debugfs_path(phyname, "fwlog_data"), O_RDONLY);
 +	if (in_fd < 0) {
 +		perror("open");
 +		goto disable;
- 	}
- 
--	close(fd);
-+	if (mt76_log_relay(in_fd, out_fd, &remote))
-+		fprintf(stderr, "Failed to relay FW log.\n");
++	}
  
 -out:
 -	mt76_set_fwlog_en(phyname, false, NULL);
++	if (mt76_log_relay(in_fd, out_fd, &remote))
++		fprintf(stderr, "Failed to relay FW log.\n");
++
 +	close(in_fd);
 +disable:
 +	ret = mt76_set_fwlog_en(phyname, false, NULL);
@@ -593,8 +581,6 @@ index 3c6a61d7..0e2de2dc 100644
  
  	return ret;
  }
-diff --git a/tools/main.c b/tools/main.c
-index 0b040292..db167d46 100644
 --- a/tools/main.c
 +++ b/tools/main.c
 @@ -322,6 +322,8 @@ int main(int argc, char **argv)
@@ -606,8 +592,6 @@ index 0b040292..db167d46 100644
  	else
  		usage();
  
-diff --git a/tools/mt76-test.h b/tools/mt76-test.h
-index d2fafa86..b9d508c5 100644
 --- a/tools/mt76-test.h
 +++ b/tools/mt76-test.h
 @@ -22,6 +22,8 @@
@@ -626,6 +610,3 @@ index d2fafa86..b9d508c5 100644
 +int mt76_idxlog(const char *phyname, int argc, char **argv);
  
  #endif
--- 
-2.49.0
-

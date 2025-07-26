@@ -27,11 +27,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h | 34 ++++++++++++++++++++++++++++++++++
  3 files changed, 37 insertions(+), 2 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index ec4d871f..5efbbcd5 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1218,7 +1218,7 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
+@@ -1218,7 +1218,7 @@ mt7996_mac_add_txs_skb(struct mt7996_dev
  		struct ieee80211_sta *sta;
  		u8 tid;
  
@@ -40,7 +38,7 @@ index ec4d871f..5efbbcd5 100644
  		tid = FIELD_GET(MT_TXS0_TID, txs);
  		ieee80211_refresh_tx_agg_session_timer(sta, tid);
  	}
-@@ -1358,7 +1358,7 @@ static void mt7996_mac_add_txs(struct mt7996_dev *dev, void *data)
+@@ -1358,7 +1358,7 @@ static void mt7996_mac_add_txs(struct mt
  	if (!wcid->sta)
  		goto out;
  
@@ -49,11 +47,9 @@ index ec4d871f..5efbbcd5 100644
  	spin_lock_bh(&dev->mt76.sta_poll_lock);
  	if (list_empty(&mlink->wcid.poll_list))
  		list_add_tail(&mlink->wcid.poll_list, &dev->mt76.sta_poll_list);
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 565656e1..ee3ff921 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -2367,6 +2367,7 @@ mt7996_assign_vif_chanctx(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2367,6 +2367,7 @@ mt7996_assign_vif_chanctx(struct ieee802
  	}
  
  	ctx->nbss_assigned++;
@@ -61,8 +57,6 @@ index 565656e1..ee3ff921 100644
  
  	if (mt7996_hw_phy(hw) == phy)
  		mvif->master_link_id = link_id;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 1491e952..1485b62a 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -369,6 +369,8 @@ struct mt7996_vif {
@@ -113,6 +107,3 @@ index 1491e952..1485b62a 100644
  extern const struct ieee80211_ops mt7996_ops;
  extern struct pci_driver mt7996_pci_driver;
  extern struct pci_driver mt7996_hif_driver;
--- 
-2.49.0
-

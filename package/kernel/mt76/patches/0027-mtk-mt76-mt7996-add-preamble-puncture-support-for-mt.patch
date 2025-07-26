@@ -21,8 +21,6 @@ Signed-off-by: Allen Ye <allen.ye@mediatek.com>
  mt7996/mt7996.h   |  4 ++++
  6 files changed, 61 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 1b0e80df..200eace5 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1288,6 +1288,7 @@ enum {
@@ -33,11 +31,9 @@ index 1b0e80df..200eace5 100644
  	MCU_UNI_CMD_FIXED_RATE_TABLE = 0x40,
  	MCU_UNI_CMD_RRO = 0x57,
  	MCU_UNI_CMD_OFFCH_SCAN_CTRL = 0x58,
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 84dc048f..527378fe 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -386,6 +386,7 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -386,6 +386,7 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_ACK_SIGNAL_SUPPORT);
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_CAN_REPLACE_PTK0);
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_MU_MIMO_AIR_SNIFFER);
@@ -45,11 +41,9 @@ index 84dc048f..527378fe 100644
  
  	if (mt7996_has_background_radar(phy->dev) &&
  	    (!mdev->dev->of_node ||
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 98d8e28b..7826f445 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -394,6 +394,11 @@ static int mt7996_config(struct ieee80211_hw *hw, u32 changed)
+@@ -394,6 +394,11 @@ static int mt7996_config(struct ieee8021
  	int ret;
  
  	if (changed & IEEE80211_CONF_CHANGE_CHANNEL) {
@@ -61,11 +55,9 @@ index 98d8e28b..7826f445 100644
  		ret = mt76_update_channel(phy->mt76);
  		if (ret)
  			return ret;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 04355776..349c69e5 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -4608,3 +4608,43 @@ int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode)
+@@ -4608,3 +4608,43 @@ int mt7996_mcu_cp_support(struct mt7996_
  	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_EXT_CMD(CP_SUPPORT),
  				 &cp_mode, sizeof(cp_mode), true);
  }
@@ -109,8 +101,6 @@ index 04355776..349c69e5 100644
 +	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
 +				 &req, sizeof(req), false);
 +}
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 324e0dd1..8e680ff2 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -926,6 +926,16 @@ enum {
@@ -130,8 +120,6 @@ index 324e0dd1..8e680ff2 100644
  #define MT7996_PATCH_SEC		GENMASK(31, 24)
  #define MT7996_PATCH_SCRAMBLE_KEY	GENMASK(15, 8)
  #define MT7996_PATCH_AES_KEY		GENMASK(7, 0)
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 1534c81d..929e500f 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -282,6 +282,9 @@ struct mt7996_phy {
@@ -144,7 +132,7 @@ index 1534c81d..929e500f 100644
  };
  
  struct mt7996_dev {
-@@ -675,6 +678,7 @@ int mt7996_mcu_wtbl_update_hdr_trans(struct mt7996_dev *dev,
+@@ -675,6 +678,7 @@ int mt7996_mcu_wtbl_update_hdr_trans(str
  				     struct ieee80211_vif *vif,
  				     struct ieee80211_sta *sta);
  int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode);
@@ -152,6 +140,3 @@ index 1534c81d..929e500f 100644
  #ifdef CONFIG_MAC80211_DEBUGFS
  void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  			    struct ieee80211_sta *sta, struct dentry *dir);
--- 
-2.49.0
-

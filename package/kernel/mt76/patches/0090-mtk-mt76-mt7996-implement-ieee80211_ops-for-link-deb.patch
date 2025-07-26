@@ -20,11 +20,9 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  mt7996/mt7996.h  |   5 ++
  5 files changed, 214 insertions(+), 4 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 9727f43b..7e5f2fdb 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -1315,4 +1315,205 @@ void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -1315,4 +1315,205 @@ void mt7996_sta_add_debugfs(struct ieee8
  	debugfs_create_file("hw-queues", 0400, dir, sta, &mt7996_queues_fops);
  }
  
@@ -230,11 +228,9 @@ index 9727f43b..7e5f2fdb 100644
 +	debugfs_create_file("link_info", 0600, dir, link_conf, &mt7996_link_info_fops);
 +}
  #endif
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 003ffb0e..afdb4ee9 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2417,10 +2417,10 @@ void mt7996_mac_work(struct work_struct *work)
+@@ -2417,10 +2417,10 @@ void mt7996_mac_work(struct work_struct
  				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_RATE);
  				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_AIRTIME);
  				mt7996_mcu_get_rssi(mdev);
@@ -247,11 +243,9 @@ index 003ffb0e..afdb4ee9 100644
  
  				if (mt7996_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
  				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 58a9515a..029b618e 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -2758,6 +2758,8 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -2758,6 +2758,8 @@ const struct ieee80211_ops mt7996_ops =
  	CFG80211_TESTMODE_DUMP(mt76_testmode_dump)
  #ifdef CONFIG_MAC80211_DEBUGFS
  	.sta_add_debugfs = mt7996_sta_add_debugfs,
@@ -260,11 +254,9 @@ index 58a9515a..029b618e 100644
  #endif
  	.set_radar_background = mt7996_set_radar_background,
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 62d49cfe..ffd4ce61 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -630,8 +630,10 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -630,8 +630,10 @@ mt7996_mcu_rx_all_sta_info_event(struct
  			wcid->stats.tx_packets += tx_packets;
  			wcid->stats.rx_packets += rx_packets;
  
@@ -277,11 +269,9 @@ index 62d49cfe..ffd4ce61 100644
  			break;
  		case UNI_ALL_STA_TXRX_AIRTIME:
  			wlan_idx = le16_to_cpu(res->airtime[i].wlan_idx);
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 21d8435a..0103c4fd 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1162,6 +1162,11 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
+@@ -1162,6 +1162,11 @@ int mt7996_mcu_set_pp_en(struct mt7996_p
  #ifdef CONFIG_MAC80211_DEBUGFS
  void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
  			    struct ieee80211_sta *sta, struct dentry *dir);
@@ -293,6 +283,3 @@ index 21d8435a..0103c4fd 100644
  #endif
  int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
  			 bool hif2, int *irq);
--- 
-2.49.0
-

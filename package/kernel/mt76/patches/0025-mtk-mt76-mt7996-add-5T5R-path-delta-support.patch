@@ -20,11 +20,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mcu.h  | 2 +-
  4 files changed, 9 insertions(+), 9 deletions(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 780b6010..116e67c1 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -1621,7 +1621,7 @@ int mt76_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -1621,7 +1621,7 @@ int mt76_get_txpower(struct ieee80211_hw
  {
  	struct mt76_phy *phy = hw->priv;
  	int n_chains = hweight16(phy->chainmask);
@@ -33,11 +31,9 @@ index 780b6010..116e67c1 100644
  
  	*dbm = DIV_ROUND_UP(phy->txpower_cur + delta, 2);
  
-diff --git a/mt76.h b/mt76.h
-index fff78242..b8dc14a7 100644
 --- a/mt76.h
 +++ b/mt76.h
-@@ -1334,12 +1334,12 @@ static inline bool mt76_is_skb_pktid(u8 pktid)
+@@ -1334,12 +1334,12 @@ static inline bool mt76_is_skb_pktid(u8
  	return pktid >= MT_PACKET_ID_FIRST;
  }
  
@@ -54,11 +50,9 @@ index fff78242..b8dc14a7 100644
  }
  
  static inline bool mt76_testmode_enabled(struct mt76_phy *phy)
-diff --git a/mt7996/init.c b/mt7996/init.c
-index d0d4c342..84dc048f 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -290,8 +290,8 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
+@@ -290,8 +290,8 @@ static void __mt7996_init_txpower(struct
  				  struct ieee80211_supported_band *sband)
  {
  	struct mt7996_dev *dev = phy->dev;
@@ -69,7 +63,7 @@ index d0d4c342..84dc048f 100644
  	int pwr_delta = mt7996_eeprom_get_power_delta(dev, sband->band);
  	struct mt76_power_limits limits;
  
-@@ -303,7 +303,7 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
+@@ -303,7 +303,7 @@ static void __mt7996_init_txpower(struct
  		target_power = mt76_get_rate_power_limits(phy->mt76, chan,
  							  &limits,
  							  target_power);
@@ -78,11 +72,9 @@ index d0d4c342..84dc048f 100644
  		target_power = DIV_ROUND_UP(target_power, 2);
  		chan->max_power = min_t(int, chan->max_reg_power,
  					target_power);
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 1225c333..324e0dd1 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
-@@ -816,7 +816,7 @@ mt7996_get_power_bound(struct mt7996_phy *phy, s8 txpower)
+@@ -816,7 +816,7 @@ mt7996_get_power_bound(struct mt7996_phy
  	int n_chains = hweight16(mphy->chainmask);
  
  	txpower = mt76_get_sar_power(mphy, mphy->chandef.chan, txpower * 2);
@@ -91,6 +83,3 @@ index 1225c333..324e0dd1 100644
  
  	return txpower;
  }
--- 
-2.49.0
-

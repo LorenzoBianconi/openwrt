@@ -22,8 +22,6 @@ Signed-off-by: Allen Ye <allen.ye@mediatek.com>
  mt7996/mt7996.h   |   2 +
  5 files changed, 165 insertions(+), 1 deletion(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index 81d00c1a..302567e3 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1076,6 +1076,7 @@ enum {
@@ -34,11 +32,9 @@ index 81d00c1a..302567e3 100644
  	MCU_UNI_EVENT_PER_STA_INFO = 0x6d,
  	MCU_UNI_EVENT_ALL_STA_INFO = 0x6e,
  };
-diff --git a/mt7996/main.c b/mt7996/main.c
-index ce9fc4dc..49c27098 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1292,6 +1292,12 @@ static int mt7996_add_link_sta(struct mt7996_dev *dev,
+@@ -1292,6 +1292,12 @@ static int mt7996_add_link_sta(struct mt
  	if (ret)
  		goto error;
  
@@ -51,7 +47,7 @@ index ce9fc4dc..49c27098 100644
  	ewma_avg_signal_init(&mlink->avg_ack_signal);
  
  	return 0;
-@@ -2918,6 +2924,10 @@ mt7996_add_chanctx(struct ieee80211_hw *hw, struct ieee80211_chanctx_conf *conf)
+@@ -2918,6 +2924,10 @@ mt7996_add_chanctx(struct ieee80211_hw *
  	if (ret)
  		return ret;
  
@@ -62,7 +58,7 @@ index ce9fc4dc..49c27098 100644
  	return mt7996_set_channel(phy, &ctx->chandef);
  }
  
-@@ -3044,6 +3054,7 @@ mt7996_switch_vif_chanctx(struct ieee80211_hw *hw,
+@@ -3044,6 +3054,7 @@ mt7996_switch_vif_chanctx(struct ieee802
  	struct mt7996_chanctx *new_ctx;
  	struct mt7996_phy *phy;
  	int i, ret = 0;
@@ -70,7 +66,7 @@ index ce9fc4dc..49c27098 100644
  
  	for (i = 0; i < n_vifs; i++) {
  		if (vifs[i].old_ctx == vifs[i].new_ctx)
-@@ -3087,6 +3098,17 @@ mt7996_switch_vif_chanctx(struct ieee80211_hw *hw,
+@@ -3087,6 +3098,17 @@ mt7996_switch_vif_chanctx(struct ieee802
  
  		mutex_unlock(&dev->mt76.mutex);
  
@@ -88,15 +84,12 @@ index ce9fc4dc..49c27098 100644
  		ret = mt7996_set_channel(phy, &new_ctx->chandef);
  		if (ret)
  			goto out;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 4d1d29f9..a3caf185 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -1280,6 +1280,39 @@ mt7996_mcu_wed_rro_event(struct mt7996_dev *dev, struct sk_buff *skb)
- 	}
+@@ -1281,6 +1281,39 @@ mt7996_mcu_wed_rro_event(struct mt7996_d
  }
  
-+static void
+ static void
 +mt7996_mcu_pp_event(struct mt7996_dev *dev, struct sk_buff *skb)
 +{
 +	struct mt7996_mcu_pp_basic_event *event;
@@ -129,10 +122,11 @@ index 4d1d29f9..a3caf185 100644
 +	}
 +}
 +
- static void
++static void
  mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -1305,6 +1338,9 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
+ 	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
+@@ -1305,6 +1338,9 @@ mt7996_mcu_uni_rx_unsolicited_event(stru
  	case MCU_UNI_EVENT_WED_RRO:
  		mt7996_mcu_wed_rro_event(dev, skb);
  		break;
@@ -142,7 +136,7 @@ index 4d1d29f9..a3caf185 100644
  #ifdef CONFIG_MTK_DEBUG
  	case MCU_UNI_EVENT_SR:
  		mt7996_mcu_rx_sr_event(dev, skb);
-@@ -6280,7 +6316,8 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
+@@ -6280,7 +6316,8 @@ int mt7996_mcu_set_pp_en(struct mt7996_p
  		u8 force_bitmap_ctrl;
  		u8 auto_mode;
  		__le16 bitmap;
@@ -152,7 +146,7 @@ index 4d1d29f9..a3caf185 100644
  	} __packed req = {
  		.tag = cpu_to_le16(UNI_CMD_PP_EN_CTRL),
  		.len = cpu_to_le16(sizeof(req) - 4),
-@@ -6290,6 +6327,7 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
+@@ -6290,6 +6327,7 @@ int mt7996_mcu_set_pp_en(struct mt7996_p
  		.force_bitmap_ctrl = (mode == PP_USR_MODE) ? 2 : 0,
  		.auto_mode = pp_auto,
  		.bitmap = cpu_to_le16(bitmap),
@@ -160,10 +154,12 @@ index 4d1d29f9..a3caf185 100644
  	};
  
  	if (phy->chanctx->chandef.chan->band == NL80211_BAND_2GHZ ||
-@@ -6306,6 +6344,73 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
- 				 &req, sizeof(req), false);
- }
+@@ -6304,6 +6342,73 @@ int mt7996_mcu_set_pp_en(struct mt7996_p
  
+ 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
+ 				 &req, sizeof(req), false);
++}
++
 +int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy,
 +			       struct cfg80211_chan_def *chandef,
 +			       u8 omac_idx)
@@ -229,13 +225,9 @@ index 4d1d29f9..a3caf185 100644
 +
 +	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
 +				 &req, sizeof(req), false);
-+}
-+
+ }
+ 
  int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data)
- {
- 	struct mt7996_dev *dev = phy->dev;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index c5c69940..4010fa35 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1173,6 +1173,7 @@ enum {
@@ -246,11 +238,10 @@ index c5c69940..4010fa35 100644
  };
  
  enum pp_mode {
-@@ -1181,6 +1182,39 @@ enum pp_mode {
- 	PP_USR_MODE,
+@@ -1182,6 +1183,39 @@ enum pp_mode {
  };
  
-+enum {
+ enum {
 +	UNI_EVENT_PP_TAG_ALG_CTRL = 1,
 +	UNI_EVENT_STATIC_PP_TAG_DSCB_IE,
 +	UNI_EVENT_STATIC_PP_TAG_CSA_DSCB_IE,
@@ -283,14 +274,13 @@ index c5c69940..4010fa35 100644
 +	u8 __rsv3[2];
 +} __packed;
 +
- enum {
++enum {
  	UNI_CMD_SCS_SEND_DATA,
  	UNI_CMD_SCS_SET_PD_THR_RANGE = 2,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 188ff623..30fe8d52 100644
+ 	UNI_CMD_SCS_ENABLE,
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1279,6 +1279,8 @@ int mt7996_mcu_wtbl_update_hdr_trans(struct mt7996_dev *dev,
+@@ -1279,6 +1279,8 @@ int mt7996_mcu_wtbl_update_hdr_trans(str
  				     struct mt7996_link_sta *mlink);
  int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode);
  int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
@@ -299,6 +289,3 @@ index 188ff623..30fe8d52 100644
  int mt7996_mcu_set_eml_omn(struct ieee80211_hw *hw, struct ieee80211_vif *vif, u8 link_id,
  			   struct ieee80211_sta *sta, struct mt7996_eml_omn *eml_omn);
  #ifdef CONFIG_MAC80211_DEBUGFS
--- 
-2.49.0
-

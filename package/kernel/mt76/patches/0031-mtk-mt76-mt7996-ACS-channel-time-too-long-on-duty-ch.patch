@@ -43,11 +43,9 @@ Signed-off-by: fancy.liu <fancy.liu@mediatek.com>
  mac80211.c | 3 ++-
  1 file changed, 2 insertions(+), 1 deletion(-)
 
-diff --git a/mac80211.c b/mac80211.c
-index 116e67c1..470630c8 100644
 --- a/mac80211.c
 +++ b/mac80211.c
-@@ -956,6 +956,7 @@ int mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
+@@ -956,6 +956,7 @@ int mt76_set_channel(struct mt76_phy *ph
  	struct mt76_dev *dev = phy->dev;
  	int timeout = HZ / 5;
  	int ret;
@@ -55,7 +53,7 @@ index 116e67c1..470630c8 100644
  
  	cancel_delayed_work_sync(&phy->mac_work);
  
-@@ -977,7 +978,7 @@ int mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
+@@ -977,7 +978,7 @@ int mt76_set_channel(struct mt76_phy *ph
  	if (!offchannel)
  		phy->main_chan = chandef->chan;
  
@@ -64,6 +62,3 @@ index 116e67c1..470630c8 100644
  		memset(phy->chan_state, 0, sizeof(*phy->chan_state));
  	mt76_worker_enable(&dev->tx_worker);
  
--- 
-2.49.0
-

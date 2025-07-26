@@ -13,11 +13,9 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  mt7996/mac.c | 15 +++++++++++----
  1 file changed, 11 insertions(+), 4 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 4706ddef..02d8e52f 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -830,6 +830,7 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -830,6 +830,7 @@ void mt7996_mac_write_txwi(struct mt7996
  			   struct ieee80211_key_conf *key, int pid,
  			   enum mt76_txq_id qid, u32 changed)
  {
@@ -25,7 +23,7 @@ index 4706ddef..02d8e52f 100644
  	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
  	struct ieee80211_vif *vif = info->control.vif;
  	u8 band_idx = (info->hw_queue & MT_TX_HW_QUEUE_PHY) >> 2;
-@@ -895,10 +896,17 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -895,10 +896,17 @@ void mt7996_mac_write_txwi(struct mt7996
  	txwi[5] = cpu_to_le32(val);
  
  	val = MT_TXD6_DIS_MAT | MT_TXD6_DAS;
@@ -46,7 +44,7 @@ index 4706ddef..02d8e52f 100644
  	txwi[6] = cpu_to_le32(val);
  	txwi[7] = 0;
  
-@@ -908,7 +916,6 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -908,7 +916,6 @@ void mt7996_mac_write_txwi(struct mt7996
  		mt7996_mac_write_txwi_80211(dev, txwi, skb, key);
  
  	if (txwi[1] & cpu_to_le32(MT_TXD1_FIXED_RATE)) {
@@ -54,6 +52,3 @@ index 4706ddef..02d8e52f 100644
  		bool mcast = ieee80211_is_data(hdr->frame_control) &&
  			     is_multicast_ether_addr(hdr->addr1);
  		u8 idx = MT7996_BASIC_RATES_TBL;
--- 
-2.49.0
-

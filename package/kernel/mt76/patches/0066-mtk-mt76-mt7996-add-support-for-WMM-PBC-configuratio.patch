@@ -20,8 +20,6 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  mt7996/mt7996.h   |  4 +++
  6 files changed, 105 insertions(+)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index adecb0ed..c9cea5bb 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1042,6 +1042,7 @@ enum {
@@ -40,11 +38,9 @@ index adecb0ed..c9cea5bb 100644
  	MCU_EXT_CMD_CP_SUPPORT = 0x75,
  	MCU_EXT_CMD_SET_RADAR_TH = 0x7c,
  	MCU_EXT_CMD_SET_RDD_PATTERN = 0x7d,
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 310efc0a..951c81e4 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -1621,6 +1621,8 @@ int mt7996_register_device(struct mt7996_dev *dev)
+@@ -1621,6 +1621,8 @@ int mt7996_register_device(struct mt7996
  	INIT_WORK(&dev->dump_work, mt7996_mac_dump_work);
  	mutex_init(&dev->dump_mutex);
  
@@ -53,11 +49,9 @@ index 310efc0a..951c81e4 100644
  	ret = mt7996_init_hardware(dev);
  	if (ret)
  		return ret;
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index ea893559..c4b9bb8c 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2300,6 +2300,10 @@ void mt7996_mac_work(struct work_struct *work)
+@@ -2300,6 +2300,10 @@ void mt7996_mac_work(struct work_struct
  					mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_ADM_STAT);
  					mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_MSDU_COUNT);
  				}
@@ -68,11 +62,9 @@ index ea893559..c4b9bb8c 100644
  			} else if (mt7996_band_valid(phy->dev, i) &&
  			           test_bit(MT76_STATE_RUNNING, &mdev->phys[i]->state))
  				break;
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 96c486e0..9c721b6a 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -671,6 +671,82 @@ mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -671,6 +671,82 @@ mt7996_mcu_rx_thermal_notify(struct mt79
  	phy->throttle_state = n->duty_percent;
  }
  
@@ -155,7 +147,7 @@ index 96c486e0..9c721b6a 100644
  static void
  mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -680,6 +756,8 @@ mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -680,6 +756,8 @@ mt7996_mcu_rx_ext_event(struct mt7996_de
  	case MCU_EXT_EVENT_FW_LOG_2_HOST:
  		mt7996_mcu_rx_log_message(dev, skb);
  		break;
@@ -164,8 +156,6 @@ index 96c486e0..9c721b6a 100644
  	default:
  		break;
  	}
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 2b952411..1b779939 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -369,10 +369,25 @@ enum {
@@ -194,8 +184,6 @@ index 2b952411..1b779939 100644
  	MCU_WA_PARAM_HW_PATH_HIF_VER = 0x2f,
  	MCU_WA_PARAM_RED_CONFIG = 0x40,
  };
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index de6ade17..fcef6dc8 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -626,6 +626,9 @@ struct mt7996_dev {
@@ -208,7 +196,7 @@ index de6ade17..fcef6dc8 100644
  #ifdef CONFIG_MTK_DEBUG
  	u16 wlan_idx;
  	struct {
-@@ -876,6 +879,7 @@ int mt7996_mcu_set_band_confg(struct mt7996_phy *phy, u16 option, bool enable);
+@@ -876,6 +879,7 @@ int mt7996_mcu_set_band_confg(struct mt7
  int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy, struct mt7996_sta *msta,
  	                        enum vow_drr_ctrl_id id);
  int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
@@ -216,6 +204,3 @@ index de6ade17..fcef6dc8 100644
  
  static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
  {
--- 
-2.49.0
-

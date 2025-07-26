@@ -15,11 +15,9 @@ Subject: [PATCH 061/148] mtk: mt76: mt7996: add support for HW-ATF
  mt7996/mt7996.h  |  96 ++++++++++++++++-
  6 files changed, 475 insertions(+), 26 deletions(-)
 
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index 494aedf3..01bc780e 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -948,6 +948,91 @@ static const struct file_operations mt7996_efuse_ops = {
+@@ -948,6 +948,91 @@ static const struct file_operations mt79
  	.llseek = default_llseek,
  };
  
@@ -111,7 +109,7 @@ index 494aedf3..01bc780e 100644
  int mt7996_init_debugfs(struct mt7996_phy *phy)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -975,6 +1060,11 @@ int mt7996_init_debugfs(struct mt7996_phy *phy)
+@@ -975,6 +1060,11 @@ int mt7996_init_debugfs(struct mt7996_ph
  				    mt7996_twt_stats);
  	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
  	debugfs_create_file("otp", 0400, dir, dev, &mt7996_efuse_ops);
@@ -123,11 +121,9 @@ index 494aedf3..01bc780e 100644
  
  	if (phy->mt76->cap.has_5ghz) {
  		debugfs_create_u32("dfs_hw_pattern", 0400, dir,
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 6cd2948a..82d385bc 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -572,6 +572,37 @@ int mt7996_txbf_init(struct mt7996_dev *dev)
+@@ -572,6 +572,37 @@ int mt7996_txbf_init(struct mt7996_dev *
  	return mt7996_mcu_set_txbf(dev, BF_HW_EN_UPDATE);
  }
  
@@ -165,7 +161,7 @@ index 6cd2948a..82d385bc 100644
  static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
  			       enum mt76_band_id band)
  {
-@@ -644,6 +675,12 @@ static int mt7996_register_phy(struct mt7996_dev *dev, struct mt7996_phy *phy,
+@@ -644,6 +675,12 @@ static int mt7996_register_phy(struct mt
  	if (ret)
  		goto error;
  
@@ -178,7 +174,7 @@ index 6cd2948a..82d385bc 100644
  	ret = mt7996_init_debugfs(phy);
  	if (ret)
  		goto error;
-@@ -1511,6 +1548,12 @@ int mt7996_register_device(struct mt7996_dev *dev)
+@@ -1511,6 +1548,12 @@ int mt7996_register_device(struct mt7996
  
  	dev->recovery.hw_init_done = true;
  
@@ -191,11 +187,9 @@ index 6cd2948a..82d385bc 100644
  	ret = mt7996_init_debugfs(&dev->phy);
  	if (ret)
  		goto error;
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index ae115ead..d541d1db 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -103,6 +103,7 @@ static void mt7996_mac_sta_poll(struct mt7996_dev *dev)
+@@ -103,6 +103,7 @@ static void mt7996_mac_sta_poll(struct m
  	};
  	struct ieee80211_sta *sta;
  	struct mt7996_sta *msta;
@@ -203,7 +197,7 @@ index ae115ead..d541d1db 100644
  	u32 tx_time[IEEE80211_NUM_ACS], rx_time[IEEE80211_NUM_ACS];
  	LIST_HEAD(sta_poll_list);
  	int i;
-@@ -161,6 +162,7 @@ static void mt7996_mac_sta_poll(struct mt7996_dev *dev)
+@@ -161,6 +162,7 @@ static void mt7996_mac_sta_poll(struct m
  
  		sta = container_of((void *)msta, struct ieee80211_sta,
  				   drv_priv);
@@ -211,7 +205,7 @@ index ae115ead..d541d1db 100644
  		for (i = 0; i < IEEE80211_NUM_ACS; i++) {
  			u8 q = mt76_connac_lmac_mapping(i);
  			u32 tx_cur = tx_time[q];
-@@ -171,6 +173,10 @@ static void mt7996_mac_sta_poll(struct mt7996_dev *dev)
+@@ -171,6 +173,10 @@ static void mt7996_mac_sta_poll(struct m
  				continue;
  
  			ieee80211_sta_register_airtime(sta, tid, tx_cur, rx_cur);
@@ -222,11 +216,9 @@ index ae115ead..d541d1db 100644
  		}
  
  		/* get signal strength of resp frames (CTS/BA/ACK) */
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 2524acd6..7317033a 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2246,34 +2246,37 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+@@ -2246,34 +2246,37 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  }
  
  static int
@@ -271,24 +263,24 @@ index 2524acd6..7317033a 100644
 +	vow->drr_quantum[IEEE80211_AC_BK] = VOW_DRR_QUANTUM_IDX2;
 +	vow->tx_airtime = 0;
 +	spin_lock_init(&vow->lock);
-+
-+	ret = mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_BSS_GROUP);
-+	if (ret)
-+		return ret;
  
 -	msta = sta ? (struct mt7996_sta *)sta->drv_priv : &mvif->sta;
 -	req.wlan_idx = cpu_to_le16(msta->wcid.idx);
-+	ret = mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_PAUSE);
++	ret = mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_BSS_GROUP);
 +	if (ret)
 +		return ret;
  
 -	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(VOW), &req,
 -				 sizeof(req), true);
++	ret = mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_PAUSE);
++	if (ret)
++		return ret;
++
 +	return mt7996_mcu_set_vow_drr_ctrl(phy, msta, VOW_DRR_CTRL_STA_ALL);
  }
  
  int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
-@@ -2334,7 +2337,7 @@ int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+@@ -2334,7 +2337,7 @@ int mt7996_mcu_add_sta(struct mt7996_dev
  		mt7996_mcu_sta_bfee_tlv(dev, skb, vif, sta);
  	}
  
@@ -297,7 +289,7 @@ index 2524acd6..7317033a 100644
  	if (ret) {
  		dev_kfree_skb(skb);
  		return ret;
-@@ -5396,6 +5399,218 @@ int mt7996_mcu_set_scs(struct mt7996_phy *phy, u8 enable)
+@@ -5396,6 +5399,218 @@ int mt7996_mcu_set_scs(struct mt7996_phy
  				 &req, sizeof(req), false);
  }
  
@@ -516,8 +508,6 @@ index 2524acd6..7317033a 100644
  #ifdef CONFIG_MTK_VENDOR
  void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
  {
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 3802699e..96fb7fb6 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -922,6 +922,7 @@ enum {
@@ -528,8 +518,6 @@ index 3802699e..96fb7fb6 100644
  	UNI_VOW_RX_AT_AIRTIME_EN = 0x0b,
  	UNI_VOW_RX_AT_AIRTIME_CLR_EN = 0x0e,
  	UNI_VOW_RED_ENABLE = 0x18,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 541345ba..a0136724 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -124,6 +124,12 @@
@@ -644,7 +632,7 @@ index 541345ba..a0136724 100644
  #ifdef CONFIG_MTK_DEBUG
  	u16 wlan_idx;
  	struct {
-@@ -753,10 +837,12 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy);
+@@ -753,10 +837,12 @@ int mt7996_mcu_apply_tx_dpd(struct mt799
  #ifdef CONFIG_NL80211_TESTMODE
  void mt7996_tm_rf_test_event(struct mt7996_dev *dev, struct sk_buff *skb);
  #endif
@@ -658,7 +646,7 @@ index 541345ba..a0136724 100644
  
  static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
  {
-@@ -806,6 +892,14 @@ static inline u16 mt7996_rx_chainmask(struct mt7996_phy *phy)
+@@ -806,6 +892,14 @@ static inline u16 mt7996_rx_chainmask(st
  	return tx_chainmask | (BIT(fls(tx_chainmask)) * phy->has_aux_rx);
  }
  
@@ -673,6 +661,3 @@ index 541345ba..a0136724 100644
  void mt7996_mac_init(struct mt7996_dev *dev);
  u32 mt7996_mac_wtbl_lmac_addr(struct mt7996_dev *dev, u16 wcid, u8 dw);
  bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask);
--- 
-2.49.0
-

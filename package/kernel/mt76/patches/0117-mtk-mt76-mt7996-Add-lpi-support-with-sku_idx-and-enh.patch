@@ -31,11 +31,9 @@ Signed-off-by: Allen Ye <allen.ye@mediatek.com>
  mt7996/vendor.h      |  15 ++++++
  14 files changed, 286 insertions(+), 30 deletions(-)
 
-diff --git a/eeprom.c b/eeprom.c
-index 27a898fa..17b1fabd 100644
 --- a/eeprom.c
 +++ b/eeprom.c
-@@ -233,8 +233,9 @@ static bool mt76_string_prop_find(struct property *prop, const char *str)
+@@ -233,8 +233,9 @@ static bool mt76_string_prop_find(struct
  }
  
  struct device_node *
@@ -46,7 +44,7 @@ index 27a898fa..17b1fabd 100644
  	struct device_node *np = dev->dev->of_node;
  	const char *const region_names[] = {
  		[NL80211_DFS_UNSET] = "ww",
-@@ -244,6 +245,7 @@ mt76_find_power_limits_node(struct mt76_dev *dev)
+@@ -244,6 +245,7 @@ mt76_find_power_limits_node(struct mt76_
  	};
  	struct device_node *cur, *fallback = NULL;
  	const char *region_name = NULL;
@@ -54,7 +52,7 @@ index 27a898fa..17b1fabd 100644
  
  	if (dev->region < ARRAY_SIZE(region_names))
  		region_name = region_names[dev->region];
-@@ -252,15 +254,20 @@ mt76_find_power_limits_node(struct mt76_dev *dev)
+@@ -252,15 +254,20 @@ mt76_find_power_limits_node(struct mt76_
  	if (!np)
  		return NULL;
  
@@ -75,7 +73,7 @@ index 27a898fa..17b1fabd 100644
  		if (mt76_string_prop_find(country, dev->alpha2) ||
  		    mt76_string_prop_find(regd, region_name)) {
  			of_node_put(np);
-@@ -337,7 +344,7 @@ mt76_apply_array_limit(s8 *pwr, size_t pwr_len, const __be32 *data,
+@@ -337,7 +344,7 @@ mt76_apply_array_limit(s8 *pwr, size_t p
  
  	for (i = 0; i < pwr_len; i++) {
  		pwr[i] = min_t(s8, target_power,
@@ -84,7 +82,7 @@ index 27a898fa..17b1fabd 100644
  		*max_power = max(*max_power, pwr[i]);
  	}
  }
-@@ -402,7 +409,7 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
+@@ -402,7 +409,7 @@ s8 mt76_get_rate_power_limits(struct mt7
  	if (!IS_ENABLED(CONFIG_OF))
  		return target_power;
  
@@ -93,8 +91,6 @@ index 27a898fa..17b1fabd 100644
  	if (!np)
  		return target_power;
  
-diff --git a/mt76.h b/mt76.h
-index 4c9774ee..ce856e38 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -942,6 +942,7 @@ struct mt76_phy {
@@ -116,7 +112,7 @@ index 4c9774ee..ce856e38 100644
  #ifdef CONFIG_NL80211_TESTMODE
  	const struct mt76_testmode_ops *test_ops;
  	struct {
-@@ -1819,7 +1824,7 @@ mt76_mcu_skb_send_msg(struct mt76_dev *dev, struct sk_buff *skb, int cmd,
+@@ -1819,7 +1824,7 @@ mt76_mcu_skb_send_msg(struct mt76_dev *d
  void mt76_set_irq_mask(struct mt76_dev *dev, u32 addr, u32 clear, u32 set);
  
  struct device_node *
@@ -125,8 +121,6 @@ index 4c9774ee..ce856e38 100644
  struct device_node *
  mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan);
  
-diff --git a/mt76_connac3_mac.h b/mt76_connac3_mac.h
-index 48f1339a..4e8d64a9 100644
 --- a/mt76_connac3_mac.h
 +++ b/mt76_connac3_mac.h
 @@ -209,6 +209,18 @@ enum {
@@ -148,11 +142,9 @@ index 48f1339a..4e8d64a9 100644
  #define MT_CT_INFO_APPLY_TXD		BIT(0)
  #define MT_CT_INFO_COPY_HOST_TXD_ALL	BIT(1)
  #define MT_CT_INFO_MGMT_FRAME		BIT(2)
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 98f6ca97..907f6f08 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -374,7 +374,7 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
+@@ -374,7 +374,7 @@ static void __mt7996_init_txpower(struct
  
  	phy->sku_limit_en = true;
  	phy->sku_path_en = true;
@@ -161,11 +153,9 @@ index 98f6ca97..907f6f08 100644
  	for (i = 0; i < sband->n_channels; i++) {
  		struct ieee80211_channel *chan = &sband->channels[i];
  		int target_power = mt7996_eeprom_get_target_power(dev, chan);
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 57a662b3..8a810fa7 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -891,8 +891,13 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
+@@ -891,8 +891,13 @@ void mt7996_mac_write_txwi(struct mt7996
  		}
  
  		val = FIELD_PREP(MT_TXD6_TX_RATE, idx) | MT_TXD6_FIXED_BW;
@@ -179,8 +169,6 @@ index 57a662b3..8a810fa7 100644
  		txwi[6] |= cpu_to_le32(val);
  		txwi[3] |= cpu_to_le32(MT_TXD3_BA_DISABLE);
  	}
-diff --git a/mt7996/main.c b/mt7996/main.c
-index fc2a4ae2..51125f96 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
 @@ -927,6 +927,7 @@ static u8
@@ -191,7 +179,7 @@ index fc2a4ae2..51125f96 100644
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
  	struct mt76_phy *mphy = mconf->phy->mt76;
  	u16 rate;
-@@ -939,6 +940,8 @@ mt7996_get_rates_table(struct ieee80211_hw *hw, struct ieee80211_bss_conf *conf,
+@@ -939,6 +940,8 @@ mt7996_get_rates_table(struct ieee80211_
  
  		if (dev->cert_mode && phy->mt76->band_idx == MT_BAND2)
  			rate = 0x0200;
@@ -200,7 +188,7 @@ index fc2a4ae2..51125f96 100644
  
  		/* odd index for driver, even index for firmware */
  		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
-@@ -1077,7 +1080,7 @@ static void mt7996_link_info_changed(struct ieee80211_hw *hw,
+@@ -1077,7 +1080,7 @@ static void mt7996_link_info_changed(str
  		mt7996_update_mu_group(hw, info, mconf);
  
  	if (changed & BSS_CHANGED_TXPOWER)
@@ -209,11 +197,9 @@ index fc2a4ae2..51125f96 100644
  
  out:
  	mutex_unlock(&dev->mt76.mutex);
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 26b7e7d1..db855b3b 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -6346,7 +6346,7 @@ int mt7996_mcu_set_fixed_rate_table(struct mt7996_phy *phy, u8 table_idx,
+@@ -6346,7 +6346,7 @@ int mt7996_mcu_set_fixed_rate_table(stru
  
  	if (beacon) {
  		req.spe_idx_sel = SPE_IXD_SELECT_TXD;
@@ -222,7 +208,7 @@ index 26b7e7d1..db855b3b 100644
  		phy->beacon_rate = rate_idx;
  	} else {
  		req.spe_idx_sel = SPE_IXD_SELECT_BMC_WTBL;
-@@ -6636,14 +6636,29 @@ mt7996_update_max_txpower_cur(struct mt7996_phy *phy, int tx_power)
+@@ -6636,14 +6636,29 @@ mt7996_update_max_txpower_cur(struct mt7
  		mphy->txpower_cur = e2p_power_limit;
  }
  
@@ -254,7 +240,7 @@ index 26b7e7d1..db855b3b 100644
  	struct tx_power_limit_table_ctrl {
  		u8 __rsv1[4];
  
-@@ -6664,9 +6679,9 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
+@@ -6664,9 +6679,9 @@ int mt7996_mcu_set_txpower_sku(struct mt
  	struct sk_buff *skb;
  	int i, ret, txpower_limit;
  
@@ -267,7 +253,7 @@ index 26b7e7d1..db855b3b 100644
  
  	if (phy->sku_limit_en) {
  		txpower_limit = mt76_get_rate_power_limits(mphy, mphy->chandef.chan,
-@@ -6685,7 +6700,36 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
+@@ -6685,7 +6700,36 @@ int mt7996_mcu_set_txpower_sku(struct mt
  	skb_put_data(skb, &req, sizeof(req));
  	/* cck and ofdm */
  	skb_put_data(skb, &la.cck, sizeof(la.cck));
@@ -305,7 +291,7 @@ index 26b7e7d1..db855b3b 100644
  	/* ht20 */
  	skb_put_data(skb, &la.mcs[0], 8);
  	/* ht40 */
-@@ -6722,8 +6766,41 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
+@@ -6722,8 +6766,41 @@ int mt7996_mcu_set_txpower_sku(struct mt
  
  	skb_put_data(skb, &req, sizeof(req));
  	skb_put_data(skb, &la_path.cck, sizeof(la_path.cck));
@@ -349,7 +335,7 @@ index 26b7e7d1..db855b3b 100644
  
  	for (i = 0; i < 32; i++) {
  		bool bf = i % 2;
-@@ -6737,6 +6814,31 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
+@@ -6737,6 +6814,31 @@ int mt7996_mcu_set_txpower_sku(struct mt
  				     MCU_WM_UNI_CMD(TXPOWER), true);
  }
  
@@ -381,8 +367,6 @@ index 26b7e7d1..db855b3b 100644
  int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode)
  {
  	__le32 cp_mode;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 486e12f8..d3f1f169 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1067,6 +1067,7 @@ enum {
@@ -393,11 +377,9 @@ index 486e12f8..d3f1f169 100644
  	UNI_BAND_CONFIG_BSSID_MAPPING_ADDR = 0x12,
  };
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 15e22de2..ea116d88 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1121,7 +1121,7 @@ int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
+@@ -1121,7 +1121,7 @@ int mt7996_mcu_get_temperature(struct mt
  int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state);
  int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
  int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
@@ -406,7 +388,7 @@ index 15e22de2..ea116d88 100644
  int mt7996_mcu_rdd_cmd(struct mt7996_dev *dev, int cmd, u8 index,
  		       u8 rx_sel, u8 val);
  int mt7996_mcu_rdd_background_disable_timer(struct mt7996_dev *dev,
-@@ -1319,6 +1319,7 @@ void mt7996_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
+@@ -1319,6 +1319,7 @@ void mt7996_set_beacon_vif(void *data, u
  int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
  		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
  int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
@@ -414,11 +396,9 @@ index 15e22de2..ea116d88 100644
  #endif
  
  int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index 25118d4c..4861f4ac 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -2516,7 +2516,7 @@ mt7996_get_txpower_info(struct file *file, char __user *user_buf,
+@@ -2516,7 +2516,7 @@ mt7996_get_txpower_info(struct file *fil
  	len += scnprintf(buf + len, size - len,
  			 "    Theraml Compensation Value: %d\n",
  			 basic_info->thermal_compensate_value);
@@ -427,7 +407,7 @@ index 25118d4c..4861f4ac 100644
  	len += scnprintf(buf + len, size - len,
  			 "    RegDB:  %s\n",
  			 !np ? "enable" : "disable");
-@@ -4512,6 +4512,7 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
+@@ -4512,6 +4512,7 @@ void mt7996_mtk_init_dev_debugfs(struct
  	debugfs_create_file("rx_drop_stats", 0400, dir, dev, &mt7996_rx_drop_fops);
  
  	debugfs_create_file("muru_dbg", 0200, dir, dev, &fops_muru_dbg_info);
@@ -435,11 +415,9 @@ index 25118d4c..4861f4ac 100644
  }
  
  #endif
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index faf3db39..9721970c 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -1857,7 +1857,7 @@ mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
+@@ -1857,7 +1857,7 @@ mt7996_tm_update_params(struct mt7996_ph
  		mt7996_tm_update_channel(phy);
  		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(SKU_POWER_LIMIT), td->sku_en);
  		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(BACKOFF_POWER_LIMIT), td->sku_en);
@@ -448,8 +426,6 @@ index faf3db39..9721970c 100644
  	}
  	if (changed & BIT(TM_CHANGED_TX_LENGTH)) {
  		mt7996_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);
-diff --git a/mt7996/testmode.h b/mt7996/testmode.h
-index ba1767ae..5c720da7 100644
 --- a/mt7996/testmode.h
 +++ b/mt7996/testmode.h
 @@ -15,18 +15,6 @@ enum {
@@ -471,11 +447,9 @@ index ba1767ae..5c720da7 100644
  enum {
  	BF_CDBW_20MHZ,
  	BF_CDBW_40MHZ,
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index b7a46fe7..af21a2cb 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -145,6 +145,14 @@ csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
+@@ -145,6 +145,14 @@ csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI
  	[MTK_VENDOR_ATTR_CSI_CTRL_DATA] = { .type = NLA_NESTED },
  };
  
@@ -594,7 +568,7 @@ index b7a46fe7..af21a2cb 100644
  static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
  	{
  		.info = {
-@@ -1533,6 +1638,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
+@@ -1533,6 +1638,17 @@ static const struct wiphy_vendor_command
  		.policy = eml_ctrl_policy,
  		.maxattr = MTK_VENDOR_ATTR_EML_CTRL_MAX,
  	},
@@ -612,8 +586,6 @@ index b7a46fe7..af21a2cb 100644
  };
  
  static const struct nl80211_vendor_cmd_info mt7996_vendor_events[] = {
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index ca4f00ad..515f77a6 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -18,6 +18,7 @@ enum mtk_nl80211_vendor_subcmds {
@@ -645,6 +617,3 @@ index ca4f00ad..515f77a6 100644
  #endif
  
  #endif
--- 
-2.49.0
-

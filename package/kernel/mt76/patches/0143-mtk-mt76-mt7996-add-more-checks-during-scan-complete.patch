@@ -14,11 +14,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/main.c | 13 +++++++++++--
  1 file changed, 11 insertions(+), 2 deletions(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 8c2f61ad..3bac5235 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -570,17 +570,22 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
+@@ -570,17 +570,22 @@ static void mt7996_remove_interface(stru
  	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
  	struct mt7996_bss_conf *mconf;
  	struct mt7996_dev *dev = mt7996_hw_dev(hw);
@@ -42,7 +40,7 @@ index 8c2f61ad..3bac5235 100644
  	conf = link_conf_dereference_protected(vif, 0);
  	mconf = mconf_dereference_protected(mvif, 0);
  	if (!mconf || !conf)
-@@ -2615,12 +2620,16 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+@@ -2615,12 +2620,16 @@ mt7996_net_fill_forward_path(struct ieee
  void mt7996_scan_complete(struct mt7996_phy *phy, bool aborted)
  {
  	struct ieee80211_vif *vif = phy->scan_vif;
@@ -60,6 +58,3 @@ index 8c2f61ad..3bac5235 100644
  	if (ieee80211_vif_is_mld(vif)) {
  		struct mt7996_bss_conf *mconf;
  
--- 
-2.49.0
-

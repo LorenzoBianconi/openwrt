@@ -27,11 +27,9 @@ Signed-off-by: Michael-CY Lee <michael-cy.lee@mediatek.com>
  mt7996/mt7996.h |   5 ++
  3 files changed, 182 insertions(+), 2 deletions(-)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 43467f42..c5785560 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -580,6 +580,8 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -580,6 +580,8 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  	wiphy->max_scan_ssids = 4;
  	wiphy->max_scan_ie_len = IEEE80211_MAX_DATA_LEN;
  
@@ -40,7 +38,7 @@ index 43467f42..c5785560 100644
  	/* enable MLO support */
  	wiphy->flags |= WIPHY_FLAG_SUPPORTS_MLO;
  	wiphy->iftype_ext_capab = mt7996_iftypes_ext_capa;
-@@ -821,6 +823,7 @@ static int mt7996_register_phy(struct mt7996_dev *dev, enum mt76_band_id band)
+@@ -821,6 +823,7 @@ static int mt7996_register_phy(struct mt
  
  	INIT_DELAYED_WORK(&mphy->mac_work, mt7996_mac_work);
  	INIT_DELAYED_WORK(&phy->scan_work, mt7996_scan_work);
@@ -48,7 +46,7 @@ index 43467f42..c5785560 100644
  
  	ret = mt7996_eeprom_parse_hw_cap(dev, phy);
  	if (ret)
-@@ -1767,6 +1770,7 @@ int mt7996_register_device(struct mt7996_dev *dev)
+@@ -1767,6 +1770,7 @@ int mt7996_register_device(struct mt7996
  	INIT_WORK(&dev->rc_work, mt7996_mac_sta_rc_work);
  	INIT_DELAYED_WORK(&dev->mphy.mac_work, mt7996_mac_work);
  	INIT_DELAYED_WORK(&dev->phy.scan_work, mt7996_scan_work);
@@ -56,11 +54,9 @@ index 43467f42..c5785560 100644
  	INIT_DELAYED_WORK(&dev->scs_work, mt7996_mcu_scs_sta_poll);
  	INIT_LIST_HEAD(&dev->sta_rc_list);
  	INIT_LIST_HEAD(&dev->twt_list);
-diff --git a/mt7996/main.c b/mt7996/main.c
-index d0e54b6e..3efea2be 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -617,7 +617,7 @@ static void ___mt7996_set_channel(struct mt7996_phy *phy,
+@@ -617,7 +617,7 @@ static void ___mt7996_set_channel(struct
  {
  	struct mt76_dev *mdev = phy->mt76->dev;
  	struct mt76_phy *mphy = phy->mt76;
@@ -69,7 +65,7 @@ index d0e54b6e..3efea2be 100644
  	int timeout = HZ / 5;
  	unsigned long was_scanning = ieee80211_get_scanning(mphy->hw);
  
-@@ -2594,7 +2594,8 @@ mt7996_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2594,7 +2594,8 @@ mt7996_hw_scan(struct ieee80211_hw *hw,
  	mt7996_dbg(dev, MT7996_DBG_CHAN, "%s: trigger scan on mt76 band %u\n",
  		   __func__, phy->mt76->band_idx);
  	mutex_lock(&phy->dev->mt76.mutex);
@@ -79,7 +75,7 @@ index d0e54b6e..3efea2be 100644
  		mutex_unlock(&phy->dev->mt76.mutex);
  		return -EBUSY;
  	}
-@@ -2716,6 +2717,172 @@ mt7996_cancel_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+@@ -2716,6 +2717,172 @@ mt7996_cancel_hw_scan(struct ieee80211_h
  	}
  }
  
@@ -252,7 +248,7 @@ index d0e54b6e..3efea2be 100644
  static int
  mt7996_add_chanctx(struct ieee80211_hw *hw, struct ieee80211_chanctx_conf *conf)
  {
-@@ -2768,6 +2935,7 @@ mt7996_remove_chanctx(struct ieee80211_hw *hw, struct ieee80211_chanctx_conf *co
+@@ -2768,6 +2935,7 @@ mt7996_remove_chanctx(struct ieee80211_h
  	mt7996_dbg(dev, MT7996_DBG_CHAN, "%s: remove %u\n",
  		   __func__, conf->def.chan->hw_value);
  	cancel_delayed_work_sync(&phy->scan_work);
@@ -260,7 +256,7 @@ index d0e54b6e..3efea2be 100644
  	cancel_delayed_work_sync(&phy->mt76->mac_work);
  
  	mutex_lock(&phy->dev->mt76.mutex);
-@@ -2857,6 +3025,7 @@ mt7996_unassign_vif_chanctx(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -2857,6 +3025,7 @@ mt7996_unassign_vif_chanctx(struct ieee8
  	mt7996_dbg(dev, MT7996_DBG_CHAN, "%s, remove link %u from %d MHz\n",
  		   __func__, link_conf->link_id, conf->def.chan->center_freq);
  	cancel_delayed_work_sync(&phy->scan_work);
@@ -268,7 +264,7 @@ index d0e54b6e..3efea2be 100644
  
  	mutex_lock(&phy->dev->mt76.mutex);
  
-@@ -3130,6 +3299,8 @@ const struct ieee80211_ops mt7996_ops = {
+@@ -3130,6 +3299,8 @@ const struct ieee80211_ops mt7996_ops =
  	.wake_tx_queue = mt76_wake_tx_queue,
  	.hw_scan = mt7996_hw_scan,
  	.cancel_hw_scan = mt7996_cancel_hw_scan,
@@ -277,8 +273,6 @@ index d0e54b6e..3efea2be 100644
  	.release_buffered_frames = mt76_release_buffered_frames,
  	.get_txpower = mt7996_get_txpower,
  	.channel_switch_beacon = mt7996_channel_switch_beacon,
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index a33ec041..80ca7fd8 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -614,6 +614,10 @@ struct mt7996_phy {
@@ -292,7 +286,7 @@ index a33ec041..80ca7fd8 100644
  	bool sku_limit_en;
  	bool sku_path_en;
  
-@@ -1252,6 +1256,7 @@ bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
+@@ -1252,6 +1256,7 @@ bool mt7996_rx_check(struct mt76_dev *md
  void mt7996_stats_work(struct work_struct *work);
  void mt7996_scan_work(struct work_struct *work);
  void mt7996_scan_complete(struct mt7996_phy *phy, bool aborted);
@@ -300,6 +294,3 @@ index a33ec041..80ca7fd8 100644
  void mt7996_beacon_mon_work(struct work_struct *work);
  int mt76_dfs_start_rdd(struct mt7996_dev *dev, bool force);
  int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy);
--- 
-2.49.0
-

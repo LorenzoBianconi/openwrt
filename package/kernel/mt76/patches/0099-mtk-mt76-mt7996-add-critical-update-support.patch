@@ -30,8 +30,6 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h   |   4 ++
  5 files changed, 207 insertions(+), 29 deletions(-)
 
-diff --git a/mt76_connac_mcu.h b/mt76_connac_mcu.h
-index c75df0d1..860c4b82 100644
 --- a/mt76_connac_mcu.h
 +++ b/mt76_connac_mcu.h
 @@ -1386,6 +1386,8 @@ enum {
@@ -43,11 +41,9 @@ index c75df0d1..860c4b82 100644
  };
  
  enum {
-diff --git a/mt7996/main.c b/mt7996/main.c
-index e0a9dde7..4e283aae 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -348,6 +348,7 @@ static int mt7996_add_bss_conf(struct mt7996_phy *phy,
+@@ -348,6 +348,7 @@ static int mt7996_add_bss_conf(struct mt
  	mconf->mt76.band_idx = band_idx;
  	mconf->mt76.wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 3;
  	mconf->link_id = link_id;
@@ -55,7 +51,7 @@ index e0a9dde7..4e283aae 100644
  
  	ret = mt7996_mcu_add_dev_info(phy, conf, mconf, true);
  	if (ret)
-@@ -1023,7 +1024,9 @@ static void mt7996_link_info_changed(struct ieee80211_hw *hw,
+@@ -1023,7 +1024,9 @@ static void mt7996_link_info_changed(str
  		mconf->mt76.beacon_rates_idx =
  			mt7996_get_rates_table(hw, info, mconf, true, false);
  
@@ -66,7 +62,7 @@ index e0a9dde7..4e283aae 100644
  	}
  
  	if (changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
-@@ -1080,17 +1083,41 @@ mt7996_channel_switch_beacon(struct ieee80211_hw *hw,
+@@ -1080,17 +1083,41 @@ mt7996_channel_switch_beacon(struct ieee
  	unsigned int link_id;
  
  	mutex_lock(&dev->mt76.mutex);
@@ -116,7 +112,7 @@ index e0a9dde7..4e283aae 100644
  	mutex_unlock(&dev->mt76.mutex);
  }
  
-@@ -2729,32 +2756,54 @@ mt7996_switch_vif_chanctx(struct ieee80211_hw *hw,
+@@ -2729,32 +2756,54 @@ mt7996_switch_vif_chanctx(struct ieee802
  			  int n_vifs,
  			  enum ieee80211_chanctx_switch_mode mode)
  {
@@ -128,33 +124,39 @@ index e0a9dde7..4e283aae 100644
 +	struct mt7996_chanctx *new_ctx;
 +	struct mt7996_phy *phy;
 +	int i, ret = 0;
-+
+ 
+-	wiphy_info(hw->wiphy, "%s: old=%d, new=%d\n", __func__, vifs->old_ctx->def.chan->hw_value, vifs->new_ctx->def.chan->hw_value);
 +	for (i = 0; i < n_vifs; i++) {
 +		if (vifs[i].old_ctx == vifs[i].new_ctx)
 +			continue;
- 
--	wiphy_info(hw->wiphy, "%s: old=%d, new=%d\n", __func__, vifs->old_ctx->def.chan->hw_value, vifs->new_ctx->def.chan->hw_value);
-+		wiphy_info(hw->wiphy, "%s: old=%d, new=%d\n",
-+			   __func__, vifs[i].old_ctx->def.chan->hw_value,
-+			   vifs[i].new_ctx->def.chan->hw_value);
  
 -	if (new_ctx->nbss_assigned && phy->chanctx == new_ctx) {
 -		new_ctx->nbss_assigned += n_vifs;
 -		return 0;
 -	}
++		wiphy_info(hw->wiphy, "%s: old=%d, new=%d\n",
++			   __func__, vifs[i].old_ctx->def.chan->hw_value,
++			   vifs[i].new_ctx->def.chan->hw_value);
++
 +		mutex_lock(&dev->mt76.mutex);
- 
--	if (WARN_ON(old_ctx != phy->chanctx))
--		return -EINVAL;
++
 +		old_ctx = mt7996_chanctx_get(vifs[i].old_ctx);
 +		new_ctx = mt7996_chanctx_get(vifs[i].new_ctx);
 +		phy = old_ctx->phy;
  
--	mutex_lock(&phy->dev->mt76.mutex);
+-	if (WARN_ON(old_ctx != phy->chanctx))
+-		return -EINVAL;
 +		if (new_ctx->nbss_assigned && phy->chanctx == new_ctx) {
 +			new_ctx->nbss_assigned++;
 +			mutex_unlock(&dev->mt76.mutex);
 +			continue;
++		}
+ 
+-	mutex_lock(&phy->dev->mt76.mutex);
++		if (WARN_ON(old_ctx != phy->chanctx)) {
++			ret = -EINVAL;
++			mutex_unlock(&dev->mt76.mutex);
++			goto out;
 +		}
  
 -	phy->chanctx = new_ctx;
@@ -163,38 +165,30 @@ index e0a9dde7..4e283aae 100644
 -	new_ctx->chandef = vifs->new_ctx->def;
 -	new_ctx->phy = phy;
 -	new_ctx->nbss_assigned += n_vifs;
-+		if (WARN_ON(old_ctx != phy->chanctx)) {
-+			ret = -EINVAL;
-+			mutex_unlock(&dev->mt76.mutex);
-+			goto out;
-+		}
- 
--	mutex_unlock(&phy->dev->mt76.mutex);
 +		phy->chanctx = new_ctx;
 +		phy->mt76->radar_enabled = vifs[i].new_ctx->radar_enabled;
 +		new_ctx->assigned = true;
 +		new_ctx->chandef = vifs[i].new_ctx->def;
 +		new_ctx->phy = phy;
 +		new_ctx->nbss_assigned++;
-+
+ 
+-	mutex_unlock(&phy->dev->mt76.mutex);
 +		mutex_unlock(&dev->mt76.mutex);
-+
+ 
+-	return mt7996_set_channel(phy, &new_ctx->chandef);
 +		ret = mt7996_set_channel(phy, &new_ctx->chandef);
 +		if (ret)
 +			goto out;
 +	}
- 
--	return mt7996_set_channel(phy, &new_ctx->chandef);
++
 +out:
 +	return ret;
  }
  
  static int
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 4210e0ba..bb94e472 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -374,6 +374,7 @@ mt7996_mcu_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
+@@ -374,6 +374,7 @@ mt7996_mcu_csa_finish(void *priv, u8 *ma
  	struct mt76_phy *mphy = (struct mt76_phy *)priv;
  	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
  	struct ieee80211_bss_conf *link_conf;
@@ -202,7 +196,7 @@ index 4210e0ba..bb94e472 100644
  	int link_id, band_idx = mphy->band_idx;
  
  	link_id = mvif->band_to_link[band_idx];
-@@ -385,7 +386,16 @@ mt7996_mcu_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
+@@ -385,7 +386,16 @@ mt7996_mcu_csa_finish(void *priv, u8 *ma
  	if (!link_conf || !link_conf->csa_active || vif->type == NL80211_IFTYPE_STATION)
  		return;
  
@@ -219,7 +213,7 @@ index 4210e0ba..bb94e472 100644
  }
  
  static void
-@@ -3273,6 +3283,93 @@ mt7996_mcu_beacon_mbss(struct sk_buff *rskb, struct sk_buff *skb,
+@@ -3273,6 +3283,93 @@ mt7996_mcu_beacon_mbss(struct sk_buff *r
  	}
  }
  
@@ -313,7 +307,7 @@ index 4210e0ba..bb94e472 100644
  static void
  mt7996_mcu_beacon_cont(struct mt7996_dev *dev, struct ieee80211_bss_conf *conf,
  		       struct sk_buff *rskb, struct sk_buff *skb,
-@@ -3357,6 +3454,8 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw,
+@@ -3357,6 +3454,8 @@ int mt7996_mcu_add_beacon(struct ieee802
  	mt7996_mcu_beacon_cont(dev, conf, rskb, skb, bcn, &offs);
  	mt7996_mcu_beacon_mbss(rskb, skb, conf, bcn, &offs);
  	mt7996_mcu_beacon_cntdwn(conf, rskb, skb, &offs);
@@ -322,8 +316,6 @@ index 4210e0ba..bb94e472 100644
  out:
  	dev_kfree_skb(skb);
  	return mt76_mcu_skb_send_msg(&phy->dev->mt76, rskb,
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 4650a88b..29b356c7 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -503,6 +503,27 @@ struct bss_bcn_mbss_tlv {
@@ -366,8 +358,6 @@ index 4650a88b..29b356c7 100644
  #define MT7996_MAX_BSS_OFFLOAD_SIZE	(MT7996_MAX_BEACON_SIZE +		\
  					 MT7996_BEACON_UPDATE_SIZE)
  
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index a27b3bb2..3d888032 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -363,6 +363,7 @@ struct mt7996_bss_conf {
@@ -388,6 +378,3 @@ index a27b3bb2..3d888032 100644
  	u8 band_to_link[__MT_MAX_BAND];
  
  	/* for beacon monitoring */
--- 
-2.49.0
-

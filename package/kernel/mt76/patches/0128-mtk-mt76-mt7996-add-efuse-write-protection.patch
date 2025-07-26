@@ -20,11 +20,9 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  mt7996/testmode.h |   6 +++
  4 files changed, 157 insertions(+), 18 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 0daf367c..8ef6f373 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -5195,13 +5195,6 @@ static int mt7996_mcu_set_cal_free_data(struct mt7996_dev *dev)
+@@ -5195,13 +5195,6 @@ static int mt7996_mcu_set_cal_free_data(
  #define MT_EE_CAL_FREE_MAX_SIZE		30
  #define MT_EE_7977BN_OFFSET		(0x1200 - 0x500)
  #define MT_EE_END_OFFSET		0xffff
@@ -38,7 +36,7 @@ index 0daf367c..8ef6f373 100644
  	static const u16 adie_offs_list[][MT_EE_CAL_FREE_MAX_SIZE] = {
  		[ADIE_7975] = {0x5cd, 0x5cf, 0x5d1, 0x5d3, 0x6c0, 0x6c1, 0x6c2, 0x6c3,
  			       0x7a1, 0x7a6, 0x7a8, 0x7aa, -1},
-@@ -5231,10 +5224,10 @@ static int mt7996_mcu_set_cal_free_data(struct mt7996_dev *dev)
+@@ -5231,10 +5224,10 @@ static int mt7996_mcu_set_cal_free_data(
  			       0x127a, 0x127b, 0x127c, 0x127e, 0x1280, -1},
  	};
  	static const u16 adie_base_7996[] = {
@@ -51,8 +49,6 @@ index 0daf367c..8ef6f373 100644
  	};
  	static const u16 *adie_offs[__MT_MAX_BAND];
  	static const u16 *eep_offs[__MT_MAX_BAND];
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index c95f5294..8c93a3b8 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -193,6 +193,29 @@ enum mt7996_eeprom_mode {
@@ -85,11 +81,9 @@ index c95f5294..8c93a3b8 100644
  enum mt7996_coredump_state {
  	MT7996_COREDUMP_IDLE = 0,
  	MT7996_COREDUMP_MANUAL_WA,
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index 586a9c91..da4b193b 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -2139,6 +2139,127 @@ mt7996_tm_dump_stats(struct mt76_phy *mphy, struct sk_buff *msg)
+@@ -2139,6 +2139,127 @@ mt7996_tm_dump_stats(struct mt76_phy *mp
  	return 0;
  }
  
@@ -217,7 +211,7 @@ index 586a9c91..da4b193b 100644
  static int
  mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
  {
-@@ -2147,8 +2268,9 @@ mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
+@@ -2147,8 +2268,9 @@ mt7996_tm_write_back_to_efuse(struct mt7
  		.len = cpu_to_le16(sizeof(req) - 4 +
  				   MT76_TM_EEPROM_BLOCK_SIZE),
  	};
@@ -228,7 +222,7 @@ index 586a9c91..da4b193b 100644
  	int i, ret = -EINVAL;
  
  	/* prevent from damaging chip id in efuse */
-@@ -2158,13 +2280,8 @@ mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
+@@ -2158,13 +2280,8 @@ mt7996_tm_write_back_to_efuse(struct mt7
  	for (i = 0; i < MT7996_EEPROM_SIZE; i += MT76_TM_EEPROM_BLOCK_SIZE) {
  		struct sk_buff *skb;
  
@@ -244,7 +238,7 @@ index 586a9c91..da4b193b 100644
  			continue;
  
  		skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, msg_len);
-@@ -2173,7 +2290,7 @@ mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
+@@ -2173,7 +2290,7 @@ mt7996_tm_write_back_to_efuse(struct mt7
  
  		req.addr = cpu_to_le32(i);
  		skb_put_data(skb, &req, sizeof(req));
@@ -253,8 +247,6 @@ index 586a9c91..da4b193b 100644
  
  		ret = mt76_mcu_skb_send_msg(&dev->mt76, skb,
  					    MCU_WM_UNI_CMD(EFUSE_CTRL), true);
-diff --git a/mt7996/testmode.h b/mt7996/testmode.h
-index 5c720da7..154392dc 100644
 --- a/mt7996/testmode.h
 +++ b/mt7996/testmode.h
 @@ -363,4 +363,10 @@ struct mt7996_tm_rdd_ipi_ctrl {
@@ -268,6 +260,3 @@ index 5c720da7..154392dc 100644
 +};
 +
  #endif
--- 
-2.49.0
-

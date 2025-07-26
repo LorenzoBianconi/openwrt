@@ -23,8 +23,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  mt7996/main.c  |  2 ++
  4 files changed, 61 insertions(+), 8 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index 55e88435..aea1b38c 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -554,6 +554,8 @@ enum {
@@ -36,8 +34,6 @@ index 55e88435..aea1b38c 100644
  };
  
  enum mt76_sta_event {
-diff --git a/mt7996/debug.h b/mt7996/debug.h
-index c9454567..750bed6a 100644
 --- a/mt7996/debug.h
 +++ b/mt7996/debug.h
 @@ -14,6 +14,7 @@ enum mt7996_debug_mask {
@@ -48,8 +44,6 @@ index c9454567..750bed6a 100644
  
  	MT7996_DBG_ALL = 0xffffffff,
  };
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index caf102d5..e67efae2 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
 @@ -12,6 +12,7 @@
@@ -60,7 +54,7 @@ index caf102d5..e67efae2 100644
  
  static const struct mt7996_dfs_radar_spec etsi_radar_specs = {
  	.pulse_th = { 110, -10, -80, 40, 5200, 128, 5200 },
-@@ -52,6 +53,8 @@ static const struct mt7996_dfs_radar_spec jp_radar_specs = {
+@@ -52,6 +53,8 @@ static const struct mt7996_dfs_radar_spe
  	},
  };
  
@@ -69,7 +63,7 @@ index caf102d5..e67efae2 100644
  bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask)
  {
  	mt76_rmw(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_WLAN_IDX,
-@@ -565,6 +568,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -565,6 +568,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  
  		hdr = mt76_skb_get_hdr(skb);
  		fc = hdr->frame_control;
@@ -80,7 +74,7 @@ index caf102d5..e67efae2 100644
  		if (ieee80211_is_data_qos(fc)) {
  			u8 *qos = ieee80211_get_qos_ctl(hdr);
  
-@@ -3436,6 +3443,33 @@ static void mt7996_scan_check_sta(void *data, struct ieee80211_sta *sta)
+@@ -3436,6 +3443,33 @@ static void mt7996_scan_check_sta(void *
  	*has_sta = true;
  }
  
@@ -114,7 +108,7 @@ index caf102d5..e67efae2 100644
  void mt7996_scan_work(struct work_struct *work)
  {
  	struct mt7996_phy *phy = container_of(work, struct mt7996_phy, scan_work.work);
-@@ -3447,6 +3481,8 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3447,6 +3481,8 @@ void mt7996_scan_work(struct work_struct
  
  	mutex_lock(&phy->dev->mt76.mutex);
  
@@ -123,7 +117,7 @@ index caf102d5..e67efae2 100644
  	if (phy->scan_chan_idx >= req->n_channels) {
  		mt7996_scan_complete(phy, false);
  		mutex_unlock(&phy->dev->mt76.mutex);
-@@ -3459,6 +3495,19 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3459,6 +3495,19 @@ void mt7996_scan_work(struct work_struct
  		return;
  	}
  
@@ -143,7 +137,7 @@ index caf102d5..e67efae2 100644
  	ieee80211_iterate_stations_atomic(hw, mt7996_scan_check_sta, &has_sta);
  
  	/* go back to operating channel */
-@@ -3481,6 +3530,11 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3481,6 +3530,11 @@ void mt7996_scan_work(struct work_struct
  	if (!req->n_ssids ||
  	    (phy->scan_chan->flags & (IEEE80211_CHAN_NO_IR |
  				      IEEE80211_CHAN_RADAR))) {
@@ -155,7 +149,7 @@ index caf102d5..e67efae2 100644
  		duration = HZ / 9; /* ~110 ms */
  	} else {
  		duration = HZ / 16; /* ~60 ms */
-@@ -3492,14 +3546,8 @@ void mt7996_scan_work(struct work_struct *work)
+@@ -3492,14 +3546,8 @@ void mt7996_scan_work(struct work_struct
  
  	mt7996_config_channel(phy, &chandef);
  
@@ -172,11 +166,9 @@ index caf102d5..e67efae2 100644
  
  	ieee80211_queue_delayed_work(hw, &phy->scan_work, duration);
  }
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 5688de8f..e9e72099 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -2637,6 +2637,8 @@ void mt7996_scan_complete(struct mt7996_phy *phy, bool aborted)
+@@ -2637,6 +2637,8 @@ void mt7996_scan_complete(struct mt7996_
  	phy->scan_req = NULL;
  	phy->scan_vif = NULL;
  	clear_bit(MT76_SCANNING, &phy->mt76->state);
@@ -185,6 +177,3 @@ index 5688de8f..e9e72099 100644
  }
  
  static int
--- 
-2.49.0
-

@@ -14,11 +14,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mcu.c | 2 ++
  1 file changed, 2 insertions(+)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 349c69e5..e97fff8b 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3923,6 +3923,8 @@ int mt7996_mcu_set_ser(struct mt7996_dev *dev, u8 action, u8 val, u8 band)
+@@ -3923,6 +3923,8 @@ int mt7996_mcu_set_ser(struct mt7996_dev
  	};
  
  	switch (action) {
@@ -27,6 +25,3 @@ index 349c69e5..e97fff8b 100644
  	case UNI_CMD_SER_SET:
  		req.set.mask = cpu_to_le32(val);
  		break;
--- 
-2.49.0
-

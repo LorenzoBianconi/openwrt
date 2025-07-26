@@ -16,11 +16,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mac.c | 91 +++++++++++++++++++++++++++++++++++++---------------
  1 file changed, 65 insertions(+), 26 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index c555514c..00a1a27a 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -73,10 +73,11 @@ static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
+@@ -73,10 +73,11 @@ static int mt7996_reverse_frag0_hdr_tran
  {
  	struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
  	struct ethhdr *eth_hdr = (struct ethhdr *)(skb->data + hdr_gap);
@@ -33,7 +31,7 @@ index c555514c..00a1a27a 100644
  	struct ieee80211_hdr hdr;
  	u16 frame_control;
  
-@@ -87,11 +88,14 @@ static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
+@@ -87,11 +88,14 @@ static int mt7996_reverse_frag0_hdr_tran
  	if (!(le32_to_cpu(rxd[1]) & MT_RXD1_NORMAL_GROUP_4))
  		return -EINVAL;
  
@@ -51,7 +49,7 @@ index c555514c..00a1a27a 100644
  
  	/* store the info from RXD and ethhdr to avoid being overridden */
  	frame_control = le32_get_bits(rxd[8], MT_RXD8_FRAME_CONTROL);
-@@ -104,7 +108,7 @@ static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
+@@ -104,7 +108,7 @@ static int mt7996_reverse_frag0_hdr_tran
  	switch (frame_control & (IEEE80211_FCTL_TODS |
  				 IEEE80211_FCTL_FROMDS)) {
  	case 0:
@@ -60,7 +58,7 @@ index c555514c..00a1a27a 100644
  		break;
  	case IEEE80211_FCTL_FROMDS:
  		ether_addr_copy(hdr.addr3, eth_hdr->h_source);
-@@ -979,15 +983,21 @@ u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id)
+@@ -979,15 +983,21 @@ u32 mt7996_wed_init_buf(void *ptr, dma_a
  }
  
  static void
@@ -84,7 +82,7 @@ index c555514c..00a1a27a 100644
  		return;
  
  	tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
-@@ -1013,17 +1023,17 @@ mt7996_tx_check_aggr(struct ieee80211_sta *sta, struct sk_buff *skb)
+@@ -1013,17 +1023,17 @@ mt7996_tx_check_aggr(struct ieee80211_st
  		return;
  
  	msta = (struct mt7996_sta *)sta->drv_priv;
@@ -105,7 +103,7 @@ index c555514c..00a1a27a 100644
  	__le32 *txwi;
  	u16 wcid_idx;
  
-@@ -1033,11 +1043,10 @@ mt7996_txwi_free(struct mt7996_dev *dev, struct mt76_txwi_cache *t,
+@@ -1033,11 +1043,10 @@ mt7996_txwi_free(struct mt7996_dev *dev,
  
  	txwi = (__le32 *)mt76_get_txwi_ptr(mdev, t);
  	if (sta) {
@@ -118,7 +116,7 @@ index c555514c..00a1a27a 100644
  	} else {
  		wcid_idx = le32_get_bits(txwi[9], MT_TXD9_WLAN_IDX);
  	}
-@@ -1092,7 +1101,9 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1092,7 +1101,9 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  		 */
  		info = le32_to_cpu(*cur_info);
  		if (info & MT_TXFREE_INFO_PAIR) {
@@ -129,7 +127,7 @@ index c555514c..00a1a27a 100644
  			u16 idx;
  
  			idx = FIELD_GET(MT_TXFREE_INFO_WLAN_ID, info);
-@@ -1101,11 +1112,17 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1101,11 +1112,17 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  			if (!sta)
  				continue;
  
@@ -151,7 +149,7 @@ index c555514c..00a1a27a 100644
  			spin_unlock_bh(&mdev->sta_poll_lock);
  			continue;
  		} else if (info & MT_TXFREE_INFO_HEADER) {
-@@ -1141,7 +1158,8 @@ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+@@ -1141,7 +1158,8 @@ mt7996_mac_tx_free(struct mt7996_dev *de
  			if (!txwi)
  				continue;
  
@@ -194,7 +192,7 @@ index c555514c..00a1a27a 100644
  }
  
  static void
-@@ -1604,7 +1632,7 @@ void mt7996_tx_token_put(struct mt7996_dev *dev)
+@@ -1604,7 +1632,7 @@ void mt7996_tx_token_put(struct mt7996_d
  
  	spin_lock_bh(&dev->mt76.token_lock);
  	idr_for_each_entry(&dev->mt76.token, txwi, id) {
@@ -203,7 +201,7 @@ index c555514c..00a1a27a 100644
  		dev->mt76.token_count--;
  	}
  	spin_unlock_bh(&dev->mt76.token_lock);
-@@ -2288,21 +2316,31 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2288,21 +2316,31 @@ void mt7996_mac_sta_rc_work(struct work_
  	u32 changed;
  	LIST_HEAD(list);
  
@@ -239,7 +237,7 @@ index c555514c..00a1a27a 100644
  
  		if (changed & (IEEE80211_RC_SUPP_RATES_CHANGED |
  			       IEEE80211_RC_NSS_CHANGED |
-@@ -2317,6 +2355,7 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
+@@ -2317,6 +2355,7 @@ void mt7996_mac_sta_rc_work(struct work_
  	}
  
  	spin_unlock_bh(&dev->mt76.sta_poll_lock);
@@ -247,6 +245,3 @@ index c555514c..00a1a27a 100644
  }
  
  void mt7996_mac_work(struct work_struct *work)
--- 
-2.49.0
-

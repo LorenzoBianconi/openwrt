@@ -27,8 +27,6 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  wed.c           |  4 ++--
  7 files changed, 24 insertions(+), 17 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index 223d6a68..ccaa9a50 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -54,6 +54,8 @@
@@ -40,11 +38,9 @@ index 223d6a68..ccaa9a50 100644
  #define MT_QFLAG_WED_RING	GENMASK(1, 0)
  #define MT_QFLAG_WED_TYPE	GENMASK(4, 2)
  #define MT_QFLAG_WED		BIT(5)
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 02f14d9f..0012429a 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1776,7 +1776,7 @@ mt7996_mac_restart(struct mt7996_dev *dev)
+@@ -1776,7 +1776,7 @@ mt7996_mac_restart(struct mt7996_dev *de
  		}
  
  		mt76_wr(dev, MT_INT_MASK_CSR, wed_irq_mask);
@@ -53,7 +49,7 @@ index 02f14d9f..0012429a 100644
  		mt7996_irq_enable(dev, wed_irq_mask);
  		mt7996_irq_disable(dev, 0);
  	}
-@@ -2002,6 +2002,7 @@ void mt7996_mac_reset_work(struct work_struct *work)
+@@ -2002,6 +2002,7 @@ void mt7996_mac_reset_work(struct work_s
  
  		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, wed_irq_mask,
  					    true);
@@ -61,11 +57,9 @@ index 02f14d9f..0012429a 100644
  		mt7996_irq_enable(dev, wed_irq_mask);
  		mt7996_irq_disable(dev, 0);
  	}
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 7317033a..e7249d83 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -3285,7 +3285,7 @@ static int mt7996_mcu_wa_red_config(struct mt7996_dev *dev)
+@@ -3285,7 +3285,7 @@ static int mt7996_mcu_wa_red_config(stru
  
  	if (!mtk_wed_device_active(&dev->mt76.mmio.wed))
  		req.token_per_src[RED_TOKEN_SRC_CNT - 1] =
@@ -74,8 +68,6 @@ index 7317033a..e7249d83 100644
  
  	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_PARAM_CMD(SET),
  				 &req, sizeof(req), false);
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index e64f9878..828eeeac 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
 @@ -14,7 +14,7 @@
@@ -87,7 +79,7 @@ index e64f9878..828eeeac 100644
  module_param(wed_enable, bool, 0644);
  
  static const struct __base mt7996_reg_base[] = {
-@@ -346,7 +346,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -346,7 +346,7 @@ int mt7996_mmio_wed_init(struct mt7996_d
  		}
  
  		wed->wlan.wpdma_rx_glo = wed->wlan.phy_base + hif1_ofs + MT_WFDMA0_GLO_CFG;
@@ -96,7 +88,7 @@ index e64f9878..828eeeac 100644
  				     MT_RXQ_RING_BASE(MT7996_RXQ_BAND0) +
  				     MT7996_RXQ_BAND0 * MT_RING_SIZE;
  
-@@ -361,7 +361,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -361,7 +361,7 @@ int mt7996_mmio_wed_init(struct mt7996_d
  
  		wed->wlan.wpdma_rx_glo = wed->wlan.phy_base + MT_WFDMA0_GLO_CFG;
  
@@ -105,7 +97,7 @@ index e64f9878..828eeeac 100644
  				     MT_RXQ_RING_BASE(MT7996_RXQ_BAND0) +
  				     MT7996_RXQ_BAND0 * MT_RING_SIZE;
  
-@@ -403,8 +403,8 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -403,8 +403,8 @@ int mt7996_mmio_wed_init(struct mt7996_d
  		dev->mt76.rx_token_size = MT7996_TOKEN_SIZE + wed->wlan.rx_npkt;
  	}
  
@@ -116,7 +108,7 @@ index e64f9878..828eeeac 100644
  
  	wed->wlan.amsdu_max_subframes = 8;
  	wed->wlan.amsdu_max_len = 1536;
-@@ -428,6 +428,8 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -428,6 +428,8 @@ int mt7996_mmio_wed_init(struct mt7996_d
  	*irq = wed->irq;
  	dev->mt76.dma_dev = wed->dev;
  
@@ -125,8 +117,6 @@ index e64f9878..828eeeac 100644
  	return 1;
  #else
  	return 0;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index fea525ab..7164e38c 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
 @@ -81,6 +81,7 @@
@@ -137,11 +127,9 @@ index fea525ab..7164e38c 100644
  
  #define MT7996_CFEND_RATE_DEFAULT	0x49	/* OFDM 24M */
  #define MT7996_CFEND_RATE_11B		0x03	/* 11B LP, 11M */
-diff --git a/mt7996/pci.c b/mt7996/pci.c
-index a8abe68e..1ce16c38 100644
 --- a/mt7996/pci.c
 +++ b/mt7996/pci.c
-@@ -172,7 +172,7 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
+@@ -172,7 +172,7 @@ static int mt7996_pci_probe(struct pci_d
  
  		ret = mt7996_mmio_wed_init(dev, hif2_dev, true, &hif2_irq);
  		if (ret < 0)
@@ -150,7 +138,7 @@ index a8abe68e..1ce16c38 100644
  
  		if (!ret) {
  			ret = pci_alloc_irq_vectors(hif2_dev, 1, 1,
-@@ -181,14 +181,15 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
+@@ -181,14 +181,15 @@ static int mt7996_pci_probe(struct pci_d
  				goto free_hif2;
  
  			dev->hif2->irq = hif2_dev->irq;
@@ -171,7 +159,7 @@ index a8abe68e..1ce16c38 100644
  
  		mt76_wr(dev, MT_INT1_MASK_CSR, 0);
  		/* master switch of PCIe tnterrupt enable */
-@@ -203,8 +204,8 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
+@@ -203,8 +204,8 @@ static int mt7996_pci_probe(struct pci_d
  
  free_hif2_irq:
  	if (dev->hif2)
@@ -182,11 +170,9 @@ index a8abe68e..1ce16c38 100644
  	if (dev->hif2) {
  		if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
  			mtk_wed_device_detach(&dev->mt76.mmio.wed_hif2);
-diff --git a/wed.c b/wed.c
-index 5d860a4d..9065a9a6 100644
 --- a/wed.c
 +++ b/wed.c
-@@ -108,7 +108,7 @@ int mt76_wed_offload_enable(struct mtk_wed_device *wed)
+@@ -108,7 +108,7 @@ int mt76_wed_offload_enable(struct mtk_w
  	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
  
  	spin_lock_bh(&dev->token_lock);
@@ -195,7 +181,7 @@ index 5d860a4d..9065a9a6 100644
  	spin_unlock_bh(&dev->token_lock);
  
  	return !wait_event_timeout(dev->tx_wait, !dev->wed_token_count, HZ);
-@@ -192,7 +192,7 @@ void mt76_wed_offload_disable(struct mtk_wed_device *wed)
+@@ -192,7 +192,7 @@ void mt76_wed_offload_disable(struct mtk
  	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
  
  	spin_lock_bh(&dev->token_lock);
@@ -204,6 +190,3 @@ index 5d860a4d..9065a9a6 100644
  	spin_unlock_bh(&dev->token_lock);
  }
  EXPORT_SYMBOL_GPL(mt76_wed_offload_disable);
--- 
-2.49.0
-

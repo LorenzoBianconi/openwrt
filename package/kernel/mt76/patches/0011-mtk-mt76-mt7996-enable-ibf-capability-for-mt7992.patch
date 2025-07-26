@@ -15,8 +15,6 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mcu.c | 7 ++++++-
  1 file changed, 6 insertions(+), 1 deletion(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 980bddce..d0eae9f0 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
 @@ -1663,6 +1663,8 @@ static void
@@ -28,7 +26,7 @@ index 980bddce..d0eae9f0 100644
  	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
  	struct mt7996_phy *phy = mvif->phy;
  	int tx_ant = hweight16(phy->mt76->chainmask) - 1;
-@@ -1701,7 +1703,10 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
+@@ -1701,7 +1703,10 @@ mt7996_mcu_sta_bfer_tlv(struct mt7996_de
  	else
  		return;
  
@@ -40,6 +38,3 @@ index 980bddce..d0eae9f0 100644
  	bf->bw = sta->deflink.bandwidth;
  	bf->ibf_dbw = sta->deflink.bandwidth;
  	bf->ibf_nrow = tx_ant;
--- 
-2.49.0
-

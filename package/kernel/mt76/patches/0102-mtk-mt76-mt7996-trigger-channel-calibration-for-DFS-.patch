@@ -19,11 +19,9 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  mt7996/testmode.c |  4 ++--
  4 files changed, 16 insertions(+), 8 deletions(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index e9dd849e..710eccad 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -641,11 +641,11 @@ static int __mt7996_set_channel(struct mt7996_phy *phy,
+@@ -641,11 +641,11 @@ static int __mt7996_set_channel(struct m
  		goto out;
  	}
  
@@ -37,7 +35,7 @@ index e9dd849e..710eccad 100644
  	if (ret)
  		goto out;
  
-@@ -3001,6 +3001,13 @@ mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -3001,6 +3001,13 @@ mt7996_event_callback(struct ieee80211_h
  				next_time = min(next_time,
  						MT7996_MAX_BEACON_LOSS *
  						conf->beacon_int);
@@ -51,11 +49,9 @@ index e9dd849e..710eccad 100644
  			}
  
  			ieee80211_queue_delayed_work(hw, &mvif->beacon_mon_work,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index e0b5e51c..eeba373d 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -4430,7 +4430,7 @@ int mt7996_mcu_rdd_background_enable(struct mt7996_phy *phy,
+@@ -4430,7 +4430,7 @@ int mt7996_mcu_rdd_background_enable(str
  				  0, region);
  }
  
@@ -64,7 +60,7 @@ index e0b5e51c..eeba373d 100644
  {
  	static const u8 ch_band[] = {
  		[NL80211_BAND_2GHZ] = 0,
-@@ -4441,6 +4441,8 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
+@@ -4441,6 +4441,8 @@ int mt7996_mcu_set_chan_info(struct mt79
  	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
  	int freq1 = chandef->center_freq1;
  	u8 band_idx = phy->mt76->band_idx;
@@ -73,7 +69,7 @@ index e0b5e51c..eeba373d 100644
  	struct {
  		/* fixed field */
  		u8 __rsv[4];
-@@ -4481,8 +4483,7 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
+@@ -4481,8 +4483,7 @@ int mt7996_mcu_set_chan_info(struct mt79
  		 phy->mt76->hw->conf.flags & IEEE80211_CONF_IDLE ||
  		 phy->scan_chan)
  		req.switch_reason = CH_SWITCH_SCAN_BYPASS_DPD;
@@ -83,11 +79,9 @@ index e0b5e51c..eeba373d 100644
  		req.switch_reason = CH_SWITCH_DFS;
  	else
  		req.switch_reason = CH_SWITCH_NORMAL;
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 6db64f44..9e79a7ff 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1074,7 +1074,7 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev,
+@@ -1074,7 +1074,7 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  int mt7996_mcu_add_mld_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
  			   struct ieee80211_sta *sta, unsigned long add);
  int mt7996_set_channel(struct mt7996_phy *phy, struct cfg80211_chan_def *chandef);
@@ -96,11 +90,9 @@ index 6db64f44..9e79a7ff 100644
  int mt7996_mcu_set_tx(struct mt7996_dev *dev, struct mt7996_bss_conf *mconf);
  int mt7996_mcu_set_fixed_rate_ctrl(struct mt7996_dev *dev,
  				   void *data, u16 version);
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index b542651d..ed0da29e 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -550,7 +550,7 @@ mt7996_tm_dpd_prek_send_req(struct mt7996_phy *phy, struct mt7996_tm_req *req,
+@@ -550,7 +550,7 @@ mt7996_tm_dpd_prek_send_req(struct mt799
  
  		/* set channel switch reason */
  		mphy->hw->conf.flags |= IEEE80211_CONF_OFFCHANNEL;
@@ -118,6 +110,3 @@ index b542651d..ed0da29e 100644
  
  	return ret;
  }
--- 
-2.49.0
-

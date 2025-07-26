@@ -21,8 +21,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  tools/fields.c    | 16 ++++++++++--
  6 files changed, 98 insertions(+), 34 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index a26f64d1..34437ba5 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -822,6 +822,9 @@ struct mt76_testmode_data {
@@ -35,11 +33,9 @@ index a26f64d1..34437ba5 100644
  	u32 freq_offset;
  
  	u8 tx_power[4];
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 710eccad..f36b4a02 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -324,16 +324,27 @@ static int mt7996_add_bss_conf(struct mt7996_phy *phy,
+@@ -324,16 +324,27 @@ static int mt7996_add_bss_conf(struct mt
  		mconf = &mvif->deflink;
  	}
  
@@ -76,11 +72,9 @@ index 710eccad..f36b4a02 100644
  	}
  
  	mconf->own_mld_id = get_own_mld_idx(dev->mld_id_mask, false);
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index ed0da29e..faf3db39 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -241,8 +241,10 @@ mt7996_tm_init(struct mt7996_phy *phy, bool en)
+@@ -241,8 +241,10 @@ mt7996_tm_init(struct mt7996_phy *phy, b
  
  	mt7996_tm_rf_switch_mode(dev, rf_test_mode);
  
@@ -93,7 +87,7 @@ index ed0da29e..faf3db39 100644
  
  	mt7996_tm_set(dev, SET_ID(BAND_IDX), phy->mt76->band_idx);
  
-@@ -258,9 +260,11 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
+@@ -258,9 +260,11 @@ mt7996_tm_update_channel(struct mt7996_p
  {
  #define CHAN_FREQ_BW_80P80_TAG		(SET_ID(CHAN_FREQ) | BIT(16))
  	struct mt7996_dev *dev = phy->dev;
@@ -106,7 +100,7 @@ index ed0da29e..faf3db39 100644
  	static const u8 ch_band[] = {
  		[NL80211_BAND_2GHZ] = 0,
  		[NL80211_BAND_5GHZ] = 1,
-@@ -280,18 +284,37 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
+@@ -280,18 +284,37 @@ mt7996_tm_update_channel(struct mt7996_p
  		mt7996_tm_set(dev, CHAN_FREQ_BW_80P80_TAG, chandef->center_freq2 * 1000);
  	}
  
@@ -150,7 +144,7 @@ index ed0da29e..faf3db39 100644
  }
  
  static void
-@@ -1185,14 +1208,9 @@ mt7996_tm_txbf_init(struct mt7996_phy *phy, u16 *val)
+@@ -1185,14 +1208,9 @@ mt7996_tm_txbf_init(struct mt7996_phy *p
  	mt7996_tm_set_mac_addr(dev, td->addr[1], SET_ID(SA));
  	mt7996_tm_set_mac_addr(dev, td->addr[2], SET_ID(BSSID));
  
@@ -167,7 +161,7 @@ index ed0da29e..faf3db39 100644
  
  	if (td->ibf) {
  		if (td->is_txbf_dut) {
-@@ -1367,7 +1385,8 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy *phy, u8 pfmu_idx, u8 nr, u8 nc, bool e
+@@ -1367,7 +1385,8 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy
  			.tx_mode = mt7996_tm_rate_mapping(td->tx_rate_mode, RATE_MODE_TO_PHY),
  		},
  	};
@@ -177,7 +171,7 @@ index ed0da29e..faf3db39 100644
  
  	if ((td->tx_rate_mode == MT76_TM_TX_MODE_HE_SU ||
  	     td->tx_rate_mode == MT76_TM_TX_MODE_EHT_SU) && !td->ibf) {
-@@ -1397,11 +1416,12 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy *phy, u8 pfmu_idx, u8 nr, u8 nc, bool e
+@@ -1397,11 +1416,12 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy
  		}
  	}
  
@@ -192,7 +186,7 @@ index ed0da29e..faf3db39 100644
  	req.bf.tx_mode = (td->tx_rate_mode == MT76_TM_TX_MODE_EHT_SU) ? 0xf : req.bf.tx_mode;
  
  	if (ebf) {
-@@ -1428,6 +1448,7 @@ mt7996_tm_txbf_profile_update(struct mt7996_phy *phy, u16 *val, bool ebf)
+@@ -1428,6 +1448,7 @@ mt7996_tm_txbf_profile_update(struct mt7
  	struct mt7996_dev *dev = phy->dev;
  	struct mt7996_pfmu_tag *tag = dev->test.txbf_pfmu_tag;
  	u8 rate, pfmu_idx = val[0], nc = val[2], nr;
@@ -200,7 +194,7 @@ index ed0da29e..faf3db39 100644
  	int ret;
  	bool is_atenl = val[5];
  
-@@ -1446,7 +1467,9 @@ mt7996_tm_txbf_profile_update(struct mt7996_phy *phy, u16 *val, bool ebf)
+@@ -1446,7 +1467,9 @@ mt7996_tm_txbf_profile_update(struct mt7
  	tag->t1.nr = nr;
  	tag->t1.nc = nc;
  	tag->t1.invalid_prof = true;
@@ -211,11 +205,9 @@ index ed0da29e..faf3db39 100644
  	tag->t2.se_idx = td->tx_spe_idx;
  
  	if (ebf) {
-diff --git a/testmode.c b/testmode.c
-index 8192b98b..a85be184 100644
 --- a/testmode.c
 +++ b/testmode.c
-@@ -25,6 +25,8 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
+@@ -25,6 +25,8 @@ const struct nla_policy mt76_tm_policy[N
  	[MT76_TM_ATTR_TX_DUTY_CYCLE] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_TX_IPG] = { .type = NLA_U32 },
  	[MT76_TM_ATTR_TX_TIME] = { .type = NLA_U32 },
@@ -224,7 +216,7 @@ index 8192b98b..a85be184 100644
  	[MT76_TM_ATTR_FREQ_OFFSET] = { .type = NLA_U32 },
  	[MT76_TM_ATTR_DRV_DATA] = { .type = NLA_NESTED },
  	[MT76_TM_ATTR_OFF_CH_SCAN_CH] = { .type = NLA_U8 },
-@@ -660,12 +662,15 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -660,12 +662,15 @@ int mt76_testmode_cmd(struct ieee80211_h
  			   &td->tx_duty_cycle, 0, 99) ||
  	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_POWER_CONTROL],
  			   &td->tx_power_control, 0, 1) ||
@@ -242,7 +234,7 @@ index 8192b98b..a85be184 100644
  	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_THRESHOLD], &td->ipi_threshold, 0, 10) ||
  	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_RESET], &td->ipi_reset, 0, 1))
  		goto out;
-@@ -709,7 +714,7 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -709,7 +714,7 @@ int mt76_testmode_cmd(struct ieee80211_h
  
  			err = mt76_tm_get_u8(cur, &td->tx_power[idx++], 0, 63);
  			if (err)
@@ -251,7 +243,7 @@ index 8192b98b..a85be184 100644
  		}
  	}
  
-@@ -916,6 +921,10 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
+@@ -916,6 +921,10 @@ int mt76_testmode_dump(struct ieee80211_
  	     nla_put_u32(msg, MT76_TM_ATTR_TX_TIME, td->tx_time)) ||
  	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER_CONTROL) &&
  	     nla_put_u8(msg, MT76_TM_ATTR_TX_POWER_CONTROL, td->tx_power_control)) ||
@@ -262,8 +254,6 @@ index 8192b98b..a85be184 100644
  	    (mt76_testmode_param_present(td, MT76_TM_ATTR_FREQ_OFFSET) &&
  	     nla_put_u32(msg, MT76_TM_ATTR_FREQ_OFFSET, td->freq_offset)))
  		goto out;
-diff --git a/testmode.h b/testmode.h
-index 794a74f9..44f9984c 100644
 --- a/testmode.h
 +++ b/testmode.h
 @@ -37,6 +37,9 @@
@@ -286,11 +276,9 @@ index 794a74f9..44f9984c 100644
  	MT76_TM_ATTR_FREQ_OFFSET,
  
  	MT76_TM_ATTR_STATS,
-diff --git a/tools/fields.c b/tools/fields.c
-index f793d1a5..8b372602 100644
 --- a/tools/fields.c
 +++ b/tools/fields.c
-@@ -35,13 +35,21 @@ static const char * const testmode_tx_mode[] = {
+@@ -35,13 +35,21 @@ static const char * const testmode_tx_mo
  	[MT76_TM_TX_MODE_EHT_MU] = "eht_mu",
  };
  
@@ -313,7 +301,7 @@ index f793d1a5..8b372602 100644
  };
  
  static const char * const testmode_txbf_act[] = {
-@@ -430,6 +438,8 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
+@@ -430,6 +438,8 @@ static const struct tm_field testdata_fi
  	FIELD(u8, TX_POWER_CONTROL, "tx_power_control"),
  	FIELD_ARRAY(u8, TX_POWER, "tx_power"),
  	FIELD(u8, TX_ANTENNA, "tx_antenna"),
@@ -322,7 +310,7 @@ index f793d1a5..8b372602 100644
  	FIELD(u32, FREQ_OFFSET, "freq_offset"),
  	FIELD(u8, AID, "aid"),
  	FIELD(u8, RU_ALLOC, "ru_alloc"),
-@@ -438,7 +448,7 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
+@@ -438,7 +448,7 @@ static const struct tm_field testdata_fi
  	FIELD_ARRAY(u16_hex, TXBF_PARAM, "txbf_param"),
  	FIELD(u8, OFF_CH_SCAN_CH, "offchan_ch"),
  	FIELD(u8, OFF_CH_SCAN_CENTER_CH, "offchan_center_ch"),
@@ -331,7 +319,7 @@ index f793d1a5..8b372602 100644
  	FIELD(u8, IPI_THRESHOLD, "ipi_threshold"),
  	FIELD(u32, IPI_PERIOD, "ipi_period"),
  	FIELD(u8, IPI_RESET, "ipi_reset"),
-@@ -469,6 +479,8 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
+@@ -469,6 +479,8 @@ static struct nla_policy testdata_policy
  	[MT76_TM_ATTR_TX_POWER_CONTROL] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_TX_ANTENNA] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_TX_SPE_IDX] = { .type = NLA_U8 },
@@ -340,6 +328,3 @@ index f793d1a5..8b372602 100644
  	[MT76_TM_ATTR_FREQ_OFFSET] = { .type = NLA_U32 },
  	[MT76_TM_ATTR_AID] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_RU_ALLOC] = { .type = NLA_U8 },
--- 
-2.49.0
-

@@ -21,11 +21,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mt7996.h |   2 -
  4 files changed, 92 insertions(+), 113 deletions(-)
 
-diff --git a/mt7996/main.c b/mt7996/main.c
-index 3efea2be..ce9fc4dc 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -1370,10 +1370,6 @@ mt7996_mac_sta_add_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+@@ -1370,10 +1370,6 @@ mt7996_mac_sta_add_links(struct mt7996_d
  		mtxq->wcid = mlink->wcid.idx;
  	}
  
@@ -36,11 +34,9 @@ index 3efea2be..ce9fc4dc 100644
  	return 0;
  error:
  	mt7996_mac_sta_remove_links(dev, vif, sta, add);
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 8ceb0208..4d1d29f9 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -2933,6 +2933,86 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev,
+@@ -2933,6 +2933,86 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  	return mt7996_mcu_add_rate_ctrl_fixed(dev, conf, mconf, link_sta, mlink);
  }
  
@@ -127,7 +123,7 @@ index 8ceb0208..4d1d29f9 100644
  #if 0
  static int
  mt7996_mcu_sta_init_vow(struct mt7996_bss_conf *mconf,
-@@ -3004,6 +3084,8 @@ int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_bss_conf *conf,
+@@ -3004,6 +3084,8 @@ int mt7996_mcu_add_sta(struct mt7996_dev
  
  	/* tag order is in accordance with firmware dependency. */
  	if (link_sta) {
@@ -136,7 +132,7 @@ index 8ceb0208..4d1d29f9 100644
  		/* starec hdrt mode */
  		mt7996_mcu_sta_hdrt_tlv(dev, skb);
  		/* starec bfer */
-@@ -3013,7 +3095,7 @@ int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_bss_conf *conf,
+@@ -3013,7 +3095,7 @@ int mt7996_mcu_add_sta(struct mt7996_dev
  		/* starec vht */
  		mt7996_mcu_sta_vht_tlv(skb, link_sta);
  		/* starec uapsd */
@@ -145,7 +141,7 @@ index 8ceb0208..4d1d29f9 100644
  		/* starec amsdu */
  		mt7996_mcu_sta_amsdu_tlv(dev, skb, vif, link_sta, mlink);
  		/* starec he */
-@@ -3026,6 +3108,12 @@ int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_bss_conf *conf,
+@@ -3026,6 +3108,12 @@ int mt7996_mcu_add_sta(struct mt7996_dev
  		mt7996_mcu_sta_muru_tlv(dev, skb, conf, mconf, link_sta);
  		/* starec bfee */
  		mt7996_mcu_sta_bfee_tlv(dev, skb, conf, mconf, link_sta);
@@ -271,8 +267,6 @@ index 8ceb0208..4d1d29f9 100644
  int mt7996_mcu_teardown_mld_sta(struct mt7996_dev *dev,
  				struct mt7996_bss_conf *mconf,
  				struct mt7996_link_sta *mlink)
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index ebc3bd41..c5c69940 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -991,6 +991,9 @@ enum {
@@ -285,11 +279,9 @@ index ebc3bd41..c5c69940 100644
  					 sizeof(struct tlv))
  
  #define MT7996_MAX_BEACON_SIZE		1338
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 80ca7fd8..188ff623 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1089,8 +1089,6 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev,
+@@ -1089,8 +1089,6 @@ int mt7996_mcu_add_rate_ctrl(struct mt79
  			     struct mt7996_bss_conf *mconf,
  			     struct ieee80211_link_sta *link_sta,
  			     struct mt7996_link_sta *mlink, bool changed);
@@ -298,6 +290,3 @@ index 80ca7fd8..188ff623 100644
  int mt7996_set_channel(struct mt7996_phy *phy, struct cfg80211_chan_def *chandef);
  int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag, bool sta);
  int mt7996_mcu_set_tx(struct mt7996_dev *dev, struct mt7996_bss_conf *mconf);
--- 
-2.49.0
-

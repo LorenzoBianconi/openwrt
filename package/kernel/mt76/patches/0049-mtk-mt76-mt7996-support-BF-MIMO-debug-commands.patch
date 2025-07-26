@@ -37,24 +37,20 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/mtk_mcu.h     | 356 ++++++++++++++++++++++
  6 files changed, 1208 insertions(+)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index d374ccc9..49534851 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -745,6 +745,11 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
- 	case MCU_UNI_EVENT_TESTMODE_CTRL:
+@@ -746,6 +746,11 @@ mt7996_mcu_uni_rx_unsolicited_event(stru
  		mt7996_tm_rf_test_event(dev, skb);
  		break;
-+#endif
+ #endif
 +#if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
 +	case MCU_UNI_EVENT_BF:
 +		mt7996_mcu_rx_bf_event(dev, skb);
 +		break;
- #endif
++#endif
  	default:
  		break;
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 0ad7dabe..14090a83 100644
+ 	}
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -770,8 +770,13 @@ enum {
@@ -71,11 +67,9 @@ index 0ad7dabe..14090a83 100644
  };
  
  enum {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index d5494f80..42f66e2e 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -846,6 +846,14 @@ int mt7996_mcu_muru_dbg_info(struct mt7996_dev *dev, u16 item, u8 val);
+@@ -846,6 +846,14 @@ int mt7996_mcu_muru_dbg_info(struct mt79
  int mt7996_mcu_set_sr_enable(struct mt7996_phy *phy, u8 action, u64 val, bool set);
  void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb);
  int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev);
@@ -90,11 +84,9 @@ index d5494f80..42f66e2e 100644
  #endif
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mtk_debugfs.c b/mt7996/mtk_debugfs.c
-index a6556bfe..d976eea0 100644
 --- a/mt7996/mtk_debugfs.c
 +++ b/mt7996/mtk_debugfs.c
-@@ -2919,6 +2919,127 @@ mt7996_sr_scene_cond_show(struct seq_file *file, void *data)
+@@ -2919,6 +2919,127 @@ mt7996_sr_scene_cond_show(struct seq_fil
  }
  DEFINE_SHOW_ATTRIBUTE(mt7996_sr_scene_cond);
  
@@ -222,7 +214,7 @@ index a6556bfe..d976eea0 100644
  int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
  {
  	struct mt7996_dev *dev = phy->dev;
-@@ -3004,6 +3125,17 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir)
+@@ -3004,6 +3125,17 @@ int mt7996_mtk_init_debugfs(struct mt799
  	debugfs_create_file("sr_stats", 0400, dir, phy, &mt7996_sr_stats_fops);
  	debugfs_create_file("sr_scene_cond", 0400, dir, phy, &mt7996_sr_scene_cond_fops);
  
@@ -240,11 +232,9 @@ index a6556bfe..d976eea0 100644
  	return 0;
  }
  
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index ea4e5bf2..68650623 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -280,4 +280,706 @@ int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev)
+@@ -280,4 +280,706 @@ int mt7996_mcu_set_dup_wtbl(struct mt799
  	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(CHIP_CONFIG), &req,
  				 sizeof(req), true);
  }
@@ -951,15 +941,12 @@ index ea4e5bf2..68650623 100644
 +}
 +
  #endif
-diff --git a/mt7996/mtk_mcu.h b/mt7996/mtk_mcu.h
-index 098e63ae..d9686ebb 100644
 --- a/mt7996/mtk_mcu.h
 +++ b/mt7996/mtk_mcu.h
-@@ -121,6 +121,362 @@ enum {
- 	EDCCA_JAPAN = 3
+@@ -122,6 +122,362 @@ enum {
  };
  
-+enum {
+ enum {
 +	UNI_CMD_MURU_SUTX_CTRL = 0x10,
 +	UNI_CMD_MURU_FIXED_RATE_CTRL,
 +	UNI_CMD_MURU_FIXED_GROUP_RATE_CTRL,
@@ -1315,9 +1302,7 @@ index 098e63ae..d9686ebb 100644
 +	BF_SND_CFG_TXOP_SND
 +};
 +
- enum {
++enum {
  	UNI_EVENT_SR_CFG_SR_ENABLE = 0x1,
  	UNI_EVENT_SR_SW_SD = 0x83,
--- 
-2.49.0
-
+ 	UNI_EVENT_SR_HW_IND = 0xC9,

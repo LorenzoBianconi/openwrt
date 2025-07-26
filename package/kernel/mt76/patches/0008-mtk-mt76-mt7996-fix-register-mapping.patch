@@ -15,11 +15,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mmio.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index 40e45fb2..442f7245 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -177,7 +177,7 @@ static u32 __mt7996_reg_addr(struct mt7996_dev *dev, u32 addr)
+@@ -177,7 +177,7 @@ static u32 __mt7996_reg_addr(struct mt79
  			continue;
  
  		ofs = addr - dev->reg.map[i].phys;
@@ -28,6 +26,3 @@ index 40e45fb2..442f7245 100644
  			continue;
  
  		return dev->reg.map[i].mapped + ofs;
--- 
-2.49.0
-

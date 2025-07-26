@@ -14,11 +14,9 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  mt7996/mmio.c | 5 ++++-
  1 file changed, 4 insertions(+), 1 deletion(-)
 
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index a344030d..df96fcf1 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -419,8 +419,11 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
+@@ -419,8 +419,11 @@ int mt7996_mmio_wed_init(struct mt7996_d
  		wed->wlan.reset_complete = mt76_wed_reset_complete;
  	}
  
@@ -31,6 +29,3 @@ index a344030d..df96fcf1 100644
  
  	*irq = wed->irq;
  	dev->mt76.dma_dev = wed->dev;
--- 
-2.49.0
-

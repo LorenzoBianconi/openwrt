@@ -15,11 +15,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mac.c | 27 ++-------------------------
  1 file changed, 2 insertions(+), 25 deletions(-)
 
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 5efbbcd5..c555514c 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -51,29 +51,6 @@ static const struct mt7996_dfs_radar_spec jp_radar_specs = {
+@@ -51,29 +51,6 @@ static const struct mt7996_dfs_radar_spe
  	},
  };
  
@@ -49,7 +47,7 @@ index 5efbbcd5..c555514c 100644
  bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask)
  {
  	mt76_rmw(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_WLAN_IDX,
-@@ -362,10 +339,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
+@@ -362,10 +339,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
  
  	unicast = FIELD_GET(MT_RXD3_NORMAL_ADDR_TYPE, rxd3) == MT_RXD3_NORMAL_U2M;
  	idx = FIELD_GET(MT_RXD1_NORMAL_WLAN_IDX, rxd1);
@@ -62,6 +60,3 @@ index 5efbbcd5..c555514c 100644
  		spin_lock_bh(&dev->mt76.sta_poll_lock);
  		if (list_empty(&mlink->wcid.poll_list))
  			list_add_tail(&mlink->wcid.poll_list,
--- 
-2.49.0
-

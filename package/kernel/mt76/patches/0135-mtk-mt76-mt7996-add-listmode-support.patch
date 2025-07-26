@@ -22,8 +22,6 @@ Signed-off-by: StanleyYP Wang <StanleyYP.Wang@mediatek.com>
  tools/fields.c    |  26 +++++
  6 files changed, 699 insertions(+)
 
-diff --git a/mt76.h b/mt76.h
-index 0d7107e2..b6a466b3 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -805,6 +805,8 @@ struct mt76_testmode_ops {
@@ -86,11 +84,9 @@ index 0d7107e2..b6a466b3 100644
  #endif
  
  	struct delayed_work mac_work;
-diff --git a/mt7996/testmode.c b/mt7996/testmode.c
-index c7d87b1a..48ba2e9c 100644
 --- a/mt7996/testmode.c
 +++ b/mt7996/testmode.c
-@@ -255,6 +255,8 @@ mt7996_tm_init(struct mt7996_phy *phy, bool en)
+@@ -255,6 +255,8 @@ mt7996_tm_init(struct mt7996_phy *phy, b
  
  	if (en)
  		INIT_DELAYED_WORK(&phy->ipi_work, mt7996_tm_ipi_work);
@@ -99,7 +95,7 @@ index c7d87b1a..48ba2e9c 100644
  }
  
  void
-@@ -2348,6 +2350,272 @@ mt7996_tm_set_eeprom(struct mt76_phy *mphy, u32 offset, u8 *val, u8 action)
+@@ -2348,6 +2350,272 @@ mt7996_tm_set_eeprom(struct mt76_phy *mp
  	return ret;
  }
  
@@ -372,14 +368,12 @@ index c7d87b1a..48ba2e9c 100644
  const struct mt76_testmode_ops mt7996_testmode_ops = {
  	.set_state = mt7996_tm_set_state,
  	.set_params = mt7996_tm_set_params,
-@@ -2356,4 +2624,5 @@ const struct mt76_testmode_ops mt7996_testmode_ops = {
+@@ -2356,4 +2624,5 @@ const struct mt76_testmode_ops mt7996_te
  	.tx_stop = mt7996_tm_tx_stop,
  	.set_eeprom = mt7996_tm_set_eeprom,
  	.dump_precal = mt7996_tm_dump_precal,
 +	.set_list_mode = mt7996_tm_set_list_mode,
  };
-diff --git a/mt7996/testmode.h b/mt7996/testmode.h
-index 154392dc..2dc9760e 100644
 --- a/mt7996/testmode.h
 +++ b/mt7996/testmode.h
 @@ -123,6 +123,7 @@ enum {
@@ -523,11 +517,9 @@ index 154392dc..2dc9760e 100644
 +} __packed;
 +
  #endif
-diff --git a/testmode.c b/testmode.c
-index 8ac85844..47325cbf 100644
 --- a/testmode.c
 +++ b/testmode.c
-@@ -36,6 +36,12 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
+@@ -36,6 +36,12 @@ const struct nla_policy mt76_tm_policy[N
  	[MT76_TM_ATTR_IPI_THRESHOLD] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
  	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
@@ -540,7 +532,7 @@ index 8ac85844..47325cbf 100644
  };
  EXPORT_SYMBOL_GPL(mt76_tm_policy);
  
-@@ -524,6 +530,182 @@ mt76_tm_get_u8(struct nlattr *attr, u8 *dest, u8 min, u8 max)
+@@ -524,6 +530,182 @@ mt76_tm_get_u8(struct nlattr *attr, u8 *
  	return 0;
  }
  
@@ -723,7 +715,7 @@ index 8ac85844..47325cbf 100644
  static int
  mt76_testmode_set_eeprom(struct mt76_phy *phy, struct nlattr **tb)
  {
-@@ -623,6 +805,11 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+@@ -623,6 +805,11 @@ int mt76_testmode_cmd(struct ieee80211_h
  
  	mutex_lock(&dev->mutex);
  
@@ -735,8 +727,6 @@ index 8ac85844..47325cbf 100644
  	if (tb[MT76_TM_ATTR_EEPROM_ACTION]) {
  		err = mt76_testmode_set_eeprom(phy, tb);
  		goto out;
-diff --git a/testmode.h b/testmode.h
-index 8e751bbf..f4c0cb5f 100644
 --- a/testmode.h
 +++ b/testmode.h
 @@ -81,6 +81,13 @@
@@ -807,11 +797,9 @@ index 8e751bbf..f4c0cb5f 100644
 +};
 +
  #endif
-diff --git a/tools/fields.c b/tools/fields.c
-index 8b372602..549c3433 100644
 --- a/tools/fields.c
 +++ b/tools/fields.c
-@@ -76,6 +76,20 @@ static const char * const testmode_txbf_act[] = {
+@@ -76,6 +76,20 @@ static const char * const testmode_txbf_
  	[MT76_TM_TXBF_ACT_TXCMD] = "txcmd",
  };
  
@@ -832,7 +820,7 @@ index 8b372602..549c3433 100644
  static void print_enum(const struct tm_field *field, struct nlattr *attr)
  {
  	unsigned int i = nla_get_u8(attr);
-@@ -452,6 +466,12 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
+@@ -452,6 +466,12 @@ static const struct tm_field testdata_fi
  	FIELD(u8, IPI_THRESHOLD, "ipi_threshold"),
  	FIELD(u32, IPI_PERIOD, "ipi_period"),
  	FIELD(u8, IPI_RESET, "ipi_reset"),
@@ -845,7 +833,7 @@ index 8b372602..549c3433 100644
  	FIELD_MAC(MAC_ADDRS, "mac_addrs"),
  	FIELD_NESTED_RO(STATS, stats, "",
  			.print_extra = print_extra_stats),
-@@ -494,6 +514,12 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
+@@ -494,6 +514,12 @@ static struct nla_policy testdata_policy
  	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
  	[MT76_TM_ATTR_IPI_ANTENNA_INDEX] = { .type = NLA_U8 },
  	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
@@ -858,6 +846,3 @@ index 8b372602..549c3433 100644
  };
  
  const struct tm_field msg_field = {
--- 
-2.49.0
-

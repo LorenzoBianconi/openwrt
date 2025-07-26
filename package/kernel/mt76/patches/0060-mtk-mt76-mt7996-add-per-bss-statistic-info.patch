@@ -35,11 +35,9 @@ This fixes the following NULL pointer crash when enabling monitor mode:
  mt7996/mcu.c  | 43 ++++++++++++++++++++++++++++++++++++++-----
  3 files changed, 40 insertions(+), 5 deletions(-)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index 1607480d..6cd2948a 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -400,6 +400,7 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
+@@ -400,6 +400,7 @@ mt7996_init_wiphy(struct ieee80211_hw *h
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_CAN_REPLACE_PTK0);
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_MU_MIMO_AIR_SNIFFER);
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_PUNCT);
@@ -47,11 +45,9 @@ index 1607480d..6cd2948a 100644
  
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_OPERATING_CHANNEL_VALIDATION);
  	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BEACON_PROTECTION);
-diff --git a/mt7996/main.c b/mt7996/main.c
-index b434b8c3..b53bf6ae 100644
 --- a/mt7996/main.c
 +++ b/mt7996/main.c
-@@ -265,6 +265,7 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
+@@ -265,6 +265,7 @@ static int mt7996_add_interface(struct i
  	mvif->sta.wcid.phy_idx = band_idx;
  	mvif->sta.wcid.hw_key_idx = -1;
  	mvif->sta.wcid.tx_info |= MT_WCID_TX_INFO_SET;
@@ -59,11 +55,9 @@ index b434b8c3..b53bf6ae 100644
  	mt76_wcid_init(&mvif->sta.wcid);
  
  	mt7996_mac_wtbl_update(dev, idx,
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index b6e06720..2524acd6 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -527,6 +527,30 @@ mt7996_mcu_update_tx_gi(struct rate_info *rate, struct all_sta_trx_rate *mcu_rat
+@@ -527,6 +527,30 @@ mt7996_mcu_update_tx_gi(struct rate_info
  	return 0;
  }
  
@@ -94,7 +88,7 @@ index b6e06720..2524acd6 100644
  static void
  mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
  {
-@@ -542,7 +566,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -542,7 +566,7 @@ mt7996_mcu_rx_all_sta_info_event(struct
  		u16 wlan_idx;
  		struct mt76_wcid *wcid;
  		struct mt76_phy *mphy;
@@ -103,7 +97,7 @@ index b6e06720..2524acd6 100644
  
  		switch (le16_to_cpu(res->tag)) {
  		case UNI_ALL_STA_TXRX_RATE:
-@@ -570,6 +594,9 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -570,6 +594,9 @@ mt7996_mcu_rx_all_sta_info_event(struct
  				wcid->stats.tx_bytes += tx_bytes;
  				wcid->stats.rx_bytes += rx_bytes;
  
@@ -113,7 +107,7 @@ index b6e06720..2524acd6 100644
  				ieee80211_tpt_led_trig_tx(mphy->hw, tx_bytes);
  				ieee80211_tpt_led_trig_rx(mphy->hw, rx_bytes);
  			}
-@@ -581,10 +608,16 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -581,10 +608,16 @@ mt7996_mcu_rx_all_sta_info_event(struct
  			if (!wcid)
  				break;
  
@@ -134,6 +128,3 @@ index b6e06720..2524acd6 100644
  			break;
  		default:
  			break;
--- 
-2.49.0
-

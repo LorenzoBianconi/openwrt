@@ -19,11 +19,9 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mt7996.h |  1 +
  4 files changed, 35 insertions(+)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index c5785560..98f6ca97 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -596,6 +596,9 @@ mt7996_mac_init_band(struct mt7996_dev *dev, u8 band)
+@@ -596,6 +596,9 @@ mt7996_mac_init_band(struct mt7996_dev *
  {
  	u32 mask, set;
  
@@ -33,7 +31,7 @@ index c5785560..98f6ca97 100644
  	/* clear estimated value of EIFS for Rx duration & OBSS time */
  	mt76_wr(dev, MT_WF_RMAC_RSVD0(band), MT_WF_RMAC_RSVD0_EIFS_CLR);
  
-@@ -623,6 +626,10 @@ mt7996_mac_init_band(struct mt7996_dev *dev, u8 band)
+@@ -623,6 +626,10 @@ mt7996_mac_init_band(struct mt7996_dev *
  	 * MT_AGG_ACR_PPDU_TXS2H (PPDU format) even though ACR bit is set.
  	 */
  	mt76_set(dev, MT_AGG_ACR4(band), MT_AGG_ACR_PPDU_TXS2H);
@@ -44,11 +42,9 @@ index c5785560..98f6ca97 100644
  }
  
  static void mt7996_mac_init_basic_rates(struct mt7996_dev *dev)
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 2b9006e4..26b7e7d1 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -6153,6 +6153,32 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
+@@ -6153,6 +6153,32 @@ int mt7996_mcu_twt_agrt_update(struct mt
  				 &req, sizeof(req), true);
  }
  
@@ -81,8 +77,6 @@ index 2b9006e4..26b7e7d1 100644
  int mt7996_mcu_set_rts_thresh(struct mt7996_phy *phy, u32 val)
  {
  	struct {
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 1e5b87d5..486e12f8 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -1067,6 +1067,7 @@ enum {
@@ -93,11 +87,9 @@ index 1e5b87d5..486e12f8 100644
  };
  
  enum {
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 793714e0..15e22de2 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -1114,6 +1114,7 @@ int mt7996_mcu_set_radar_th(struct mt7996_dev *dev, int index,
+@@ -1114,6 +1114,7 @@ int mt7996_mcu_set_radar_th(struct mt799
  			    const struct mt7996_dfs_pattern *pattern);
  int mt7996_mcu_set_radio_en(struct mt7996_phy *phy, bool enable);
  int mt7996_mcu_set_rts_thresh(struct mt7996_phy *phy, u32 val);
@@ -105,6 +97,3 @@ index 793714e0..15e22de2 100644
  int mt7996_mcu_set_timing(struct mt7996_phy *phy, struct mt7996_bss_conf *mconf);
  int mt7996_mcu_get_chan_mib_info(struct mt7996_phy *phy, bool chan_switch);
  int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
--- 
-2.49.0
-

@@ -13,8 +13,6 @@ Signed-off-by: Rex Lu <rex.lu@mediatek.com>
  mt7996/mmio.c | 2 +-
  2 files changed, 3 insertions(+), 2 deletions(-)
 
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index 43468bca..a75e1c94 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -908,7 +908,8 @@ enum {
@@ -27,11 +25,9 @@ index 43468bca..a75e1c94 100644
  	UNI_CMD_SER_SET_SYSTEM_ASSERT,
  	/* action */
  	UNI_CMD_SER_ENABLE = 1,
-diff --git a/mt7996/mmio.c b/mt7996/mmio.c
-index df96fcf1..e64f9878 100644
 --- a/mt7996/mmio.c
 +++ b/mt7996/mmio.c
-@@ -281,7 +281,7 @@ static int mt7996_mmio_wed_reset(struct mtk_wed_device *wed)
+@@ -281,7 +281,7 @@ static int mt7996_mmio_wed_reset(struct
  	if (test_and_set_bit(MT76_STATE_WED_RESET, &mphy->state))
  		return -EBUSY;
  
@@ -40,6 +36,3 @@ index df96fcf1..e64f9878 100644
  				 mphy->band_idx);
  	if (ret)
  		goto out;
--- 
-2.49.0
-

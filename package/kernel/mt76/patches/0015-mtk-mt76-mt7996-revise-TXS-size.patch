@@ -16,8 +16,6 @@ Signed-off-by: Benjamin Lin <benjamin-jw.lin@mediatek.com>
  mt7996/mac.c       | 4 ++--
  2 files changed, 5 insertions(+), 2 deletions(-)
 
-diff --git a/mt76_connac3_mac.h b/mt76_connac3_mac.h
-index db0c29e6..487ad716 100644
 --- a/mt76_connac3_mac.h
 +++ b/mt76_connac3_mac.h
 @@ -314,6 +314,9 @@ enum tx_frag_idx {
@@ -30,11 +28,9 @@ index db0c29e6..487ad716 100644
  #define MT_TXS0_BW			GENMASK(31, 29)
  #define MT_TXS0_TID			GENMASK(28, 26)
  #define MT_TXS0_AMPDU			BIT(25)
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index cd5f9a6b..341bc35c 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -1403,7 +1403,7 @@ bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len)
+@@ -1403,7 +1403,7 @@ bool mt7996_rx_check(struct mt76_dev *md
  		mt7996_mac_tx_free(dev, data, len);
  		return false;
  	case PKT_TYPE_TXS:
@@ -43,7 +39,7 @@ index cd5f9a6b..341bc35c 100644
  			mt7996_mac_add_txs(dev, rxd);
  		return false;
  	case PKT_TYPE_RX_FW_MONITOR:
-@@ -1446,7 +1446,7 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
+@@ -1446,7 +1446,7 @@ void mt7996_queue_rx_skb(struct mt76_dev
  		mt7996_mcu_rx_event(dev, skb);
  		break;
  	case PKT_TYPE_TXS:
@@ -52,6 +48,3 @@ index cd5f9a6b..341bc35c 100644
  			mt7996_mac_add_txs(dev, rxd);
  		dev_kfree_skb(skb);
  		break;
--- 
-2.49.0
-

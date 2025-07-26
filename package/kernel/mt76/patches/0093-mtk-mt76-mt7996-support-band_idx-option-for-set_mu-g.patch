@@ -18,11 +18,9 @@ Signed-off-by: Howard Hsu <howard-yh.hsu@mediatek.com>
  mt7996/vendor.h |  1 +
  4 files changed, 56 insertions(+), 12 deletions(-)
 
-diff --git a/mt7996/mcu.c b/mt7996/mcu.c
-index 86d65aab..9297cd67 100644
 --- a/mt7996/mcu.c
 +++ b/mt7996/mcu.c
-@@ -6084,12 +6084,23 @@ int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy)
+@@ -6084,12 +6084,23 @@ int mt7996_mcu_set_vow_feature_ctrl(stru
  #ifdef CONFIG_MTK_VENDOR
  void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
  {
@@ -48,7 +46,7 @@ index 86d65aab..9297cd67 100644
  
  	switch (mode) {
  	case RATE_PARAM_FIXED_OFDMA:
-@@ -6105,13 +6116,14 @@ void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
+@@ -6105,13 +6116,14 @@ void mt7996_set_wireless_vif(void *data,
  			phy->muru_onoff |= MUMIMO_UL;
  		break;
  	case RATE_PARAM_AUTO_MU:
@@ -68,8 +66,6 @@ index 86d65aab..9297cd67 100644
  }
  
  void mt7996_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
-diff --git a/mt7996/mcu.h b/mt7996/mcu.h
-index b53c5688..3248cdb4 100644
 --- a/mt7996/mcu.h
 +++ b/mt7996/mcu.h
 @@ -882,6 +882,7 @@ enum {
@@ -80,11 +76,9 @@ index b53c5688..3248cdb4 100644
  #define RATE_CFG_MODE	GENMASK(15, 8)
  #define RATE_CFG_VAL	GENMASK(7, 0)
  
-diff --git a/mt7996/vendor.c b/mt7996/vendor.c
-index 31688c37..64ef5515 100644
 --- a/mt7996/vendor.c
 +++ b/mt7996/vendor.c
-@@ -16,6 +16,7 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
+@@ -16,6 +16,7 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_C
  	[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] = {.type = NLA_U8 },
  	[MTK_VENDOR_ATTR_MU_CTRL_DUMP] = {.type = NLA_U8 },
  	[MTK_VENDOR_ATTR_MU_CTRL_STRUCT] = {.type = NLA_BINARY },
@@ -92,7 +86,7 @@ index 31688c37..64ef5515 100644
  };
  
  static const struct nla_policy
-@@ -135,7 +136,7 @@ static int mt7996_vendor_mu_ctrl(struct wiphy *wiphy,
+@@ -135,7 +136,7 @@ static int mt7996_vendor_mu_ctrl(struct
  	struct mt7996_phy *phy = mt7996_hw_phy(hw);
  	struct mt7996_muru *muru;
  	int err;
@@ -101,7 +95,7 @@ index 31688c37..64ef5515 100644
  	u32 val32 = 0;
  
  	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
-@@ -143,10 +144,13 @@ static int mt7996_vendor_mu_ctrl(struct wiphy *wiphy,
+@@ -143,10 +144,13 @@ static int mt7996_vendor_mu_ctrl(struct
  	if (err)
  		return err;
  
@@ -117,7 +111,7 @@ index 31688c37..64ef5515 100644
  		ieee80211_iterate_active_interfaces_atomic(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
  							   mt7996_set_wireless_vif, &val32);
  	} else if (tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT]) {
-@@ -168,18 +172,44 @@ mt7996_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+@@ -168,18 +172,44 @@ mt7996_vendor_mu_ctrl_dump(struct wiphy
  			   unsigned long *storage)
  {
  	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
@@ -164,8 +158,6 @@ index 31688c37..64ef5515 100644
  }
  
  void mt7996_set_wireless_rts_sigta(struct ieee80211_hw *hw, u8 value) {
-diff --git a/mt7996/vendor.h b/mt7996/vendor.h
-index 0d1ef322..32346775 100644
 --- a/mt7996/vendor.h
 +++ b/mt7996/vendor.h
 @@ -68,6 +68,7 @@ enum mtk_vendor_attr_mu_ctrl {
@@ -176,6 +168,3 @@ index 0d1ef322..32346775 100644
  
  	/* keep last */
  	NUM_MTK_VENDOR_ATTRS_MU_CTRL,
--- 
-2.49.0
-

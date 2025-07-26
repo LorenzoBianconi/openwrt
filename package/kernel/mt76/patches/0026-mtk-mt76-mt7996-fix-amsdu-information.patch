@@ -18,8 +18,6 @@ Signed-off-by: Peter Chiu <chui-hao.chiu@mediatek.com>
  mt7996/mac.c     | 15 +++++++++------
  3 files changed, 11 insertions(+), 20 deletions(-)
 
-diff --git a/mt76.h b/mt76.h
-index b8dc14a7..6ceacac1 100644
 --- a/mt76.h
 +++ b/mt76.h
 @@ -931,6 +931,7 @@ struct mt76_dev {
@@ -39,11 +37,9 @@ index b8dc14a7..6ceacac1 100644
  	u32 tx_amsdu_cnt;
  
  	/* mcu_muru_stats */
-diff --git a/mt7996/debugfs.c b/mt7996/debugfs.c
-index e106581e..968989c5 100644
 --- a/mt7996/debugfs.c
 +++ b/mt7996/debugfs.c
-@@ -556,7 +556,6 @@ mt7996_tx_stats_show(struct seq_file *file, void *data)
+@@ -556,7 +556,6 @@ mt7996_tx_stats_show(struct seq_file *fi
  	struct mt7996_phy *phy = file->private;
  	struct mt7996_dev *dev = phy->dev;
  	struct mt76_mib_stats *mib = &phy->mib;
@@ -51,7 +47,7 @@ index e106581e..968989c5 100644
  	u32 attempts, success, per;
  
  	mutex_lock(&dev->mt76.mutex);
-@@ -573,18 +572,6 @@ mt7996_tx_stats_show(struct seq_file *file, void *data)
+@@ -573,18 +572,6 @@ mt7996_tx_stats_show(struct seq_file *fi
  
  	mt7996_txbf_stat_read_phy(phy, file);
  
@@ -70,11 +66,9 @@ index e106581e..968989c5 100644
  	mutex_unlock(&dev->mt76.mutex);
  
  	return 0;
-diff --git a/mt7996/mac.c b/mt7996/mac.c
-index 3303d32b..ac55d150 100644
 --- a/mt7996/mac.c
 +++ b/mt7996/mac.c
-@@ -2096,10 +2096,19 @@ void mt7996_mac_update_stats(struct mt7996_phy *phy)
+@@ -2096,10 +2096,19 @@ void mt7996_mac_update_stats(struct mt79
  {
  	struct mt76_mib_stats *mib = &phy->mib;
  	struct mt7996_dev *dev = phy->dev;
@@ -94,7 +88,7 @@ index 3303d32b..ac55d150 100644
  	cnt = mt76_rr(dev, MT_MIB_RSCR1(band_idx));
  	mib->fcs_err_cnt += cnt;
  
-@@ -2205,12 +2214,6 @@ void mt7996_mac_update_stats(struct mt7996_phy *phy)
+@@ -2205,12 +2214,6 @@ void mt7996_mac_update_stats(struct mt79
  	cnt = mt76_rr(dev, MT_MIB_BSCR17(band_idx));
  	mib->tx_bf_fb_cpl_cnt += cnt;
  
@@ -107,6 +101,3 @@ index 3303d32b..ac55d150 100644
  	/* rts count */
  	cnt = mt76_rr(dev, MT_MIB_BTSCR5(band_idx));
  	mib->rts_cnt += cnt;
--- 
-2.49.0
-

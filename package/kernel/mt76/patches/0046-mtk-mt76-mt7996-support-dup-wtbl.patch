@@ -13,11 +13,9 @@ Signed-off-by: Shayne Chen <shayne.chen@mediatek.com>
  mt7996/mtk_mcu.c | 23 +++++++++++++++++++++++
  3 files changed, 25 insertions(+)
 
-diff --git a/mt7996/init.c b/mt7996/init.c
-index c443bc1c..d5e3b0e8 100644
 --- a/mt7996/init.c
 +++ b/mt7996/init.c
-@@ -686,6 +686,7 @@ static void mt7996_init_work(struct work_struct *work)
+@@ -686,6 +686,7 @@ static void mt7996_init_work(struct work
  	mt7996_mcu_set_eeprom(dev);
  	mt7996_mac_init(dev);
  	mt7996_txbf_init(dev);
@@ -25,11 +23,9 @@ index c443bc1c..d5e3b0e8 100644
  }
  
  void mt7996_wfsys_reset(struct mt7996_dev *dev)
-diff --git a/mt7996/mt7996.h b/mt7996/mt7996.h
-index 365a4caf..2dcd1bd7 100644
 --- a/mt7996/mt7996.h
 +++ b/mt7996/mt7996.h
-@@ -843,6 +843,7 @@ int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir);
+@@ -843,6 +843,7 @@ int mt7996_mtk_init_debugfs(struct mt799
  int mt7996_mcu_muru_dbg_info(struct mt7996_dev *dev, u16 item, u8 val);
  int mt7996_mcu_set_sr_enable(struct mt7996_phy *phy, u8 action, u64 val, bool set);
  void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb);
@@ -37,11 +33,9 @@ index 365a4caf..2dcd1bd7 100644
  #endif
  
  #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-diff --git a/mt7996/mtk_mcu.c b/mt7996/mtk_mcu.c
-index dbdf8d80..ea4e5bf2 100644
 --- a/mt7996/mtk_mcu.c
 +++ b/mt7996/mtk_mcu.c
-@@ -257,4 +257,27 @@ void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb)
+@@ -257,4 +257,27 @@ void mt7996_mcu_rx_sr_event(struct mt799
  			 le16_to_cpu(event->basic.tag));
  	}
  }
@@ -69,6 +63,3 @@ index dbdf8d80..ea4e5bf2 100644
 +				 sizeof(req), true);
 +}
  #endif
--- 
-2.49.0
-
