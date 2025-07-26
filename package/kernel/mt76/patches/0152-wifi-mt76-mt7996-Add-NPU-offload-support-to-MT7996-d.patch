@@ -1,0 +1,618 @@
+From 36c52f62cdc91a8ad5c0c3f8972786612421c5a6 Mon Sep 17 00:00:00 2001
+Message-ID: <36c52f62cdc91a8ad5c0c3f8972786612421c5a6.1753541716.git.lorenzo@kernel.org>
+In-Reply-To: <f797f67cd7917f060f4296742e2fa8a9f4bd0f39.1753541716.git.lorenzo@kernel.org>
+References: <f797f67cd7917f060f4296742e2fa8a9f4bd0f39.1753541716.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Mon, 14 Jul 2025 16:25:38 +0200
+Subject: [PATCH 5/5] wifi: mt76: mt7996: Add NPU offload support to MT7996
+ driver
+
+Introduce Airoha NPU support to MT7996 driver. NPU is used to enable
+traffic forward offloading between the MT76 NIC and Airoha ethernet one
+available on the Airoha EN7581 SoC using Netfilter Flowtable APIs.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ mt7996/Makefile |   1 +
+ mt7996/dma.c    |  13 +-
+ mt7996/init.c   |  10 +-
+ mt7996/mac.c    |   4 +
+ mt7996/main.c   |  26 ++--
+ mt7996/mmio.c   |  13 +-
+ mt7996/mt7996.h |  21 +++
+ mt7996/npu.c    | 342 ++++++++++++++++++++++++++++++++++++++++++++++++
+ mt7996/pci.c    |   3 +
+ 9 files changed, 417 insertions(+), 16 deletions(-)
+ create mode 100644 mt7996/npu.c
+
+--- a/mt7996/Makefile
++++ b/mt7996/Makefile
+@@ -8,7 +8,7 @@ EXTRA_CFLAGS += $(ADDITIONAL_CFLAGS)
+ obj-$(CONFIG_MT7996E) += mt7996e.o
+ 
+ mt7996e-y := pci.o init.o dma.o eeprom.o main.o mcu.o mac.o \
+-	     debugfs.o mmio.o vendor.o
++	     debugfs.o mmio.o vendor.o npu.o
+ 
+ mt7996e-$(CONFIG_DEV_COREDUMP) += coredump.o
+ mt7996e-$(CONFIG_NL80211_TESTMODE) += testmode.o
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -31,6 +31,10 @@ int mt7996_init_tx_queues(struct mt7996_
+ 			flags = MT_WED_Q_TX(idx);
+ 	}
+ #endif
++
++	if (mt76_npu_device_active(&dev->mt76))
++		flags = MT_NPU_Q_TX(phy->mt76->band_idx);
++
+ 	return mt76_connac_init_tx_queues(phy->mt76, idx, n_desc,
+ 					  ring_base, wed, flags);
+ }
+@@ -348,7 +352,7 @@ void mt7996_dma_start(struct mt7996_dev
+ 		mtk_wed_device_start(wed, wed_irq_mask);
+ 	}
+ #endif
+-	if (!mt7996_has_wa(dev))
++	if (!mt7996_has_wa(dev) || mt76_npu_device_active(&dev->mt76))
+ 		irq_mask &= ~(MT_INT_RX(MT_RXQ_MAIN_WA) | MT_INT_RX(MT_RXQ_BAND1_WA));
+ 
+ 	irq_mask = reset ? MT_INT_MCU_CMD : irq_mask;
+@@ -627,7 +631,8 @@ start_hw_rro:
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND0, mt76_dma_rx_poll);
+ 		}
+ 
+-		mt7996_irq_enable(dev, MT_INT_RRO_RX_DONE);
++		if (!mt76_npu_device_active(&dev->mt76))
++			mt7996_irq_enable(dev, MT_INT_RRO_RX_DONE);
+ 	}
+ 
+ 	return 0;
+@@ -924,6 +929,11 @@ int mt7996_dma_init(struct mt7996_dev *d
+ 	ret = mt76_init_queues(dev, mt76_dma_rx_poll);
+ 	if (ret < 0)
+ 		return ret;
++
++	ret = mt7996_npu_rx_queues_init(dev);
++	if (ret)
++		return ret;
++
+ #if 0
+ 	netif_tx_napi_add(&dev->mt76.tx_napi_dev, &dev->mt76.tx_napi,
+ 			  mt7996_poll_tx, NAPI_POLL_WEIGHT);
+--- a/mt7996/init.c
++++ b/mt7996/init.c
+@@ -519,10 +519,8 @@ mt7996_init_wiphy(struct ieee80211_hw *h
+ 	hw->max_rx_aggregation_subframes = max_subframes;
+ 	hw->max_tx_aggregation_subframes = max_subframes;
+ 	hw->netdev_features = NETIF_F_RXCSUM;
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED		
+-	if (mtk_wed_device_active(wed))
++	if (mtk_wed_device_active(wed) || mt76_npu_device_active(mdev))
+ 		hw->netdev_features |= NETIF_F_HW_TC;
+-#endif
+ 	hw->radiotap_timestamp.units_pos =
+ 		IEEE80211_RADIOTAP_TIMESTAMP_UNIT_US;
+ 
+@@ -1233,6 +1231,9 @@ static void mt7996_wed_rro_work(struct w
+ 				     list);
+ 		list_del_init(&e->list);
+ 
++		if (mt76_npu_device_active(&dev->mt76))
++			goto reset_session;
++
+ 		for (i = 0; i < MT7996_RRO_WINDOW_MAX_LEN; i++) {
+ 			void *ptr = dev->wed_rro.session.ptr;
+ 			struct mt7996_wed_rro_addr *elem;
+@@ -1253,6 +1254,7 @@ reset:
+ 			elem = ptr + elem_id * sizeof(*elem);
+ 			elem->signature = 0xff;
+ 		}
++reset_session:
+ 		mt7996_mcu_wed_rro_reset_sessions(dev, e->id);
+ out:
+ 		kfree(e);
+@@ -1872,6 +1874,10 @@ int mt7996_register_device(struct mt7996
+ 	if (ret)
+ 		return ret;
+ 
++	ret = mt7996_npu_hw_init(dev);
++	if (ret)
++		return ret;
++
+ 	ret = mt76_register_device(&dev->mt76, true, mt76_rates,
+ 				   ARRAY_SIZE(mt76_rates));
+ 	if (ret)
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -624,6 +624,7 @@ mt7996_mac_fill_rx(struct mt7996_dev *de
+ 		status->flag |= RX_FLAG_8023;
+ 		mt7996_wed_check_ppe(dev, &dev->mt76.q_rx[q], mlink ? mlink->sta : NULL, skb,
+ 				     *info);
++		mt76_npu_check_ppe(&dev->mt76, skb, *info);
+ 	}
+ 
+ 	if (rxv && !(status->flag & RX_FLAG_8023) &&
+@@ -2574,6 +2575,8 @@ void mt7996_mac_reset_work(struct work_s
+ 	dev_info(dev->mt76.dev,"%s L1 SER napi disable done.",
+ 		 wiphy_name(dev->mt76.hw->wiphy));
+ 
++	mt7996_npu_hw_stop(dev);
++
+ 	mt76_wr(dev, MT_MCU_INT_EVENT, MT_MCU_INT_EVENT_DMA_STOPPED);
+ 
+ 	dev_info(dev->mt76.dev,"%s L1 SER dma stop done.",
+@@ -2670,6 +2673,7 @@ void mt7996_mac_reset_work(struct work_s
+ 	if (phy3)
+ 		ieee80211_wake_queues(phy3->mt76->hw);
+ 
++	mt7996_npu_hw_init(dev);
+ 	mt7996_update_beacons(dev);
+ 
+ 	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
+--- a/mt7996/main.c
++++ b/mt7996/main.c
+@@ -2564,7 +2564,6 @@ out:
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ static int
+ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
+ 			     struct ieee80211_vif *vif,
+@@ -2612,15 +2611,17 @@ mt7996_net_fill_forward_path(struct ieee
+ 			break;
+ 		}
+ 	}
+-	#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+-	if (!mtk_wed_device_active(wed))
+-	#else
++	if (!mtk_wed_device_active(wed) && !mt76_npu_device_active(&dev->mt76))
+ 		return -ENODEV;
+-	#endif
+ 
+ 	path->type = DEV_PATH_MTK_WDMA;
+ 	path->dev = ctx->dev;
+-	path->mtk_wdma.wdma_idx = wed->wdma_idx;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++	if (mtk_wed_device_active(wed))
++		path->mtk_wdma.wdma_idx = wed->wdma_idx;
++	else
++#endif
++	path->mtk_wdma.wdma_idx = mconf->phy->mt76->band_idx;
+ 	path->mtk_wdma.bss = mconf->mt76.idx;
+ 	path->mtk_wdma.queue = 0;
+ 	path->mtk_wdma.wcid = mlink->wcid.idx;
+@@ -2642,8 +2643,6 @@ mt7996_net_fill_forward_path(struct ieee
+ 	return 0;
+ }
+ 
+-#endif
+-
+ void mt7996_scan_complete(struct mt7996_phy *phy, bool aborted)
+ {
+ 	struct ieee80211_vif *vif = phy->scan_vif;
+@@ -3513,9 +3512,11 @@ const struct ieee80211_ops mt7996_ops =
+ 	.vif_add_debugfs = mt7996_vif_add_debugfs,
+ #endif
+ 	.set_radar_background = mt7996_set_radar_background,
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	.net_fill_forward_path = mt7996_net_fill_forward_path,
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	.net_setup_tc = mt76_wed_net_setup_tc,
++#elif (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
++	.net_setup_tc = mt76_npu_net_setup_tc,
+ #endif
+ 	.event_callback = mt7996_event_callback,
+ 	.add_chanctx = mt7996_add_chanctx,
+--- a/mt7996/mmio.c
++++ b/mt7996/mmio.c
+@@ -724,9 +724,18 @@ void mt7996_dual_hif_set_irq_mask(struct
+ static void mt7996_rx_poll_complete(struct mt76_dev *mdev,
+ 				    enum mt76_rxq_id q)
+ {
+-	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
++	if (q == MT_RXQ_NPU0 || q == MT_RXQ_NPU1) {
++		struct airoha_npu *npu;
+ 
+-	mt7996_irq_enable(dev, MT_INT_RX(q));
++		npu = rcu_dereference(mdev->mmio.npu);
++		if (npu)
++			airoha_npu_wlan_enable_irq(npu, q - MT_RXQ_NPU0);
++	} else {
++		struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev,
++						      mt76);
++
++		mt7996_irq_enable(dev, MT_INT_RX(q));
++	}
+ }
+ 
+ /* TODO: support 2/4/6/8 MSI-X vectors */
+--- a/mt7996/mt7996.h
++++ b/mt7996/mt7996.h
+@@ -1595,6 +1595,28 @@ int mt7996_mcu_set_mru_probe_en(struct m
+ #endif
+ 
+ int mt7996_dma_rro_init(struct mt7996_dev *dev);
++
++#if (IS_BUILTIN(CONFIG_NET_AIROHA_NPU) || IS_MODULE(CONFIG_NET_AIROHA_NPU))
++int mt7996_npu_hw_init(struct mt7996_dev *dev);
++int mt7996_npu_hw_stop(struct mt7996_dev *dev);
++int mt7996_npu_rx_queues_init(struct mt7996_dev *dev);
++#else
++static inline int mt7996_npu_hw_init(struct mt7996_dev *dev)
++{
++	return 0;
++}
++
++static inline int mt7996_npu_hw_stop(struct mt7996_dev *dev)
++{
++	return 0;
++}
++
++static inline int mt7996_npu_rx_queues_init(struct mt7996_dev *dev)
++{
++	return 0;
++}
++#endif /* CONFIG_NET_AIROHA_NPU */
++
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ extern void mtk_set_pse_drop(u32 config);
+ #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
+--- /dev/null
++++ b/mt7996/npu.c
+@@ -0,0 +1,342 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (c) 2025 AIROHA Inc
++ * Author: Lorenzo Bianconi <lorenzo@kernel.org>
++ */
++#include <linux/kernel.h>
++#include <linux/soc/airoha/airoha_offload.h>
++
++#include "mt7996.h"
++
++static int mt7996_npu_offload_init(struct mt7996_dev *dev,
++				   struct airoha_npu *npu)
++{
++	phys_addr_t phy_addr = dev->mt76.mmio.phy_addr;
++	u32 hif1_ofs = 0, dma_addr;
++	int i, err;
++
++	err = airoha_npu_wlan_send_msg(npu, 0,
++				       WLAN_FUNC_SET_WAIT_PCIE_PORT_TYPE,
++				       dev->mt76.mmio.npu_type, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan PCIe port type\n");
++		return err;
++	}
++
++	if (dev->hif2)
++		hif1_ofs = MT_WFDMA0_PCIE1(0) - MT_WFDMA0(0);
++
++	for (i = MT_BAND0; i < MT_BAND2; i++) {
++		dma_addr = phy_addr;
++		if (i)
++			dma_addr += MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND1) + 0x90 +
++				    hif1_ofs;
++		else
++			dma_addr += MT_RXQ_RING_BASE(MT_RXQ_RRO_BAND0) + 0x80;
++
++		err = airoha_npu_wlan_send_msg(npu, i,
++					       WLAN_FUNC_SET_WAIT_PCIE_ADDR,
++					       dma_addr, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan PCIe desc addr\n");
++			return err;
++		}
++
++		err = airoha_npu_wlan_send_msg(npu, i, WLAN_FUNC_SET_WAIT_DESC,
++					       MT7996_RX_RING_SIZE, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan PCIe desc size\n");
++			return err;
++		}
++
++		dma_addr = phy_addr;
++		if (i)
++			dma_addr += MT_TXQ_RING_BASE(0) + 0x150 + hif1_ofs;
++		else
++			dma_addr += MT_TXQ_RING_BASE(0) + 0x120;
++
++		err = airoha_npu_wlan_send_msg(npu, i,
++					       WLAN_FUNC_SET_WAIT_TX_RING_PCIE_ADDR,
++					       dma_addr, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan tx desc addr\n");
++			return err;
++		}
++	}
++
++	err = airoha_npu_wlan_send_msg(npu, 9, WLAN_FUNC_SET_WAIT_PCIE_ADDR,
++				       phy_addr + MT_RXQ_RRO_AP_RING_BASE,
++				       GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan rxdmad_c addr\n");
++		return err;
++	}
++
++	err = airoha_npu_wlan_send_msg(npu, 9, WLAN_FUNC_SET_WAIT_DESC,
++				       MT7996_RX_RING_SIZE, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan rxdmad_c desc size\n");
++		return err;
++	}
++
++	err = airoha_npu_wlan_send_msg(npu, 2,
++				       WLAN_FUNC_SET_WAIT_TX_RING_PCIE_ADDR,
++				       phy_addr + MT_RRO_ACK_SN_CTRL,
++				       GFP_KERNEL);
++	if (err)
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan rro_ack_sn desc addr\n");
++
++	return err;
++}
++
++static int mt7996_npu_rxd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
++{
++	u32 val;
++	int err;
++
++	err = airoha_npu_wlan_get_msg(npu, 0, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
++				      &val, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed retriving npu wlan rx ring0 addr\n");
++		return err;
++	}
++	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND0].regs->desc_base);
++
++	err = airoha_npu_wlan_get_msg(npu, 1, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
++				      &val, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed retriving npu wlan rx ring1 addr\n");
++		return err;
++	}
++	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_BAND1].regs->desc_base);
++
++	err = airoha_npu_wlan_get_msg(npu, 9, WLAN_FUNC_GET_WAIT_RXDESC_BASE,
++				      &val, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed retriving npu wlan rxdmad_c ring addr\n");
++		return err;
++	}
++	writel(val, &dev->mt76.q_rx[MT_RXQ_RRO_RXDMAD_C].regs->desc_base);
++
++	return 0;
++}
++
++static int mt7996_npu_txd_init(struct mt7996_dev *dev, struct airoha_npu *npu)
++{
++	int i, err;
++
++	for (i = MT_BAND0; i < MT_BAND2; i++) {
++		dma_addr_t dma_addr;
++		u32 val;
++
++		err = airoha_npu_wlan_get_msg(npu, i + 5,
++					      WLAN_FUNC_GET_WAIT_RXDESC_BASE,
++					      &val, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed retriving npu wlan tx ring addr\n");
++			return err;
++		}
++		writel(val, &dev->mt76.phys[i]->q_tx[0]->regs->desc_base);
++
++		if (!dmam_alloc_coherent(dev->mt76.dma_dev,
++					 256 * MT7996_TX_RING_SIZE,
++					 &dma_addr, GFP_KERNEL))
++			return -ENOMEM;
++
++		err = airoha_npu_wlan_send_msg(npu, i,
++					       WLAN_FUNC_SET_WAIT_TX_BUF_SPACE_HW_BASE,
++					       dma_addr, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan queue buf addr\n");
++			return err;
++		}
++
++		if (!dmam_alloc_coherent(dev->mt76.dma_dev,
++					 256 * MT7996_TX_RING_SIZE,
++					 &dma_addr, GFP_KERNEL))
++			return -ENOMEM;
++
++		err = airoha_npu_wlan_send_msg(npu, i + 5,
++					       WLAN_FUNC_SET_WAIT_TX_BUF_SPACE_HW_BASE,
++					       dma_addr, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan tx buf addr\n");
++			return err;
++		}
++
++		if (!dmam_alloc_coherent(dev->mt76.dma_dev, 256 * 1024,
++					 &dma_addr, GFP_KERNEL))
++			return -ENOMEM;
++
++		err = airoha_npu_wlan_send_msg(npu, i + 10,
++					       WLAN_FUNC_SET_WAIT_TX_BUF_SPACE_HW_BASE,
++					       dma_addr, GFP_KERNEL);
++		if (err) {
++			dev_warn(dev->mt76.dev,
++				 "failed setting npu wlan tx buf base\n");
++			return err;
++		}
++	}
++
++	return 0;
++}
++
++static int mt7996_npu_rx_event_init(struct mt7996_dev *dev,
++				    struct airoha_npu *npu)
++{
++	struct mt76_queue *q = &dev->mt76.q_rx[MT_RXQ_MAIN_WA];
++	phys_addr_t phy_addr = dev->mt76.mmio.phy_addr;
++	int err;
++
++	err = airoha_npu_wlan_send_msg(npu, 0,
++				       WLAN_FUNC_SET_WAIT_RX_RING_FOR_TXDONE_HW_BASE,
++				       q->desc_dma, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan tx-done ring\n");
++		return err;
++	}
++
++	err = airoha_npu_wlan_send_msg(npu, 10, WLAN_FUNC_SET_WAIT_DESC,
++				       MT7996_RX_MCU_RING_SIZE, GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan descriptors\n");
++		return err;
++	}
++
++	phy_addr += MT_RXQ_RING_BASE(MT_RXQ_MAIN_WA) + 0x20;
++	err = airoha_npu_wlan_send_msg(npu, 10, WLAN_FUNC_SET_WAIT_PCIE_ADDR,
++				       phy_addr, GFP_KERNEL);
++	if (err)
++		dev_warn(dev->mt76.dev,
++			 "failed setting npu wlan rx pcie address\n");
++	return err;
++}
++
++static int mt7996_npu_tx_done_init(struct mt7996_dev *dev,
++				   struct airoha_npu *npu)
++{
++	int err;
++
++	err = airoha_npu_wlan_send_msg(npu, 2,
++				       WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR, 0,
++				       GFP_KERNEL);
++	if (err) {
++		dev_warn(dev->mt76.dev, "failed setting npu wlan txrx addr2\n");
++		return err;
++	}
++
++	err = airoha_npu_wlan_send_msg(npu, 7,
++				       WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR, 0,
++				       GFP_KERNEL);
++	if (err)
++		dev_warn(dev->mt76.dev, "failed setting npu wlan txrx addr7\n");
++
++	return err;
++}
++
++int mt7996_npu_rx_queues_init(struct mt7996_dev *dev)
++{
++	int err;
++
++	if (!mt76_npu_device_active(&dev->mt76))
++		return 0;
++
++	err = mt76_npu_rx_queue_init(&dev->mt76,
++				     &dev->mt76.q_rx[MT_RXQ_NPU0]);
++	if (err)
++		return err;
++
++	return mt76_npu_rx_queue_init(&dev->mt76,
++				      &dev->mt76.q_rx[MT_RXQ_NPU1]);
++}
++
++int mt7996_npu_hw_init(struct mt7996_dev *dev)
++{
++	struct airoha_npu *npu;
++	int i, err = 0;
++
++	mutex_lock(&dev->mt76.mutex);
++
++	npu = rcu_dereference_protected(dev->mt76.mmio.npu, &dev->mt76.mutex);
++	if (!npu)
++		goto unlock;
++
++	err = mt7996_npu_offload_init(dev, npu);
++	if (err)
++		goto unlock;
++
++	err = mt7996_npu_rxd_init(dev, npu);
++	if (err)
++		goto unlock;
++
++	err = mt7996_npu_txd_init(dev, npu);
++	if (err)
++		goto unlock;
++
++	err = mt7996_npu_rx_event_init(dev, npu);
++	if (err)
++		goto unlock;
++
++	err = mt7996_npu_tx_done_init(dev, npu);
++	if (err)
++		goto unlock;
++
++	dev->mt76.token_start = MT7996_TOKEN_SIZE;
++	for (i = MT_RXQ_NPU0; i <= MT_RXQ_NPU1; i++)
++		airoha_npu_wlan_enable_irq(npu, i - MT_RXQ_NPU0);
++unlock:
++	mutex_unlock(&dev->mt76.mutex);
++
++	return err;
++}
++
++int mt7996_npu_hw_stop(struct mt7996_dev *dev)
++{
++	struct airoha_npu *npu;
++	int i, err;
++	u32 info;
++
++	npu = rcu_dereference_protected(dev->mt76.mmio.npu, &dev->mt76.mutex);
++	if (!npu)
++		return 0;
++
++	err = airoha_npu_wlan_send_msg(npu, 4,
++				       WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR,
++				       0, GFP_KERNEL);
++	if (err)
++		return err;
++
++	for (i = 0; i < 10; i++) {
++		err = airoha_npu_wlan_get_msg(npu, 3,
++					      WLAN_FUNC_GET_WAIT_NPU_INFO,
++					      &info, GFP_KERNEL);
++		if (err)
++			continue;
++
++		if (info) {
++			err = -ETIMEDOUT;
++			continue;
++		}
++	}
++
++	if (!err)
++		err = airoha_npu_wlan_send_msg(npu, 6,
++					       WLAN_FUNC_SET_WAIT_INODE_TXRX_REG_ADDR,
++					       0, GFP_KERNEL);
++	return err;
++}
+--- a/mt7996/pci.c
++++ b/mt7996/pci.c
+@@ -169,6 +169,9 @@ static int mt7996_pci_probe(struct pci_d
+ 	if (hif2)
+ 		dev->hif2 = hif2;
+ 
++	mt76_npu_init(mdev, pci_resource_start(pdev, 0),
++		      pdev->bus && pci_domain_nr(pdev->bus) ? 3 : 2);
++
+ 	ret = mt7996_mmio_wed_init(dev, pdev, false, &irq);
+ 	if (ret < 0)
+ 		goto free_wed_or_irq_vector;
