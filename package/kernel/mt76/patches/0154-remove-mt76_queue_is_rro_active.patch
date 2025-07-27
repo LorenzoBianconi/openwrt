@@ -1,0 +1,44 @@
+--- a/dma.c
++++ b/dma.c
+@@ -158,7 +158,7 @@ static void
+ mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
+ {
+ 	Q_WRITE(q, desc_base, q->desc_dma);
+-	if (mt76_queue_is_rro_active(q))
++	if ((q->flags & MT_QFLAG_WED_RRO_EN) && !mt76_npu_device_active(dev))
+ 		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc);
+ 	else
+ 		Q_WRITE(q, ring_size, q->ndesc);
+@@ -252,7 +252,7 @@ mt76_dma_add_rx_buf(struct mt76_dev *dev
+ 			return	-ENOMEM;
+ 	}
+ 
+-	if (mt76_queue_is_rro_active(q)) {
++	if (q->flags & MT_QFLAG_WED_RRO_EN) {
+ 		info |= FIELD_PREP(MT_DMA_MAGIC_MASK, q->magic_cnt);
+ 		if ((q->head + 1) == q->ndesc)
+ 			q->magic_cnt = (q->magic_cnt + 1) % MT_DMA_MAGIC_CNT;
+@@ -1016,7 +1016,7 @@ mt76_dma_rx_process(struct mt76_dev *dev
+ 	bool allow_direct = !mt76_queue_is_wed_rx(q);
+ 	bool more;
+ 
+-	if (mt76_queue_is_rro_active(q) ||
++	if ((q->flags & MT_QFLAG_WED_RRO_EN) ||
+ 	    (IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED) &&
+ 	     mt76_queue_is_wed_tx_free(q))) {
+ 		dma_idx = Q_READ(q, dma_idx);
+--- a/mt76.h
++++ b/mt76.h
+@@ -2071,12 +2071,6 @@ static inline bool mt76_queue_is_wed_rro
+ 	       FIELD_GET(MT_QFLAG_WED_TYPE, q->flags) == MT76_WED_RRO_Q_IND;
+ }
+ 
+-static inline bool mt76_queue_is_rro_active(struct mt76_queue *q)
+-{
+-	return !mt76_npu_device_active(q->dev) &&
+-	       (q->flags & MT_QFLAG_WED_RRO_EN);
+-}
+-
+ static inline bool mt76_queue_is_wed_rro_rxdmad_c(struct mt76_queue *q)
+ {
+ 	return mt76_queue_is_wed_rro(q) &&

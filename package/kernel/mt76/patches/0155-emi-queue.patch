@@ -1,0 +1,272 @@
+--- a/dma.c
++++ b/dma.c
+@@ -187,7 +187,10 @@ void __mt76_dma_queue_reset(struct mt76_
+ 	}
+ 
+ 	if (reset_idx) {
+-		Q_WRITE(q, cpu_idx, 0);
++		if (mt76_queue_is_emi(q))
++			*q->emi_cpu_idx = 0;
++		else
++			Q_WRITE(q, cpu_idx, 0);
+ 		Q_WRITE(q, dma_idx, 0);
+ 	}
+ 	mt76_dma_sync_idx(dev, q);
+@@ -370,7 +373,10 @@ static void
+ mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
+ {
+ 	wmb();
+-	Q_WRITE(q, cpu_idx, q->head);
++	if (mt76_queue_is_emi(q))
++		*q->emi_cpu_idx = cpu_to_le16(q->head);
++	else
++		Q_WRITE(q, cpu_idx, q->head);
+ }
+ 
+ static void
+@@ -878,8 +884,13 @@ mt76_dma_alloc_queue(struct mt76_dev *de
+ 		}
+ 	}
+ 
+-	if (mt76_queue_is_wed_rro_rxdmad_c(q) && dev->drv->rx_init_rxdmad_c)
+-		dev->drv->rx_init_rxdmad_c(dev, q);
++	if (mt76_queue_is_wed_rro_rxdmad_c(q)) {
++		struct mt76_rro_rxdmad_c *dmad = (void *)q->desc;
++		int i;
++
++		for (i = 0; i < q->ndesc; i++)
++			dmad[i].magic_cnt = MT_DMA_MAGIC_CNT - 1;
++	}
+ 
+ 	size = q->ndesc * sizeof(*q->entry);
+ 	q->entry = devm_kzalloc(dev->dev, size, GFP_KERNEL);
+@@ -901,7 +912,10 @@ mt76_dma_alloc_queue(struct mt76_dev *de
+ 			return 0;
+ 	}
+ #endif
+-	mt76_dma_queue_reset(dev, q, true);
++	/* HW specific driver is supposed to reset brand-new EMI queues since
++	 * it needs to set cpu index pointer.
++	 */
++	mt76_dma_queue_reset(dev, q, !mt76_queue_is_emi(q));
+ 
+ 	return 0;
+ }
+--- a/mt76.h
++++ b/mt76.h
+@@ -62,6 +62,7 @@
+ #define MT_QFLAG_WED		BIT(5)
+ #define MT_QFLAG_WED_RRO	BIT(6)
+ #define MT_QFLAG_WED_RRO_EN	BIT(7)
++#define MT_QFLAG_EMI_EN		BIT(8)
+ #define MT_QFLAG_NPU		BIT(9)
+ 
+ #define __MT_WED_Q(_type, _n)	(MT_QFLAG_WED | \
+@@ -300,6 +301,8 @@ struct mt76_queue {
+ 	u16 flags;
+ 	u8 magic_cnt;
+ 
++	__le16 *emi_cpu_idx;
++
+ 	struct mtk_wed_device *wed;
+ 	struct mt76_dev *dev;
+ 	u32 wed_regs;
+@@ -659,7 +662,6 @@ struct mt76_driver_ops {
+ 	void (*rx_rro_ind_process)(struct mt76_dev *dev, void *data);
+ 	int (*rx_rro_fill_msdu_pg)(struct mt76_dev *dev, struct mt76_queue *q,
+ 				   dma_addr_t p, void *data);
+-	void (*rx_init_rxdmad_c)(struct mt76_dev *dev, struct mt76_queue *q);
+ 
+ 	void (*rx_poll_complete)(struct mt76_dev *dev, enum mt76_rxq_id q);
+ 
+@@ -2095,6 +2097,11 @@ static inline bool mt76_queue_is_wed_rx(
+ 	       FIELD_GET(MT_QFLAG_WED_TYPE, q->flags) == MT76_WED_Q_RX;
+ }
+ 
++static inline bool mt76_queue_is_emi(struct mt76_queue *q)
++{
++	return q->flags & MT_QFLAG_EMI_EN;
++}
++
+ static inline bool mt76_queue_is_npu(struct mt76_queue *q)
+ {
+ 	return q->flags & MT_QFLAG_NPU;
+--- a/mt7996/dma.c
++++ b/mt7996/dma.c
+@@ -524,6 +524,8 @@ int mt7996_dma_rro_init(struct mt7996_de
+ 	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+ 		/* rxdmad_c */
+ 		mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags = MT_WED_RRO_Q_RXDMAD_C;
++		if (!mt76_npu_device_active(&dev->mt76))
++			mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags |= MT_QFLAG_EMI_EN;
+ #ifdef CONFIG_NET_MEDIATEK_SOC_WED		
+ 		if (mtk_wed_device_active(&mdev->mmio.wed) &&
+ 			mtk_wed_get_rx_capa(&mdev->mmio.wed))
+@@ -537,6 +539,13 @@ int mt7996_dma_rro_init(struct mt7996_de
+ 		if (ret)
+ 			return ret;
+ 	
++		/* We need to set cpu idx pointer before resetting the EMI
++		 * queues.
++		 */
++		mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].emi_cpu_idx =
++			&dev->wed_rro.emi_rings_cpu.ptr->ring[0].idx;
++		mt76_queue_reset(dev, &mdev->q_rx[MT_RXQ_RRO_RXDMAD_C], true);
++
+ 		goto start_hw_rro;
+ 	}
+ 
+--- a/mt7996/init.c
++++ b/mt7996/init.c
+@@ -972,6 +972,17 @@ static void mt7996_rro_3_1_hw_init(struc
+ 		reg += 4;
+ 	}
+ 
++	if (!mtk_wed_device_active(&dev->mt76.mmio.wed) &&
++	    !mt76_npu_device_active(&dev->mt76)) {
++		mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
++			 MT_RRO_3_1_GLOBAL_CONFIG_RX_DIDX_WR_EN |
++			 MT_RRO_3_1_GLOBAL_CONFIG_RX_CIDX_RD_EN);
++		mt76_wr(dev, MT_RRO_RX_RING_AP_CIDX_ADDR,
++			dev->wed_rro.emi_rings_cpu.phy_addr >> 4);
++		mt76_wr(dev, MT_RRO_RX_RING_AP_DIDX_ADDR,
++			dev->wed_rro.emi_rings_dma.phy_addr >> 4);
++	}
++
+ 	mt76_clear(dev, MT_RRO_3_0_EMU_CONF,
+ 			MT_RRO_3_0_EMU_CONF_EN_MASK);
+ 	mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
+@@ -1143,6 +1154,26 @@ static int mt7996_wed_rro_init(struct mt
+ 		memset(dev->wed_rro.msdu_pg[i].ptr, 0, MT7996_RRO_MSDU_PG_SIZE_PER_CR);
+ 	}
+ 
++	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
++		ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
++				sizeof(dev->wed_rro.emi_rings_cpu.ptr),
++				&dev->wed_rro.emi_rings_cpu.phy_addr,
++				GFP_KERNEL);
++		if (!ptr)
++			return -ENOMEM;
++
++		dev->wed_rro.emi_rings_cpu.ptr = ptr;
++
++		ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
++				sizeof(dev->wed_rro.emi_rings_dma.ptr),
++				&dev->wed_rro.emi_rings_dma.phy_addr,
++				GFP_KERNEL);
++		if (!ptr)
++			return -ENOMEM;
++
++		dev->wed_rro.emi_rings_dma.ptr = ptr;
++	}
++
+ 	ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
+ 				  MT7996_RRO_WINDOW_MAX_LEN * sizeof(*addr),
+ 				  &dev->wed_rro.session.phy_addr,
+--- a/mt7996/mt7996.h
++++ b/mt7996/mt7996.h
+@@ -790,6 +790,14 @@ struct mt7996_phy {
+ #endif
+ };
+ 
++#define MT7996_MAX_RRO_RRS_RING 4
++struct mt7996_rro_queue_regs_emi {
++	struct {
++		__le16 idx;
++		__le16 rsv;
++	} ring[MT7996_MAX_RRO_RRS_RING];
++};
++
+ struct mt7996_dev {
+ 	union { /* must be first */
+ 		struct mt76_dev mt76;
+@@ -876,6 +884,14 @@ struct mt7996_dev {
+ 			void *ptr;
+ 			dma_addr_t phy_addr;
+ 		} msdu_pg[MT7996_RRO_MSDU_PG_CR_CNT];
++		struct {
++			struct mt7996_rro_queue_regs_emi *ptr;
++			dma_addr_t phy_addr;
++		} emi_rings_cpu;
++		struct {
++			struct mt7996_rro_queue_regs_emi *ptr;
++			dma_addr_t phy_addr;
++		} emi_rings_dma;
+ 
+ 		struct work_struct work;
+ 		struct list_head poll_list;
+@@ -1461,10 +1477,6 @@ void mt7996_rro_rx_process(struct mt76_d
+ int mt7996_rro_fill_msdu_page(struct mt76_dev *mdev, struct mt76_queue *q,
+ 			      dma_addr_t p, void *data);
+ 
+-/*rro3.1*/
+-void mt7996_rx_init_rxdmad_c(struct mt76_dev *mdev, struct mt76_queue *q);
+-/**/
+-
+ bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
+ void mt7996_stats_work(struct work_struct *work);
+ void mt7996_scan_work(struct work_struct *work);
+--- a/mt7996/mac.c
++++ b/mt7996/mac.c
+@@ -1970,23 +1970,6 @@ update_ack_sn:
+ 			FIELD_PREP(MT_RRO_ACK_SN_CTRL_SN_MASK, sn));
+ }
+ 
+-
+-/*rro3.1*/
+-void mt7996_rx_init_rxdmad_c(struct mt76_dev *mdev, struct mt76_queue *q)
+-{
+-	struct mt76_desc *desc;
+-	int i;
+-
+-	q->magic_cnt = 0;
+-	desc = (struct mt76_desc *)q->desc;
+-	for (i = 0; i < q->ndesc; i++) {
+-		struct mt76_rro_rxdmad_c *dmad;
+-
+-		dmad = (struct mt76_rro_rxdmad_c *)&desc[i];
+-		dmad->magic_cnt = MT_DMA_MAGIC_CNT - 1;
+-	}
+-}
+-
+ void mt7996_mac_cca_stats_reset(struct mt7996_phy *phy)
+ {
+ 	struct mt7996_dev *dev = phy->dev;
+--- a/mt7996/mmio.c
++++ b/mt7996/mmio.c
+@@ -858,9 +858,6 @@ struct mt7996_dev *mt7996_mmio_probe(str
+ 		.rx_poll_complete = mt7996_rx_poll_complete,
+ 		.rx_rro_ind_process = mt7996_rro_rx_process,
+ 		.rx_rro_fill_msdu_pg = mt7996_rro_fill_msdu_page,
+-		/*rro3.1*/
+-		.rx_init_rxdmad_c = mt7996_rx_init_rxdmad_c,
+-		/***/	
+ 		.sta_add = mt7996_mac_sta_add,
+ 		.sta_event = mt7996_mac_sta_event,
+ 		.sta_remove = mt7996_mac_sta_remove,
+--- a/mt7996/regs.h
++++ b/mt7996/regs.h
+@@ -116,8 +116,13 @@ enum offs_rev {
+ #define MT_RRO_3_1_GLOBAL_CONFIG		MT_RRO_TOP(0x604)
+ #define MT_RRO_3_1_GLOBAL_CONFIG_INTERLEAVE_EN	BIT(0)
+ #define MT_RRO_3_1_GLOBAL_CONFIG_RXDMAD_SEL	BIT(6)
++#define MT_RRO_3_1_GLOBAL_CONFIG_RX_CIDX_RD_EN	BIT(3)
++#define MT_RRO_3_1_GLOBAL_CONFIG_RX_DIDX_WR_EN	BIT(2)
++#define MT_RRO_3_1_GLOBAL_CONFIG_INTERLEAVE_EN	BIT(0)
+ 
+ #define MT_RRO_MSDU_PG_SEG_ADDR0		MT_RRO_TOP(0x620)
++#define MT_RRO_RX_RING_AP_CIDX_ADDR		MT_RRO_TOP(0x6f0)
++#define MT_RRO_RX_RING_AP_DIDX_ADDR		MT_RRO_TOP(0x6f4)
+ 
+ #define MT_RRO_ACK_SN_CTRL			MT_RRO_TOP(0x50)
+ #define MT_RRO_ACK_SN_CTRL_SN_MASK		GENMASK(27, 16)
+@@ -199,6 +204,9 @@ enum offs_rev {
+ #define MT_WTBLOFF_RSCR_RCPI_MODE		GENMASK(31, 30)
+ #define MT_WTBLOFF_RSCR_RCPI_PARAM		GENMASK(25, 24)
+ 
++#define MT_WTBLOFF_ACR(_band)			MT_WTBLOFF(_band, 0x010)
++#define MT_WTBLOFF_ADM_BACKOFFTIME		BIT(29)
++
+ /* ETBF: band 0(0x820ea000), band 1(0x820fa000), band 2(0x830ea000) */
+ #define MT_WF_ETBF_BASE(_band)			__BASE(WF_ETBF_BASE, (_band))
+ #define MT_WF_ETBF(_band, ofs)			(MT_WF_ETBF_BASE(_band) + (ofs))
