@@ -1,0 +1,290 @@
+diff -urN old/dma.c new/dma.c
+--- old/dma.c	2025-07-23 15:18:42.854879000 +0800
++++ new/dma.c	2025-07-25 15:39:06.942854000 +0800
+@@ -420,6 +420,20 @@
+ 		Q_WRITE(q, cpu_idx, q->head);
+ }
+ 
++void npu_tx_skb_free(struct mt76_dev *dev, struct mt76_queue *q, int index){
++	struct airoha_npu_tx_dma_desc *desc = q->desc;
++	if (!mt76_queue_is_npu_tx(q))
++		return;
++	if(desc[index].rsv){
++		if(desc[index].addr){
++			unsigned int len = FIELD_GET(NPU_TX_DMA_DESC_LEN_MASK, desc[index].ctrl);
++			dma_unmap_single(dev->dma_dev, desc[index].addr,  len, DMA_TO_DEVICE);
++		}
++		dev_kfree_skb_any((struct sk_buff *)desc[index].rsv);
++		desc[index].rsv = 0;
++	}
++}
++
+ static void
+ mt76_dma_tx_cleanup(struct mt76_dev *dev, struct mt76_queue *q, bool flush)
+ {
+@@ -437,9 +451,10 @@
+ 
+ 	while (q->queued > 0 && q->tail != last) {
+ 		mt76_dma_tx_cleanup_idx(dev, q, q->tail, &entry);
++		npu_tx_skb_free(dev, q, q->tail);
+ 		mt76_npu_txdesc_cleanup(q, q->tail);
+ 		mt76_queue_tx_complete(dev, q, &entry);
+-
++		//npu_tx_skb_free(dev, q, q->tail);
+ 		if (entry.txwi) {
+ 			if (!(dev->drv->drv_flags & MT_DRV_TXWI_NO_FREE))
+ 				mt76_put_txwi(dev, entry.txwi);
+@@ -743,7 +758,7 @@
+ 	phy->tx_dbg_stats.tx_to_hw++;
+ 
+ 	if (mt76_npu_device_active(dev))
+-		return mt76_npu_dma_add_buf(phy, q, skb, &tx_info.buf[1], txwi);
++		return mt76_npu_dma_add_buf(phy, q, skb, &tx_info.buf[1], txwi, wcid, sta);
+ 
+ 	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
+ 				tx_info.info, tx_info.skb, t);
+diff -urN old/mac80211.c new/mac80211.c
+--- old/mac80211.c	2025-07-23 15:18:42.862861000 +0800
++++ new/mac80211.c	2025-07-25 15:42:32.320857000 +0800
+@@ -1716,8 +1716,11 @@
+ 	skb_queue_splice_tail_init(&wcid->tx_pending, &list);
+ 	spin_unlock(&wcid->tx_pending.lock);
+ 
+-	spin_unlock_bh(&phy->tx_lock);
++	spin_lock(&wcid->tx_offchannel.lock);
++	skb_queue_splice_tail_init(&wcid->tx_offchannel, &list);
++	spin_unlock(&wcid->tx_offchannel.lock);
+ 
++	spin_unlock_bh(&phy->tx_lock);
+ 	while ((skb = __skb_dequeue(&list)) != NULL) {
+ 		hw = mt76_tx_status_get_hw(dev, skb);
+ 		ieee80211_free_txskb(hw, skb);
+diff -urN old/mt76.h new/mt76.h
+--- old/mt76.h	2025-07-23 15:18:42.981905000 +0800
++++ new/mt76.h	2025-07-25 15:21:13.596954000 +0800
+@@ -685,6 +685,9 @@
+ 
+ 	void (*sta_remove)(struct mt76_dev *dev, struct ieee80211_vif *vif,
+ 			   struct ieee80211_sta *sta);
++	void (*npu_txwi_free)(struct mt76_dev *dev, struct mt76_txwi_cache *t,
++		struct ieee80211_sta *sta, struct mt76_wcid *wcid,
++		struct list_head *free_list);	
+ 
+ 	int (*vif_link_add)(struct mt76_phy *phy, struct ieee80211_vif *vif,
+ 			    struct ieee80211_bss_conf *link_conf,
+@@ -1909,7 +1912,7 @@
+ int mt76_npu_rx_queue_init(struct mt76_dev *dev, struct mt76_queue *q);
+ int mt76_npu_dma_add_buf(struct mt76_phy *phy, struct mt76_queue *q,
+ 			 struct sk_buff *skb, struct mt76_queue_buf *buf,
+-			 void *txwi_ptr);
++			 void *txwi_ptr, struct mt76_wcid *wcid, struct ieee80211_sta *sta);
+ int mt76_npu_init(struct mt76_dev *dev);
+ void mt76_npu_deinit(struct mt76_dev *dev);
+ void mt76_npu_queue_setup(struct mt76_dev *dev, struct mt76_queue *q);
+diff -urN old/mt7996/mac.c new/mt7996/mac.c
+--- old/mt7996/mac.c	2025-07-23 15:18:43.018874000 +0800
++++ new/mt7996/mac.c	2025-07-25 15:24:31.958952000 +0800
+@@ -1346,6 +1346,37 @@
+ 		return ret;
+ }
+ 
++void npu_mt7996_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
++	struct ieee80211_sta *sta, struct mt76_wcid *wcid,
++	struct list_head *free_list)
++{
++	struct mt76_dev *mdev = dev;
++	__le32 *txwi;
++	u16 wcid_idx;
++
++	mt76_connac_txp_skb_unmap(mdev, t);
++	if (!t->skb)
++		goto out;
++
++	txwi = (__le32 *)mt76_get_txwi_ptr(mdev, t);
++	if (sta) {
++		wcid_idx = wcid->idx;
++
++		if (likely(t->skb->protocol != cpu_to_be16(ETH_P_PAE)))
++			mt7996_tx_check_aggr(sta, t->skb, wcid);
++	} else {
++		wcid_idx = le32_get_bits(txwi[9], MT_TXD9_WLAN_IDX);
++	}
++
++	__mt76_tx_complete_skb(mdev, wcid_idx, t->skb, free_list);
++	
++out:
++	t->skb = NULL;
++	mt76_put_txwi(mdev, t);
++}
++
++EXPORT_SYMBOL_GPL(npu_mt7996_txwi_free);
++
+ static void
+ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+ {
+diff -urN old/mt7996/mmio.c new/mt7996/mmio.c
+--- old/mt7996/mmio.c	2025-07-23 15:18:42.809849000 +0800
++++ new/mt7996/mmio.c	2025-07-25 15:25:24.015912000 +0800
+@@ -950,6 +950,7 @@
+ 		.rx_rro_rxdmadc_process = mt7996_rro_rxdamdc_process,
+ 		.update_survey = mt7996_update_channel,
+ 		.set_channel = mt7996_set_channel,
++		.npu_txwi_free = npu_mt7996_txwi_free,
+ 		.vif_link_add = mt7996_vif_link_add,
+ 		.vif_link_remove = mt7996_vif_link_remove,
+ 	};
+diff -urN old/mt7996/mt7996.h new/mt7996/mt7996.h
+--- old/mt7996/mt7996.h	2025-07-23 15:18:42.911883000 +0800
++++ new/mt7996/mt7996.h	2025-07-25 15:26:35.149947000 +0800
+@@ -1431,6 +1431,9 @@
+ void mt7996_rro_rx_process(struct mt76_dev *mdev, void *data);
+ int mt7996_rro_fill_msdu_page(struct mt76_dev *mdev, struct mt76_queue *q,
+ 			      dma_addr_t p, void *data);
++void npu_mt7996_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
++	struct ieee80211_sta *sta, struct mt76_wcid *wcid,	 struct list_head *free_list);
++
+ void mt7996_rx_init_rxdmad_c(struct mt76_dev *mdev, struct mt76_queue *q);
+ void mt7996_rro_rxdamdc_process(struct mt76_dev *mdev, void *data);
+ /*rro3.1*/
+diff -urN old/mt7996/pci.c new/mt7996/pci.c
+--- old/mt7996/pci.c	2025-07-23 15:18:43.026853000 +0800
++++ new/mt7996/pci.c	2025-07-25 15:28:22.379889000 +0800
+@@ -326,6 +326,8 @@
+ 			 "failed setting npu wlan rx pcie address\n");
+ 	return err;
+ }
++
++#if 0
+ extern void (*tx_token_pending_free)(struct mt76_dev *dev);
+ struct mt76_txwi_cache *
+ mt76_token_release_npu(struct mt76_dev *dev, int token)
+@@ -401,7 +403,7 @@
+ 		}
+ 	}	
+ }
+-
++#endif
+ static int mt7996_npu_init_tx_done(struct mt7996_dev *dev, struct airoha_npu *npu)
+ {
+ 	int err;
+@@ -454,7 +456,7 @@
+ 		err = -ENODEV;
+ 		goto out;
+ 	}
+-	tx_token_pending_free = token_peding_free;
++	//tx_token_pending_free = token_peding_free;
+ 	err = mt7996_npu_wlan_offload_init(dev, npu, pdev);
+ 	if (err)
+ 			goto out;
+diff -urN old/npu.c new/npu.c
+--- old/npu.c	2025-07-23 15:18:42.997872000 +0800
++++ new/npu.c	2025-07-25 16:48:10.170572000 +0800
+@@ -223,21 +223,69 @@
+ 	return IRQ_HANDLED;
+ }
+ 
++char npu_mt76_token_release(struct mt76_dev *dev, unsigned int token, struct mt76_wcid *wcid, struct ieee80211_sta *sta)
++{	
++	struct mt76_txwi_cache *txwi_t;
++	struct sk_buff *skb, *tmp;
++	LIST_HEAD(free_list);
++
++	spin_lock_bh(&dev->token_lock);
++
++	txwi_t = idr_remove(&dev->token, token);
++
++	if (txwi_t) {
++		struct mt76_phy *phy = mt76_dev_phy(dev, txwi_t->phy_idx);
++
++		dev->token_count--;
++		phy->tokens--;
++	}
++
++	spin_unlock_bh(&dev->token_lock);
++	if (txwi_t) {
++		dev->drv->npu_txwi_free(dev, txwi_t, sta, wcid, &free_list);
++		txwi_t->jiffies = 0;
++	}
++
++	mt76_worker_schedule(&dev->tx_worker);
++
++	list_for_each_entry_safe(skb, tmp, &free_list, list) {
++		skb_list_del_init(skb);
++		napi_consume_skb(skb, 1);
++	}
++
++	return 0;
++}
++
+ int mt76_npu_dma_add_buf(struct mt76_phy *phy, struct mt76_queue *q,
+ 			 struct sk_buff *skb, struct mt76_queue_buf *buf,
+-			 void *txwi_ptr)
++			 void *txwi_ptr, struct mt76_wcid *wcid, struct ieee80211_sta *sta)
+ {
+ 	u16 txwi_len = min_t(u16, phy->dev->drv->txwi_size, NPU_TXWI_LEN);
+ 	struct airoha_npu_tx_dma_desc *desc = q->desc;
+ 	int ret;
+-
++	__le32 *_txd;
++	unsigned int token;
++	struct mt76_dev *dev = phy->dev;
++	struct sk_buff *n_skb = NULL;
++	_txd = (__le32 *)txwi_ptr;
++
++	n_skb = skb_clone(skb, GFP_ATOMIC);
++	if (!n_skb) {
++		dev_kfree_skb(skb);
++		return -ENOMEM;;
++	}
++	token = (_txd[8] >> 16) & 0xffff;
+ 	/* FIXME: Take into account unlinear skbs */
+ 	memcpy(desc[q->head].txwi, txwi_ptr, txwi_len);
+-	desc[q->head].addr = buf->addr;
++	if(n_skb->len != 0)
++		desc[q->head].addr = dma_map_single(dev->dma_dev, (void *)((unsigned long)n_skb->data), n_skb->len, DMA_TO_DEVICE);
++	else
++		desc[q->head].addr = 0;
++	//desc[q->head].addr = buf->addr;
+ 	desc[q->head].ctrl = FIELD_PREP(NPU_TX_DMA_DESC_VEND_LEN_MASK, txwi_len) |
+-			     FIELD_PREP(NPU_TX_DMA_DESC_LEN_MASK, skb->len) |
++				 FIELD_PREP(NPU_TX_DMA_DESC_LEN_MASK, n_skb->len) |
+ 			     NPU_TX_DMA_DESC_DONE_MASK;
+-
++	desc[q->head].rsv = (u64)n_skb;
+ 	ret = q->head;
+ 	q->entry[q->head].skip_buf0 = true;
+ 	q->entry[q->head].skip_buf1 = true;
+@@ -248,6 +296,9 @@
+ 	q->head = (q->head + 1) % q->ndesc;
+ 	q->queued++;
+ 
++	if(npu_mt76_token_release(dev, token, wcid, sta)){
++		printk("npu_mt76_token_release fail\n");
++	}
+ 	return ret;
+ }
+ 
+diff -urN old/tx.c new/tx.c
+--- old/tx.c	2025-07-23 15:18:43.033831000 +0800
++++ new/tx.c	2025-07-25 15:45:00.532827000 +0800
+@@ -687,14 +687,15 @@
+ 		if (ret >= 0 && !phy->offchannel)
+ 			ret = mt76_txq_schedule_pending_wcid(phy, wcid, &wcid->tx_pending);
+ 		spin_lock(&phy->tx_lock);
+-
+-		if (!skb_queue_empty(&wcid->tx_pending) &&
+-		    !skb_queue_empty(&wcid->tx_offchannel) &&
+-		    list_empty(&wcid->tx_list))
++		if ((!skb_queue_empty(&wcid->tx_pending) ||
++			!skb_queue_empty(&wcid->tx_offchannel)) &&
++			list_empty(&wcid->tx_list)) 
+ 			list_add_tail(&wcid->tx_list, &phy->tx_list);
+ 
+-		if (ret < 0)
++		if (ret < 0){
++			list_splice_init(&tx_list, &phy->tx_list);
+ 			break;
++		}
+ 	}
+ 	spin_unlock(&phy->tx_lock);
+ 

@@ -1,0 +1,1086 @@
+diff -ruN old/dma.c new/dma.c
+--- old/dma.c	2025-05-27 16:05:53.178057000 +0800
++++ new/dma.c	2025-05-26 16:47:59.657846000 +0800
+@@ -516,11 +516,13 @@
+ 
+ 		mt76_put_rxwi(dev, t);
+ 		/* only wed v2 rx path handle by wo */
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (drop && dev->mmio.wed.version == MTK_WED_HW_V2) {
+ 			*drop |= !!(buf1 & MT_DMA_CTL_WO_DROP);
+ 			if (buf1 & MT_DMA_CTL_WO_DROP)
+ 				q->rx_drop[MT_RX_DROP_DMAD_WO_FRAG]++;
+ 		}
++#endif
+ 	} else {
+ 		dma_sync_single_for_cpu(dev->dma_dev, e->dma_addr[0],
+ 				SKB_WITH_OVERHEAD(q->buf_size),
+@@ -841,13 +843,13 @@
+ 	ret = mt76_wed_dma_setup(dev, q, false);
+ 	if (ret)
+ 		return ret;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mmio.wed)) {
+ 		if ((mtk_wed_get_rx_capa(&dev->mmio.wed) && mt76_queue_is_wed_rro(q)) ||
+ 		    mt76_queue_is_wed_tx_free(q))
+ 			return 0;
+ 	}
+-
++#endif
+ 	mt76_dma_queue_reset(dev, q, true);
+ 
+ 	return 0;
+@@ -905,11 +907,11 @@
+ 
+ 	if (mt76_queue_is_wed_tx_free(q))
+ 		return;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mmio.wed) &&
+ 	    mt76_queue_is_wed_rro(q))
+ 		return;
+-
++#endif
+ 	mt76_dma_sync_idx(dev, q);
+ 	mt76_dma_rx_fill_buf(dev, q, false);
+ }
+@@ -1158,23 +1160,24 @@
+ 
+ 	mt76_for_each_q_rx(dev, i) {
+ 		struct mt76_queue *q = &dev->q_rx[i];
+-
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&dev->mmio.wed) &&
+ 		    mt76_queue_is_wed_rro(q))
+ 			continue;
+-
++		#endif
++		
+ 		netif_napi_del(&dev->napi[i]);
+ 		mt76_dma_rx_cleanup(dev, q);
+ 
+ 		page_pool_destroy(q->page_pool);
+ 	}
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mmio.wed))
+ 		mtk_wed_device_detach(&dev->mmio.wed);
+ 
+ 	if (mtk_wed_device_active(&dev->mmio.wed_hif2))
+ 		mtk_wed_device_detach(&dev->mmio.wed_hif2);
+-
++#endif
+ 	mt76_free_pending_txwi(dev);
+ 	mt76_free_pending_rxwi(dev);
+ }
+diff -ruN old/dma.h new/dma.h
+--- old/dma.h	2025-05-27 16:05:49.751121000 +0800
++++ new/dma.h	2025-05-26 16:49:08.878874000 +0800
+@@ -95,8 +95,10 @@
+ mt76_dma_reset_tx_queue(struct mt76_dev *dev, struct mt76_queue *q)
+ {
+ 	dev->queue_ops->reset_q(dev, q, true);
++	#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mmio.wed))
+ 		mt76_wed_dma_setup(dev, q, true);
++	#endif		
+ }
+ 
+ static inline int
+diff -ruN old/mac80211.c new/mac80211.c
+--- old/mac80211.c	2025-05-27 16:05:53.190068000 +0800
++++ new/mac80211.c	2025-05-26 16:49:49.466874000 +0800
+@@ -1533,9 +1533,11 @@
+ 
+ 	while ((skb = __skb_dequeue(&dev->rx_skb[q])) != NULL) {
+ 		mt76_check_sta(dev, skb);
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&dev->mmio.wed))
+ 			__skb_queue_tail(&frames, skb);
+ 		else
++		#endif
+ 			mt76_rx_aggr_reorder(dev, skb, &frames);
+ 	}
+ 
+diff -ruN old/mmio.c new/mmio.c
+--- old/mmio.c	2025-04-11 17:07:15.000000000 +0800
++++ new/mmio.c	2025-05-26 16:50:50.745813000 +0800
+@@ -75,10 +75,12 @@
+ 	dev->mmio.irqmask &= ~clear;
+ 	dev->mmio.irqmask |= set;
+ 	if (addr) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&dev->mmio.wed))
+ 			mtk_wed_device_irq_set_mask(&dev->mmio.wed,
+ 						    dev->mmio.irqmask);
+ 		else
++#endif
+ 			mt76_mmio_wr(dev, addr, dev->mmio.irqmask);
+ 	}
+ 	spin_unlock_irqrestore(&dev->mmio.irq_lock, flags);
+diff -ruN old/mt76_connac_mac.c new/mt76_connac_mac.c
+--- old/mt76_connac_mac.c	2025-05-27 16:05:48.149067000 +0800
++++ new/mt76_connac_mac.c	2025-05-26 16:52:43.985824000 +0800
+@@ -532,8 +532,10 @@
+ 			mt76_connac_lmac_mapping(skb_get_queue_mapping(skb));
+ 
+ 		/* mt7915 WA only counts WED path */
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (is_mt7915(dev) && mtk_wed_device_active(&dev->mmio.wed))
+ 			wcid->stats.tx_packets++;
++		#endif
+ 	}
+ 
+ 	val = FIELD_PREP(MT_TXD0_TX_BYTES, skb->len + sz_txd) |
+@@ -620,6 +622,7 @@
+ 	txs = le32_to_cpu(txs_data[0]);
+ 
+ 	/* PPDU based reporting */
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mmio.wed) &&
+ 	    FIELD_GET(MT_TXS0_TXS_FORMAT, txs) > 1) {
+ 		stats->tx_bytes +=
+@@ -641,7 +644,7 @@
+ 			ieee80211_refresh_tx_agg_session_timer(sta, tid);
+ 		}
+ 	}
+-
++#endif
+ 	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
+ 
+ 	rate.mcs = FIELD_GET(MT_TX_RATE_IDX, txrate);
+diff -ruN old/mt76_connac_mcu.c new/mt76_connac_mcu.c
+--- old/mt76_connac_mcu.c	2025-05-27 16:05:49.221077000 +0800
++++ new/mt76_connac_mcu.c	2025-05-26 16:53:45.416828000 +0800
+@@ -1259,8 +1259,9 @@
+ {
+ 	if (!mt76_is_mmio(dev))
+ 		return 0;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (!mtk_wed_device_active(&dev->mmio.wed))
++#endif
+ 		return 0;
+ 
+ 	return mtk_wed_device_update_msg(&dev->mmio.wed, WED_WO_STA_REC,
+diff -ruN old/mt7996/dma.c new/mt7996/dma.c
+--- old/mt7996/dma.c	2025-05-27 16:05:53.222061000 +0800
++++ new/mt7996/dma.c	2025-05-26 16:42:39.808865000 +0800
+@@ -20,7 +20,7 @@
+ 			phy->mt76->q_tx[i] = phy->mt76->q_tx[0];
+ 		return 0;
+ 	}
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(wed)) {
+ 		ring_base += MT_TXQ_ID(0) * MT_RING_SIZE;
+ 		idx -= MT_TXQ_ID(0);
+@@ -30,7 +30,7 @@
+ 		else
+ 			flags = MT_WED_Q_TX(idx);
+ 	}
+-
++#endif
+ 	return mt76_connac_init_tx_queues(phy->mt76, idx, n_desc,
+ 					  ring_base, wed, flags);
+ }
+@@ -50,8 +50,9 @@
+ 
+ static void mt7996_dma_config(struct mt7996_dev *dev)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+-
++#endif
+ #define Q_CONFIG(q, wfdma, int, id) do {		\
+ 	if (wfdma)					\
+ 		dev->q_wfdma_mask |= (1 << (q));	\
+@@ -127,6 +128,7 @@
+ 	}
+ 
+ 	/* wed rx queue */
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(wed) && wed->version == MTK_WED_HW_V3_1) {
+ 		/* For mt7996, there is not enough Rx ring and thus we use Tx ring instead */
+ 		if (is_mt7996(&dev->mt76))
+@@ -136,7 +138,7 @@
+ 			RXQ_CONFIG(MT_RXQ_WED_RX_DATA, WFDMA0, MT_INT_RX_DONE_WED_RX_DATA,
+ 				   MT7996_RXQ_WED_RX_DATA);
+ 	}
+-
++#endif
+ 	/* data tx queue */
+ 	if (is_mt7996(&dev->mt76)) {
+ 		TXQ_CONFIG(0, WFDMA0, MT_INT_TX_DONE_BAND0, MT7996_TXQ_BAND0);
+@@ -302,7 +304,9 @@
+ 
+ void mt7996_dma_start(struct mt7996_dev *dev, bool reset, bool wed_reset)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
++#endif
+ 	u32 hif1_ofs = 0;
+ 	u32 irq_mask;
+ 
+@@ -311,12 +315,14 @@
+ 
+ 	/* enable WFDMA Tx/Rx */
+ 	if (!reset) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(wed))
+ 			mt76_set(dev, MT_WFDMA0_GLO_CFG,
+ 				 MT_WFDMA0_GLO_CFG_TX_DMA_EN |
+ 				 MT_WFDMA0_GLO_CFG_OMIT_TX_INFO |
+ 				 MT_WFDMA0_GLO_CFG_EXT_EN);
+ 		else
++#endif
+ 			mt76_set(dev, MT_WFDMA0_GLO_CFG,
+ 				 MT_WFDMA0_GLO_CFG_TX_DMA_EN |
+ 				 MT_WFDMA0_GLO_CFG_RX_DMA_EN |
+@@ -349,6 +355,7 @@
+ 	if (mt7996_band_valid(dev, MT_BAND2))
+ 		irq_mask |= MT_INT_BAND2_RX_DONE | MT_INT_TX_RX_DONE_EXT;
+ 
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(wed) && wed_reset) {
+ 		u32 wed_irq_mask = irq_mask;
+ 
+@@ -358,7 +365,7 @@
+ 		mt76_wr(dev, MT_INT_MASK_CSR, wed_irq_mask);
+ 		mtk_wed_device_start(wed, wed_irq_mask);
+ 	}
+-
++#endif
+ 	if (!mt7996_has_wa(dev))
+ 		irq_mask &= ~(MT_INT_RX(MT_RXQ_MAIN_WA) |
+ 			      MT_INT_RX(MT_RXQ_BAND1_WA));
+@@ -500,6 +507,7 @@
+ 		/* fix hardware limitation, pcie1's rx ring3 is not available
+ 		 * so, redirect pcie0 rx ring3 interrupt to pcie1
+ 		 */
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+ 		    mt7996_has_hwrro(dev)) {
+ 			u32 intr = is_mt7996(&dev->mt76) ?
+@@ -508,7 +516,9 @@
+ 				   MT_WFDMA0_RX_INT_SEL_RING5;
+ 			mt76_set(dev, MT_WFDMA0_RX_INT_PCIE_SEL + hif1_ofs,
+ 				 intr);
+-		} else {
++		} else 
++#endif
++		{
+ 			mt76_set(dev, MT_WFDMA0_RX_INT_PCIE_SEL,
+ 				 MT_WFDMA0_RX_INT_SEL_RING3);
+ 		}
+@@ -520,15 +530,19 @@
+ int mt7996_dma_rro_init(struct mt7996_dev *dev)
+ {
+ 	struct mt76_dev *mdev = &dev->mt76;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	u32 irq_mask;
++#endif
+ 	int ret;
+ 
+ 	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+ 		/* rxdmad_c */
+ 		mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags = MT_WED_RRO_Q_RXDMAD_C;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
+ 			mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].wed = &mdev->mmio.wed;
+ 		else
++#endif
+ 			mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags |= MT_QFLAG_EMI_EN;
+ 
+ 		ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_RRO_RXDMAD_C],
+@@ -543,8 +557,10 @@
+ 	}
+ 	/* ind cmd */
+ 	mdev->q_rx[MT_RXQ_RRO_IND].flags = MT_WED_RRO_Q_IND;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
+ 		mdev->q_rx[MT_RXQ_RRO_IND].wed = &mdev->mmio.wed;
++#endif
+ 	ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_RRO_IND],
+ 			       MT_RXQ_ID(MT_RXQ_RRO_IND),
+ 			       MT7996_RX_RING_SIZE,
+@@ -555,8 +571,10 @@
+ 	/* rx msdu page queue for band0 */
+ 	mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND0].flags =
+ 		MT_WED_RRO_Q_MSDU_PG(0) | MT_QFLAG_WED_RRO_EN;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
+ 		mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND0].wed = &mdev->mmio.wed;
++#endif
+ 	ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND0],
+ 			       MT_RXQ_ID(MT_RXQ_MSDU_PAGE_BAND0),
+ 			       MT7996_RX_RING_SIZE,
+@@ -569,8 +587,10 @@
+ 		/* rx msdu page queue for band1 */
+ 		mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND1].flags =
+ 			MT_WED_RRO_Q_MSDU_PG(1) | MT_QFLAG_WED_RRO_EN;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
+ 			mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND1].wed = &mdev->mmio.wed;
++#endif
+ 		ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND1],
+ 				       MT_RXQ_ID(MT_RXQ_MSDU_PAGE_BAND1),
+ 				       MT7996_RX_RING_SIZE,
+@@ -584,8 +604,10 @@
+ 		/* rx msdu page queue for band2 */
+ 		mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND2].flags =
+ 			MT_WED_RRO_Q_MSDU_PG(2) | MT_QFLAG_WED_RRO_EN;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
+ 			mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND2].wed = &mdev->mmio.wed;
++#endif
+ 		ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_MSDU_PAGE_BAND2],
+ 				       MT_RXQ_ID(MT_RXQ_MSDU_PAGE_BAND2),
+ 				       MT7996_RX_RING_SIZE,
+@@ -596,6 +618,7 @@
+ 	}
+ 
+ start_hw_rro:
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&mdev->mmio.wed)) {
+ 		irq_mask = mdev->mmio.irqmask |
+ 			   MT_INT_TX_DONE_BAND2;
+@@ -606,7 +629,9 @@
+ 		mt76_wr(dev, MT_INT_MASK_CSR, irq_mask);
+ 		mtk_wed_device_start_hw_rro(&mdev->mmio.wed, irq_mask, false);
+ 		mt7996_irq_enable(dev, irq_mask);
+-	} else {
++	} else 
++#endif
++	{
+ 		if (is_mt7996(&dev->mt76)) {
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND1, mt76_dma_rx_poll);
+ 			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND2, mt76_dma_rx_poll);
+@@ -632,7 +657,9 @@
+ int mt7996_dma_init(struct mt7996_dev *dev)
+ {
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed_hif2 = &dev->mt76.mmio.wed_hif2;
++#endif
+ 	u32 rx_base;
+ 	u32 hif1_ofs = 0;
+ 	int ret;
+@@ -700,11 +727,12 @@
+ 		return ret;
+ 
+ 	/* rx data queue for band0 and mt7996 band1 */
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mt76_wed_check_rx_cap(wed) && wed->version != MTK_WED_HW_V3_1) {
+ 		dev->mt76.q_rx[MT_RXQ_MAIN].flags = MT_WED_Q_RX(0);
+ 		dev->mt76.q_rx[MT_RXQ_MAIN].wed = wed;
+ 	}
+-
++#endif
+ 	ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MAIN],
+ 			       MT_RXQ_ID(MT_RXQ_MAIN),
+ 			       MT7996_RX_RING_SIZE,
+@@ -712,7 +740,7 @@
+ 			       MT_RXQ_RING_BASE(MT_RXQ_MAIN));
+ 	if (ret)
+ 		return ret;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mt76_wed_check_rx_cap(wed) && wed->version == MTK_WED_HW_V3_1) {
+ 		dev->mt76.q_rx[MT_RXQ_WED_RX_DATA].flags = MT_WED_Q_RX(0);
+ 		dev->mt76.q_rx[MT_RXQ_WED_RX_DATA].wed = wed;
+@@ -733,7 +761,7 @@
+ 		dev->mt76.q_rx[MT_RXQ_MAIN_WA].flags = MT_WED_Q_TXFREE;
+ 		dev->mt76.q_rx[MT_RXQ_MAIN_WA].wed = wed;
+ 	}
+-
++#endif
+ 	if (mt7996_has_wa(dev)) {
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MAIN_WA],
+ 				       MT_RXQ_ID(MT_RXQ_MAIN_WA),
+@@ -743,10 +771,12 @@
+ 		if (ret)
+ 			return ret;
+ 	} else {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(wed)) {
+ 			dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0].flags = MT_WED_Q_TXFREE;
+ 			dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0].wed = wed;
+ 		}
++#endif
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0],
+ 				       MT_RXQ_ID(MT_RXQ_TXFREE_BAND0),
+ 				       MT7996_RX_MCU_RING_SIZE,
+@@ -757,10 +787,12 @@
+ 	}
+ 
+ 	if (!mt7996_has_wa(dev) && dev->hif2) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(wed)) {
+ 			dev->mt76.q_rx[MT_RXQ_TXFREE_BAND1].flags = MT_WED_Q_TXFREE;
+ 			dev->mt76.q_rx[MT_RXQ_TXFREE_BAND1].wed = wed;
+ 		}
++#endif
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_TXFREE_BAND1],
+ 				       MT_RXQ_ID(MT_RXQ_TXFREE_BAND1),
+ 				       MT7996_RX_MCU_RING_SIZE,
+@@ -773,10 +805,12 @@
+ 	if (mt7996_band_valid(dev, MT_BAND2)) {
+ 		/* rx data queue for mt7996 band2 */
+ 		rx_base = MT_RXQ_RING_BASE(MT_RXQ_BAND2) + hif1_ofs;
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(wed_hif2)) {
+ 			dev->mt76.q_rx[MT_RXQ_BAND2].flags = MT_WED_Q_RX(0);
+ 			dev->mt76.q_rx[MT_RXQ_BAND2].wed = wed_hif2;
+ 		}
++		#endif
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_BAND2],
+ 				       MT_RXQ_ID(MT_RXQ_BAND2),
+ 				       MT7996_RX_RING_SIZE,
+@@ -788,11 +822,13 @@
+ 		/* tx free notify event from WA for mt7996 band2
+ 		 * use pcie0's rx ring3, but, redirect pcie0 rx ring3 interrupt to pcie1
+ 		 */
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(wed_hif2) && !mt7996_has_hwrro(dev)) {
+ 			dev->mt76.q_rx[MT_RXQ_BAND2_WA].flags = MT_WED_Q_TXFREE;
+ 			dev->mt76.q_rx[MT_RXQ_BAND2_WA].wed = wed_hif2;
+ 		}
+-
++		#endif
++		
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_BAND2_WA],
+ 				       MT_RXQ_ID(MT_RXQ_BAND2_WA),
+ 				       MT7996_RX_MCU_RING_SIZE,
+@@ -803,11 +839,12 @@
+ 	} else if (mt7996_band_valid(dev, MT_BAND1)) {
+ 		/* rx data queue for mt7992 band1 */
+ 		rx_base = MT_RXQ_RING_BASE(MT_RXQ_BAND1) + hif1_ofs;
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(wed) && wed->version != MTK_WED_HW_V3_1) {
+ 			dev->mt76.q_rx[MT_RXQ_BAND1].flags = MT_WED_Q_RX(1);
+ 			dev->mt76.q_rx[MT_RXQ_BAND1].wed = wed;
+ 		}
+-
++		#endif
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_BAND1],
+ 				       MT_RXQ_ID(MT_RXQ_BAND1),
+ 				       MT7996_RX_RING_SIZE,
+@@ -819,10 +856,12 @@
+ 		/* tx free notify event from WA for mt7992 band1 */
+ 		if (mt7996_has_wa(dev)) {
+ 			rx_base = MT_RXQ_RING_BASE(MT_RXQ_BAND1_WA) + hif1_ofs;
++			#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 			if (mtk_wed_device_active(wed_hif2)) {
+ 				dev->mt76.q_rx[MT_RXQ_BAND1_WA].flags = MT_WED_Q_TXFREE;
+ 				dev->mt76.q_rx[MT_RXQ_BAND1_WA].wed = wed_hif2;
+ 			}
++			#endif
+ 			ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_BAND1_WA],
+ 					       MT_RXQ_ID(MT_RXQ_BAND1_WA),
+ 					       MT7996_RX_MCU_RING_SIZE,
+@@ -837,8 +876,10 @@
+ 		/* rx rro data queue for band0 */
+ 		dev->mt76.q_rx[MT_RXQ_RRO_BAND0].flags =
+ 			MT_WED_RRO_Q_DATA(0) | MT_QFLAG_WED_RRO_EN;
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(wed))
+ 			dev->mt76.q_rx[MT_RXQ_RRO_BAND0].wed = wed;
++		#endif
+ 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_RRO_BAND0],
+ 				       MT_RXQ_ID(MT_RXQ_RRO_BAND0),
+ 				       MT7996_RX_RING_SIZE,
+@@ -850,8 +891,10 @@
+ 		if (!is_mt7996(&dev->mt76)) {
+ 			dev->mt76.q_rx[MT_RXQ_RRO_BAND1].flags =
+ 				MT_WED_RRO_Q_DATA(1) | MT_QFLAG_WED_RRO_EN;
++			#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 			if (mt76_wed_check_rx_cap(wed))
+ 				dev->mt76.q_rx[MT_RXQ_RRO_BAND1].wed = wed;
++			#endif
+ 			ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_RRO_BAND1],
+ 					       MT_RXQ_ID(MT_RXQ_RRO_BAND1),
+ 					       MT7996_RX_RING_SIZE,
+@@ -861,10 +904,12 @@
+ 				return ret;
+ 		} else {
+ 			/* tx free notify event from WA for band0 */
++			#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 			if (mtk_wed_device_active(wed)) {
+ 				dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0].flags = MT_WED_Q_TXFREE;
+ 				dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0].wed = wed;
+ 			}
++			#endif
+ 			ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_TXFREE_BAND0],
+ 					       MT_RXQ_ID(MT_RXQ_TXFREE_BAND0),
+ 					       MT7996_RX_MCU_RING_SIZE,
+@@ -878,8 +923,10 @@
+ 			/* rx rro data queue for band2 */
+ 			dev->mt76.q_rx[MT_RXQ_RRO_BAND2].flags =
+ 				MT_WED_RRO_Q_DATA(1) | MT_QFLAG_WED_RRO_EN;
++			#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 			if (mt76_wed_check_rx_cap(wed))
+ 				dev->mt76.q_rx[MT_RXQ_RRO_BAND2].wed = wed;
++			#endif
+ 			ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_RRO_BAND2],
+ 					       MT_RXQ_ID(MT_RXQ_RRO_BAND2),
+ 					       MT7996_RX_RING_SIZE,
+@@ -889,10 +936,12 @@
+ 				return ret;
+ 
+ 			/* tx free notify event from MAC for band2 */
++			#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 			if (mtk_wed_device_active(wed_hif2)) {
+ 				dev->mt76.q_rx[MT_RXQ_TXFREE_BAND2].flags = MT_WED_Q_TXFREE;
+ 				dev->mt76.q_rx[MT_RXQ_TXFREE_BAND2].wed = wed_hif2;
+ 			}
++			#endif
+ 			ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_TXFREE_BAND2],
+ 					       MT_RXQ_ID(MT_RXQ_TXFREE_BAND2),
+ 					       MT7996_RX_MCU_RING_SIZE,
+@@ -955,8 +1004,12 @@
+ 	if (!force)
+ 		dev_info(dev->mt76.dev,"%s L1 SER rx queue clean up done.",
+ 			 wiphy_name(dev->mt76.hw->wiphy));
+-
+-	if (mt7996_has_hwrro(dev) && !mtk_wed_device_active(&dev->mt76.mmio.wed)) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++	if (mt7996_has_hwrro(dev) && !mtk_wed_device_active(&dev->mt76.mmio.wed)) 
++#else
++	if (mt7996_has_hwrro(dev) ) 
++#endif
++	{
+ 		mt7996_rro_msdu_pg_free(dev);
+ 		mt7996_rx_token_put(dev);
+ 	}
+@@ -970,13 +1023,13 @@
+ 	/* reset wfsys */
+ 	if (force)
+ 		mt7996_wfsys_reset(dev);
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (dev->hif2 && mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
+ 		mtk_wed_device_dma_reset(&dev->mt76.mmio.wed_hif2);
+ 
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+ 		mtk_wed_device_dma_reset(&dev->mt76.mmio.wed);
+-
++#endif
+ 	if (!force)
+ 		dev_info(dev->mt76.dev,"%s L1 SER wed dma reset done.",
+ 			 wiphy_name(dev->mt76.hw->wiphy));
+@@ -1008,6 +1061,7 @@
+ 		dev_info(dev->mt76.dev,"%s L1 SER mcu queue reset done.",
+ 			 wiphy_name(dev->mt76.hw->wiphy));
+ 	mt76_for_each_q_rx(&dev->mt76, i) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {
+ 			if (mt76_queue_is_wed_rro(&dev->mt76.q_rx[i]) ||
+ 			    mt76_queue_is_wed_tx_free(&dev->mt76.q_rx[i])) {
+@@ -1016,7 +1070,7 @@
+ 				continue;
+ 			}
+ 		}
+-
++#endif
+ 		mt76_queue_reset(dev, &dev->mt76.q_rx[i], true);
+ 	}
+ 
+@@ -1027,11 +1081,13 @@
+ 	mt76_tx_status_check(&dev->mt76, true);
+ 
+ 	mt76_for_each_q_rx(&dev->mt76, i) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) && force &&
+ 		    (mt76_queue_is_wed_rro_ind(&dev->mt76.q_rx[i]) ||
+ 		     mt76_queue_is_wed_rro_msdu_pg(&dev->mt76.q_rx[i]) ||
+ 		     mt76_queue_is_wed_rro_rxdmad_c(&dev->mt76.q_rx[i])))
+ 			continue;
++#endif
+ 
+ 		mt76_queue_rx_reset(dev, i);
+ 	}
+diff -ruN old/mt7996/init.c new/mt7996/init.c
+--- old/mt7996/init.c	2025-05-27 16:05:53.237079000 +0800
++++ new/mt7996/init.c	2025-05-26 15:46:11.361113000 +0800
+@@ -528,9 +528,10 @@
+ 		hw->max_tx_aggregation_subframes = 512;
+ 
+ 	hw->netdev_features = NETIF_F_RXCSUM;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(wed))
+ 		hw->netdev_features |= NETIF_F_HW_TC;
+-
++#endif
+ 	hw->radiotap_timestamp.units_pos =
+ 		IEEE80211_RADIOTAP_TIMESTAMP_UNIT_US;
+ 
+@@ -887,11 +888,12 @@
+ 		if (ret)
+ 			goto error;
+ 	}
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (wed == &dev->mt76.mmio.wed_hif2 && mtk_wed_device_active(wed)) {
+ 		mt76_wr(dev, MT_INT_PCIE1_MASK_CSR, MT_INT_TX_RX_DONE_EXT);
+ 		mtk_wed_device_start(&dev->mt76.mmio.wed_hif2, MT_INT_TX_RX_DONE_EXT);
+ 	}
++#endif
+ 
+ 	return 0;
+ 
+@@ -953,11 +955,12 @@
+ 
+ static void mt7996_rro_v3_hw_init(struct mt7996_dev *dev)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+-
++#endif
+ 	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1)
+ 		return;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mt76_wed_check_rx_cap(wed)) {
+ 		wed->wlan.ind_cmd.win_size = ffs(MT7996_RRO_WINDOW_MAX_LEN) - 6;
+ 		if (is_mt7996(&dev->mt76))
+@@ -971,7 +974,9 @@
+ 		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0x15010e00);
+ 		mt76_set(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1,
+ 			MT_RRO_IND_CMD_SIGNATURE_BASE1_EN);
+-	} else {
++	} else 
++#endif
++	{
+ 		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0);
+ 		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1, 0);
+ 	}
+@@ -1071,6 +1076,7 @@
+ 
+ static int mt7996_wed_rro_init(struct mt7996_dev *dev)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+ 	struct mt7996_wed_rro_addr *addr;
+ 	void *ptr;
+@@ -1111,8 +1117,10 @@
+ 			addr->signature = 0xff;
+ 			addr++;
+ 		}
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mt76_wed_check_rx_cap(wed))
+ 			wed->wlan.ind_cmd.addr_elem_phys[i] = dev->wed_rro.addr_elem[i].phy_addr;
++		#endif
+ 	}
+ 
+ 	for (i = 0; i < MT7996_RRO_MSDU_PG_CR_CNT; i++) {
+@@ -1164,6 +1172,9 @@
+ 	mt7996_rro_hw_init(dev);
+ 
+ 	return mt7996_dma_rro_init(dev);
++#else
++	return 0;
++#endif
+ }
+ 
+ static void mt7996_wed_rro_free(struct mt7996_dev *dev)
+@@ -1938,7 +1949,12 @@
+ 	mt7996_mcu_exit(dev);
+ 	mt7996_tx_token_put(dev);
+ 	mt7996_dma_cleanup(dev);
+-	if (mt7996_has_hwrro(dev) && !mtk_wed_device_active(&dev->mt76.mmio.wed)) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
++	if (mt7996_has_hwrro(dev) && !mtk_wed_device_active(&dev->mt76.mmio.wed)) 
++#else
++	if (mt7996_has_hwrro(dev))
++#endif
++	{
+ 		mt7996_rro_msdu_pg_free(dev);
+ 		mt7996_rx_token_put(dev);
+ 	}
+diff -ruN old/mt7996/mac.c new/mt7996/mac.c
+--- old/mt7996/mac.c	2025-05-27 16:05:53.474078000 +0800
++++ new/mt7996/mac.c	2025-05-26 16:01:00.507056000 +0800
+@@ -1493,7 +1493,7 @@
+ 		dev_err(mdev->dev, "Unknown TXS format: %hhu\n", fmt);
+ 		goto unlock;
+ 	}
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta &&
+ 	    (wcid->tx_info & MT_WCID_TX_INFO_SET)) {
+ 		/* Do not check TX BA status for mgmt frames which are sent at a
+@@ -1502,6 +1502,7 @@
+ 		if (!le32_get_bits(txs_data[3], MT_TXS3_FIXED_RATE))
+ 			mt7996_check_tx_ba_status(wcid, FIELD_GET(MT_TXS0_TID, txs));
+ 	}
++#endif
+ 
+ 	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
+ 	bw = FIELD_GET(MT_TXS0_BW, txs);
+@@ -1625,11 +1626,13 @@
+ 
+ 	switch (type) {
+ 	case PKT_TYPE_TXRX_NOTIFY:
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2) &&
+ 		    q == MT_RXQ_TXFREE_BAND2) {
+ 			dev_kfree_skb(skb);
+ 			break;
+ 		}
++#endif
+ 
+ 		mt7996_mac_tx_free(dev, skb->data, skb->len);
+ 		napi_consume_skb(skb, 1);
+@@ -2394,10 +2397,12 @@
+ 	/* disable all tx/rx napi */
+ 	mt76_worker_disable(&dev->mt76.tx_worker);
+ 	mt76_for_each_q_rx(mdev, i) {
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+ 		    mt76_queue_is_wed_rro(&mdev->q_rx[i]))
+ 			continue;
+-
++		#endif
++		
+ 		if (mdev->q_rx[i].ndesc)
+ 			napi_disable(&dev->mt76.napi[i]);
+ 	}
+@@ -2410,9 +2415,11 @@
+ 	mt7996_dma_reset(dev, true);
+ 
+ 	mt76_for_each_q_rx(mdev, i) {
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+ 		    mt76_queue_is_wed_rro(&mdev->q_rx[i]))
+ 			continue;
++		#endif
+ 
+ 		if (mdev->q_rx[i].ndesc) {
+ 			napi_enable(&dev->mt76.napi[i]);
+@@ -2440,7 +2447,8 @@
+ 	ret = mt7996_mcu_init_firmware(dev);
+ 	if (ret)
+ 		goto out;
+-
++	
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && mt7996_has_hwrro(dev)) {
+ 		u32 wed_irq_mask = dev->mt76.mmio.irqmask |
+ 				   MT_INT_TX_DONE_BAND2;
+@@ -2458,13 +2466,15 @@
+ 		mt7996_irq_enable(dev, wed_irq_mask);
+ 		mt7996_irq_disable(dev, 0);
+ 	}
+-
++#endif
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2)) {
+ 		mt76_wr(dev, MT_INT_PCIE1_MASK_CSR,
+ 			MT_INT_TX_RX_DONE_EXT);
+ 		mtk_wed_device_start(&dev->mt76.mmio.wed_hif2,
+ 				     MT_INT_TX_RX_DONE_EXT);
+ 	}
++#endif
+ 
+ 	/* set the necessary init items */
+ 	ret = mt7996_mcu_set_eeprom(dev);
+@@ -2650,10 +2660,12 @@
+ 		 wiphy_name(dev->mt76.hw->wiphy));
+ 
+ 	mt76_for_each_q_rx(&dev->mt76, i) {
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+ 		    mt76_queue_is_wed_rro(&dev->mt76.q_rx[i]))
+ 			continue;
+-
++		#endif
++		
+ 		napi_disable(&dev->mt76.napi[i]);
+ 	}
+ 	napi_disable(&dev->mt76.tx_napi);
+@@ -2698,6 +2710,7 @@
+ 	if (!is_mt7996(&dev->mt76) && dev->mt76.hwrro_mode == MT76_HWRRO_V3)
+ 		mt76_wr(dev, MT_RRO_3_0_EMU_CONF, MT_RRO_3_0_EMU_CONF_EN_MASK);
+ 
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {
+ 		u32 wed_irq_mask = MT_INT_TX_DONE_BAND2 |
+ 				   dev->mt76.mmio.irqmask;
+@@ -2716,7 +2729,7 @@
+ 		mtk_wed_device_start(&dev->mt76.mmio.wed_hif2,
+ 				     MT_INT_TX_RX_DONE_EXT);
+ 	}
+-
++#endif
+ 	dev_info(dev->mt76.dev,"%s L1 SER wed start done.",
+ 		 wiphy_name(dev->mt76.hw->wiphy));
+ 
+@@ -2728,10 +2741,12 @@
+ 		clear_bit(MT76_RESET, &phy3->mt76->state);
+ 
+ 	mt76_for_each_q_rx(&dev->mt76, i) {
++		#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
+ 		    mt76_queue_is_wed_rro(&dev->mt76.q_rx[i]))
+ 			continue;
+-
++		#endif
++		
+ 		napi_enable(&dev->mt76.napi[i]);
+ 		local_bh_disable();
+ 		napi_schedule(&dev->mt76.napi[i]);
+diff -ruN old/mt7996/main.c new/mt7996/main.c
+--- old/mt7996/main.c	2025-05-27 16:05:53.488084000 +0800
++++ new/mt7996/main.c	2025-05-26 16:06:44.611004000 +0800
+@@ -2752,8 +2752,9 @@
+ 			break;
+ 		}
+ 	}
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (!mtk_wed_device_active(wed))
++#endif
+ 		return -ENODEV;
+ 
+ 	path->type = DEV_PATH_MTK_WDMA;
+diff -ruN old/mt7996/mcu.c new/mt7996/mcu.c
+--- old/mt7996/mcu.c	2025-05-27 16:05:53.542100000 +0800
++++ new/mt7996/mcu.c	2025-05-26 16:10:14.529018000 +0800
+@@ -5022,9 +5022,13 @@
+ 	ret = mt7996_mcu_init_rx_airtime(dev);
+ 	if (ret)
+ 		return ret;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	return mt7996_mcu_red_config(dev,
+ 			mtk_wed_device_active(&dev->mt76.mmio.wed));
++#else
++	return mt7996_mcu_red_config(dev,
++		0);
++#endif
+ }
+ 
+ int mt7996_mcu_init(struct mt7996_dev *dev)
+diff -ruN old/mt7996/mmio.c new/mt7996/mmio.c
+--- old/mt7996/mmio.c	2025-05-27 16:05:53.275092000 +0800
++++ new/mt7996/mmio.c	2025-05-26 16:15:28.647988000 +0800
+@@ -790,13 +790,16 @@
+ 	mdev->mmio.irqmask |= set;
+ 
+ 	if (write_reg) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&mdev->mmio.wed)) {
+ 			mtk_wed_device_irq_set_mask(&mdev->mmio.wed,
+ 						    mdev->mmio.irqmask);
+ 			if (mtk_wed_device_active(&mdev->mmio.wed_hif2))
+ 				mtk_wed_device_irq_set_mask(&mdev->mmio.wed_hif2,
+ 							    mdev->mmio.irqmask);
+-		} else {
++		} else 
++#endif
++		{
+ 			mt76_wr(dev, MT_INT_MASK_CSR, mdev->mmio.irqmask);
+ 			mt76_wr(dev, MT_INT1_MASK_CSR, mdev->mmio.irqmask);
+ 		}
+@@ -817,10 +820,12 @@
+ static void mt7996_irq_tasklet(struct tasklet_struct *t)
+ {
+ 	struct mt7996_dev *dev = from_tasklet(dev, t, mt76.irq_tasklet);
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+ 	struct mtk_wed_device *wed_hif2 = &dev->mt76.mmio.wed_hif2;
++#endif
+ 	u32 i, intr, mask, intr1 = 0;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (dev->hif2 && mtk_wed_device_active(wed_hif2)) {
+ 		mtk_wed_device_irq_set_mask(wed_hif2, 0);
+ 		intr1 = mtk_wed_device_irq_get(wed_hif2,
+@@ -839,7 +844,9 @@
+ 		mtk_wed_device_irq_set_mask(wed, 0);
+ 		intr = mtk_wed_device_irq_get(wed, dev->mt76.mmio.irqmask);
+ 		intr |= (intr1 & ~MT_INT_TX_RX_DONE_EXT);
+-	} else {
++	} else 
++#endif
++	{
+ 		mt76_wr(dev, MT_INT_MASK_CSR, 0);
+ 		if (dev->hif2)
+ 			mt76_wr(dev, MT_INT1_MASK_CSR, 0);
+@@ -884,16 +891,19 @@
+ irqreturn_t mt7996_irq_handler(int irq, void *dev_instance)
+ {
+ 	struct mt7996_dev *dev = dev_instance;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+ 		mtk_wed_device_irq_set_mask(&dev->mt76.mmio.wed, 0);
+ 	else
++#endif
+ 		mt76_wr(dev, MT_INT_MASK_CSR, 0);
+ 
+ 	if (dev->hif2) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
+ 			mtk_wed_device_irq_set_mask(&dev->mt76.mmio.wed_hif2, 0);
+ 		else
++#endif
+ 			mt76_wr(dev, MT_INT1_MASK_CSR, 0);
+ 	}
+ 
+diff -ruN old/mt7996/mt7996.h new/mt7996/mt7996.h
+--- old/mt7996/mt7996.h	2025-05-27 16:05:53.302082000 +0800
++++ new/mt7996/mt7996.h	2025-05-26 16:17:02.601976000 +0800
+@@ -1380,9 +1380,15 @@
+ static inline bool
+ mt7996_vow_should_enable(struct mt7996_dev *dev)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
+ 	                                NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
+ 	       mtk_wed_device_active(&dev->mt76.mmio.wed);
++#else
++	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
++									NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
++	   0;
++#endif
+ }
+ 
+ void mt7996_mac_init(struct mt7996_dev *dev);
+diff -ruN old/mt7996/mtk_debugfs.c new/mt7996/mtk_debugfs.c
+--- old/mt7996/mtk_debugfs.c	2025-05-27 16:05:52.578067000 +0800
++++ new/mt7996/mtk_debugfs.c	2025-05-27 17:50:41.560609000 +0800
+@@ -344,7 +344,7 @@
+ 		[MT7996_FEM_MIX] = "mixed FEM",
+ 	};
+ 
+-	seq_printf(s, "Version: 4.3.%02d.%02d\n", PKG_YEAR, PKG_MONTH);
++	seq_printf(s, "Version: 4.3.25.03\n");
+ 
+ 	if (!test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state))
+ 		return 0;
+@@ -4394,11 +4394,12 @@
+ 	struct mt76_rx_debug *stats[__MT_MAX_BAND];
+ 	struct mt76_queue *q[2];
+ 	int i = 0;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (mtk_wed_device_active(&mdev->mmio.wed) &&
+ 	    mdev->mmio.wed.version == MTK_WED_HW_V3_1)
+ 		q[0] = &mdev->q_rx[MT_RXQ_WED_RX_DATA];
+ 	else
++#endif
+ 		q[0] = &mdev->q_rx[MT_RXQ_MAIN];
+ 
+ 	q[1] = is_mt7996(mdev) ? &mdev->q_rx[MT_RXQ_BAND2] :
+diff -ruN old/mt7996/pci.c new/mt7996/pci.c
+--- old/mt7996/pci.c	2025-05-27 16:05:51.822093000 +0800
++++ new/mt7996/pci.c	2025-05-26 16:20:17.205967000 +0800
+@@ -233,9 +233,11 @@
+ 		devm_free_irq(mdev->dev, dev->hif2->irq, dev);
+ free_hif2_irq_vector:
+ 	if (dev->hif2) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
+ 			mtk_wed_device_detach(&dev->mt76.mmio.wed_hif2);
+ 		else
++#endif
+ 			pci_free_irq_vectors(hif2_dev);
+ 	}
+ free_hif2:
+@@ -243,9 +245,11 @@
+ 		put_device(dev->hif2->dev);
+ 	devm_free_irq(mdev->dev, irq, dev);
+ free_wed_or_irq_vector:
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+ 		mtk_wed_device_detach(&dev->mt76.mmio.wed);
+ 	else
++#endif
+ 		pci_free_irq_vectors(pdev);
+ free_device:
+ 	mt76_free_device(&dev->mt76);
+diff -ruN old/tx.c new/tx.c
+--- old/tx.c	2025-05-27 16:05:52.552068000 +0800
++++ new/tx.c	2025-05-26 16:56:15.221825000 +0800
+@@ -122,7 +122,9 @@
+ mt76_tx_status_skb_add(struct mt76_dev *dev, struct mt76_wcid *wcid,
+ 		       struct sk_buff *skb)
+ {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
++#endif
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	struct mt76_tx_cb *cb = mt76_tx_skb_cb(skb);
+ 	int pid;
+@@ -137,11 +139,12 @@
+ 
+ 	if (!(info->flags & (IEEE80211_TX_CTL_REQ_TX_STATUS |
+ 			     IEEE80211_TX_CTL_RATE_CTRL_PROBE))) {
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 		if (mtk_wed_device_active(&dev->mmio.wed) &&
+ 		    ((info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) ||
+ 		     ieee80211_is_data(hdr->frame_control)))
+ 			return MT_PACKET_ID_WED;
+-
++#endif
+ 		return MT_PACKET_ID_NO_SKB;
+ 	}
+ 
+@@ -861,10 +864,10 @@
+ {
+ 	int token = -EINVAL, start = 0;
+ 	struct mt76_phy *phy = mt76_dev_phy(dev, phy_idx);
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (mtk_wed_device_active(&dev->mmio.wed))
+ 		start = dev->mmio.wed.wlan.nbuf;
+-
++#endif
+ 	spin_lock_bh(&dev->token_lock);
+ 
+ 	if (phy->tokens >= dev->token_threshold)
+diff -ruN old/wed.c new/wed.c
+--- old/wed.c	2025-05-27 16:05:51.839092000 +0800
++++ new/wed.c	2025-05-26 16:59:42.708787000 +0800
+@@ -5,7 +5,7 @@
+ 
+ #include "mt76.h"
+ #include "dma.h"
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
+ {
+ 	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+@@ -130,7 +130,11 @@
+ 		return -EINVAL;
+ 
+ 	flags = q->flags;
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+ 	if (!q->wed || !mtk_wed_device_active(q->wed))
++#else
++	if (!q->wed )
++#endif
+ 		q->flags &= ~MT_QFLAG_WED;
+ 
+ 	if (!(q->flags & MT_QFLAG_WED))
+@@ -222,14 +226,15 @@
+ {
+ 	struct mt76_phy *phy = hw->priv;
+ 	struct mtk_wed_device *wed = &phy->dev->mmio.wed;
+-
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED	
+ 	if (!mtk_wed_device_active(wed))
++#endif
+ 		return -EOPNOTSUPP;
+ 
+ 	return mtk_wed_device_setup_tc(wed, netdev, type, type_data);
+ }
+ EXPORT_SYMBOL_GPL(mt76_wed_net_setup_tc);
+-
++#endif
+ void mt76_wed_dma_reset(struct mt76_dev *dev)
+ {
+ 	struct mt76_mmio *mmio = &dev->mmio;

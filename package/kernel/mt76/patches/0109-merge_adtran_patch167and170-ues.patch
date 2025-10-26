@@ -1,0 +1,124 @@
+diff -urN old/mt7996/mac.c new/mt7996/mac.c
+--- old/mt7996/mac.c	2025-07-16 15:49:32.394422000 +0800
++++ new/mt7996/mac.c	2025-07-16 17:22:38.456015000 +0800
+@@ -1270,7 +1270,7 @@
+ 	}
+ }
+ 
+-static void
++void
+ mt7996_tx_check_aggr(struct ieee80211_sta *sta, struct sk_buff *skb,
+ 		     struct mt76_wcid *wcid)
+ {
+diff -urN old/mt7996/pci.c new/mt7996/pci.c
+--- old/mt7996/pci.c	2025-07-16 16:35:15.699230000 +0800
++++ new/mt7996/pci.c	2025-07-16 17:20:29.608098000 +0800
+@@ -328,7 +328,7 @@
+ }
+ extern void (*tx_token_pending_free)(struct mt76_dev *dev);
+ struct mt76_txwi_cache *
+-mt76_token_release_npu(struct mt76_dev *dev, int token, bool *wake)
++mt76_token_release_npu(struct mt76_dev *dev, int token)
+ {
+ 	struct mt76_txwi_cache *txwi;
+ 	txwi = idr_remove(&dev->token, token);
+@@ -337,37 +337,68 @@
+ 
+ 		dev->token_count--;
+ 		phy->tokens--;
++        }
++	return txwi;
++}
++extern void mt7996_tx_check_aggr(struct ieee80211_sta *sta, struct sk_buff *skb,struct mt76_wcid *wcid);
++void npu_mt7996_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
++		 struct ieee80211_sta *sta, struct mt76_wcid *wcid,
++		 struct list_head *free_list)
++{
++	struct mt76_dev *mdev = dev;
++	__le32 *txwi;
++	u16 wcid_idx;
++
++	mt76_connac_txp_skb_unmap(mdev, t);
++	if (!t->skb)
++		goto out;
++
++	txwi = (__le32 *)mt76_get_txwi_ptr(mdev, t);
++	if (sta) {
++		wcid_idx = wcid->idx;
+ 
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+-		if (mtk_wed_device_active(&dev->mmio.wed) &&
+-		    token >= dev->mmio.wed.wlan.token_start &&
+-		    --dev->wed_token_count == 0)
+-			wake_up(&dev->tx_wait);
+-#endif
++		if (likely(t->skb->protocol != cpu_to_be16(ETH_P_PAE)))
++			mt7996_tx_check_aggr(sta, t->skb, wcid);
++	} else {
++		wcid_idx = le32_get_bits(txwi[9], MT_TXD9_WLAN_IDX);
+ 	}
+- 
+-	if (dev->token_count < dev->token_size - MT76_TOKEN_FREE_THR &&
+-	    dev->phy.q_tx[0]->blocked)
+-		*wake = true;
+-	return txwi;
++
++	__mt76_tx_complete_skb(mdev, wcid_idx, t->skb, free_list);
++
++out:
++	t->skb = NULL;
++	mt76_put_txwi(mdev, t);
+ }
++
+ void token_peding_free(struct mt76_dev *dev){
+ 	int msdu_id;
+ 	struct mt76_txwi_cache *txwi;
+ 	struct mt76_txwi_cache *txwi_tmp;
+-	bool wake = false;
++	struct mt76_connac_txp_common *txp;
++	__le32 *txwi_ptr;
++	__le16 wcid_idx;
++	struct sk_buff *skb, *tmp;
++	LIST_HEAD(free_list);	
++	struct ieee80211_sta *sta;
++	struct mt76_wcid *wcid = NULL;
+ 	idr_for_each_entry(&dev->token, txwi, msdu_id) {
+ 		if(jiffies_to_msecs(jiffies - txwi->jiffies) < 20000)
+ 			continue;
+-		txwi_tmp = mt76_token_release_npu(dev, msdu_id, &wake);
++		txwi_tmp = mt76_token_release_npu(dev, msdu_id);
+ 		if (!txwi_tmp)
+ 			continue;
+-		mt76_connac_txp_skb_unmap(dev, txwi_tmp);
+-		if(txwi_tmp->skb)
+-			napi_consume_skb(txwi_tmp->skb, 1);	
+-		txwi_tmp->skb = NULL;
+-		mt76_put_txwi(dev, txwi_tmp);
+-		txwi_tmp->jiffies = 0;
++		txwi_ptr = (__le32 *)mt76_get_txwi_ptr(dev,txwi_tmp);
++		txp = (struct mt76_connac_txp_common *)(txwi_ptr + MT_TXD_SIZE);
++		wcid_idx = txp->fw.rept_wds_wcid;
++		if(wcid_idx >= ARRAY_SIZE(dev->wcid))
++			continue;
++		wcid = rcu_dereference(dev->wcid[wcid_idx]);	
++		sta = wcid_to_sta(wcid);
++		npu_mt7996_txwi_free(dev, txwi_tmp, sta, wcid, &free_list);
++		list_for_each_entry_safe(skb, tmp, &free_list, list) {
++			skb_list_del_init(skb);
++			napi_consume_skb(skb, 1);
++		}
+ 	}	
+ }
+ 
+diff -urN old/tx.c new/tx.c
+--- old/tx.c	2025-07-16 15:49:32.440414000 +0800
++++ new/tx.c	2025-07-16 17:35:29.980985000 +0800
+@@ -858,7 +858,7 @@
+ 		mt76_worker_schedule(&dev->tx_worker);
+ }
+ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked);
+-#define TOKEN_FREE_CHECK_THR 3500
++#define TOKEN_FREE_CHECK_THR 1000
+ void (*tx_token_pending_free)(struct mt76_dev *dev) = NULL;
+ EXPORT_SYMBOL(tx_token_pending_free);
+ int __mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,

@@ -1,0 +1,23 @@
+diff -uNr old/mt76.h new/mt76.h
+--- old/mt76.h	2025-06-14 20:07:35.165042000 +0800
++++ new/mt76.h	2025-06-15 14:23:35.847436000 +0800
+@@ -390,6 +390,7 @@
+ 	MT_PHY_TYPE_EHT_TRIG,
+ 	MT_PHY_TYPE_EHT_MU,
+ 	__MT_PHY_TYPE_MAX,
++	MT_PHY_TYPE_UNKNOWN = 0xff,
+ };
+ 
+ struct mt76_sta_stats {
+diff -uNr old/mt7996/mcu.c new/mt7996/mcu.c
+--- old/mt7996/mcu.c	2025-06-14 20:07:35.201943000 +0800
++++ new/mt7996/mcu.c	2025-06-15 14:26:05.052417000 +0800
+@@ -622,6 +622,8 @@
+ 		tmp_rate.flags |= RATE_INFO_FLAGS_EHT_MCS;
+ 		tmp_rate.eht_gi = gi;
+ 		break;
++	case MT_PHY_TYPE_UNKNOWN:
++		return 0;
+ 	default:
+ 		return -EINVAL;
+ 	}

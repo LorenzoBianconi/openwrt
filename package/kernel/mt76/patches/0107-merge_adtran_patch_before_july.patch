@@ -1,0 +1,1021 @@
+diff -urN old/dma.c new/dma.c
+--- old/dma.c	2025-06-19 14:46:46.450437000 +0800
++++ new/dma.c	2025-07-04 16:18:27.840842000 +0800
+@@ -190,13 +190,14 @@
+ static void
+ mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
+ {
++	u32 val = q->ndesc;
++
+ 	Q_WRITE(q, desc_base, q->desc_dma);
+-#if MAGIC_ENABLE	
+-	if (q->flags & MT_QFLAG_WED_RRO_EN)
+-		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc);
+-	else
+-#endif		
+-		Q_WRITE(q, ring_size, q->ndesc);
++	
++	if (mt76_queue_is_rro_active(q))
++			val |= MT_DMA_RRO_EN;
++	Q_WRITE(q, ring_size, val);	
++	
+ 	if (mt76_queue_is_npu_tx(q)) {
+ 		writel(q->desc_dma, &q->regs->desc_base);
+ 		writel(q->ndesc, &q->regs->ring_size);
+@@ -294,13 +295,13 @@
+ 		if (dev->drv->rx_rro_fill_msdu_pg(dev, q, buf->addr, data))
+ 			return	-ENOMEM;
+ 	}
+-#if MAGIC_ENABLE
+-	if (q->flags & MT_QFLAG_WED_RRO_EN) {
++
++	if (mt76_queue_is_rro_active(q)) {
+ 		info |= FIELD_PREP(MT_DMA_MAGIC_MASK, q->magic_cnt);
+ 		if ((q->head + 1) == q->ndesc)
+ 			q->magic_cnt = (q->magic_cnt + 1) % MT_DMA_MAGIC_CNT;
+ 	}
+-#endif
++
+ 	WRITE_ONCE(desc->buf0, cpu_to_le32(buf->addr));
+ 	WRITE_ONCE(desc->buf1, cpu_to_le32(buf1));
+ 	WRITE_ONCE(desc->ctrl, cpu_to_le32(ctrl));
+@@ -1010,14 +1011,13 @@
+ 	bool allow_direct = !mt76_queue_is_wed_rx(q);
+ 	bool more;
+ 
+-#if MAGIC_ENABLE
+-	if ((q->flags & MT_QFLAG_WED_RRO_EN) ||
++	if (mt76_queue_is_rro_active(q) ||
+ 	    (IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED) &&
+ 	    mt76_queue_is_wed_tx_free(q))) {
+ 		dma_idx = Q_READ(q, dma_idx);
+ 		check_ddone = true;
+ 	}
+-#endif
++
+ 
+ 	while (done < budget) {
+ 		bool drop = false;
+diff -urN old/mac80211.c new/mac80211.c
+--- old/mac80211.c	2025-06-19 14:46:46.465480000 +0800
++++ new/mac80211.c	2025-07-04 16:21:53.068726000 +0800
+@@ -707,7 +707,11 @@
+ 
+ 	INIT_LIST_HEAD(&dev->wcid_list);
+ 	INIT_LIST_HEAD(&dev->sta_poll_list);
++	
++	INIT_LIST_HEAD(&dev->sta_pool_chk_list);
++	
+ 	spin_lock_init(&dev->sta_poll_lock);
++	spin_lock_init(&dev->sta_poll_chk_lock);
+ 
+ 	INIT_LIST_HEAD(&dev->txwi_cache);
+ 	INIT_LIST_HEAD(&dev->rxwi_cache);
+diff -urN old/mt76.h new/mt76.h
+--- old/mt76.h	2025-06-19 14:46:46.479516000 +0800
++++ new/mt76.h	2025-07-04 17:01:14.946556000 +0800
+@@ -26,7 +26,6 @@
+ #include "util.h"
+ #include "testmode.h"
+ #include "debug.h"
+-#define MAGIC_ENABLE 0
+ 
+ #define CHAN2G(_idx, _freq) {			\
+ 	.band = NL80211_BAND_2GHZ,		\
+@@ -382,6 +381,7 @@
+ 	MT_PHY_TYPE_HT,
+ 	MT_PHY_TYPE_HT_GF,
+ 	MT_PHY_TYPE_VHT,
++	MT_PHY_TYPE_PLR, /* Proprietary Long Range */
+ 	MT_PHY_TYPE_HE_SU = 8,
+ 	MT_PHY_TYPE_HE_EXT_SU,
+ 	MT_PHY_TYPE_HE_TB,
+@@ -1213,6 +1213,9 @@
+ 	struct list_head wcid_list;
+ 
+ 	struct list_head sta_poll_list;
++	struct list_head sta_pool_chk_list;
++
++	spinlock_t sta_poll_chk_lock;
+ 	spinlock_t sta_poll_lock;
+ 
+ 	u32 rev;
+@@ -2149,6 +2152,12 @@
+ 	return q->flags & MT_QFLAG_WED_RRO;
+ }
+ 
++static inline bool mt76_queue_is_rro_active(struct mt76_queue *q)
++{	
++		return !mt76_npu_device_active(q->dev) &&	       
++				(q->flags & MT_QFLAG_WED_RRO_EN);
++}
++
+ static inline bool mt76_queue_is_wed_rro_ind(struct mt76_queue *q)
+ {
+ 	return mt76_queue_is_wed_rro(q) &&
+diff -urN old/mt7996/mac.c new/mt7996/mac.c
+--- old/mt7996/mac.c	2025-06-19 14:46:46.508486000 +0800
++++ new/mt7996/mac.c	2025-07-04 17:11:25.614564000 +0800
+@@ -1331,6 +1331,21 @@
+ 	mt76_put_txwi(mdev, t);
+ }
+ 
++int check_sta_valid(struct mt76_dev *dev, struct ieee80211_sta *sta){
++		int ret = 0;
++		struct sta_pool_check *sta_pool_chk = NULL, *sta_pool_tmp = NULL;
++		spin_lock_bh(&dev->sta_poll_chk_lock);
++		list_for_each_entry_safe(sta_pool_chk, sta_pool_tmp, &dev->sta_pool_chk_list, list){
++				if(sta_pool_chk->sta_pointer == (void *)sta){
++						ret = 1;
++						goto out;
++				}
++		}
++out:
++		spin_unlock_bh(&dev->sta_poll_chk_lock);
++		return ret;
++}
++
+ static void
+ mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
+ {
+@@ -1361,9 +1376,11 @@
+ 	}
+ 
+ 	ver = le32_get_bits(tx_free[1], MT_TXFREE1_VER);
+-	if (WARN_ON_ONCE(ver < 5))
++	if(ver < 5)
++	{
++		printk("%s:%d recv wrong version tx done event !!!!\n",__func__,__LINE__);
+ 		return;
+-
++	}
+ 	total = le32_get_bits(tx_free[0], MT_TXFREE0_MSDU_CNT);
+ 	for (cur_info = &tx_free[2]; count < total; cur_info++) {
+ 		u32 msdu, info;
+@@ -1384,7 +1401,6 @@
+ 			unsigned long valid_links;
+ 			unsigned int link_id;
+ 			u16 idx;
+-
+ 			idx = FIELD_GET(MT_TXFREE_INFO_WLAN_ID, info);
+ 			if (idx >= mt7996_wtbl_size(dev))
+ 				return;
+@@ -1393,7 +1409,8 @@
+ 			sta = wcid_to_sta(wcid);
+ 			if (!sta)
+ 				goto next;
+-
++			if(!check_sta_valid(mdev, sta))
++					goto next;
+ 			valid_links = sta->valid_links ?: BIT(0);
+ 			msta = (struct mt7996_sta *)sta->drv_priv;
+ 			/* for MLD STA, add all link's wcid to sta_poll_list */
+@@ -1510,16 +1527,17 @@
+ 		dev_err(mdev->dev, "Unknown TXS format: %hhu\n", fmt);
+ 		goto unlock;
+ 	}
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+-	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta &&
+-	    (wcid->tx_info & MT_WCID_TX_INFO_SET)) {
++//#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++//	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta &&
++//	    (wcid->tx_info & MT_WCID_TX_INFO_SET)) {
++	if (wcid->sta) {
+ 		/* Do not check TX BA status for mgmt frames which are sent at a
+ 		 * fixed rate
+ 		 */
+ 		if (!le32_get_bits(txs_data[3], MT_TXS3_FIXED_RATE))
+ 			mt7996_check_tx_ba_status(wcid, FIELD_GET(MT_TXS0_TID, txs));
+ 	}
+-#endif
++//#endif
+ 
+ 	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
+ 	bw = FIELD_GET(MT_TXS0_BW, txs);
+diff -urN old/mt7996/main.c new/mt7996/main.c
+--- old/mt7996/main.c	2025-06-19 14:46:46.517508000 +0800
++++ new/mt7996/main.c	2025-07-04 17:04:12.667564000 +0800
+@@ -1478,6 +1478,7 @@
+ 	struct mt76_dev *mdev = mphy->dev;
+ 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+ 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
++	struct sta_pool_check *sta_pool_new = NULL;
+ 	u8 link_id = sta->valid_links ? __ffs(sta->valid_links) : 0;
+ 	unsigned long add = BIT(link_id);
+ 	int ret;
+@@ -1486,6 +1487,13 @@
+ 
+ 	msta->deflink_id = link_id;
+ 	ret = mt7996_mac_sta_add_links(dev, vif, sta, add, false);
++	if (ret)
++		return ret;
++	sta_pool_new = kmalloc(sizeof(*sta_pool_new), GFP_KERNEL);
++	sta_pool_new->sta_pointer = (void *)sta;
++	spin_lock_bh(&mdev->sta_poll_chk_lock);
++	list_add(&sta_pool_new->list, &mdev->sta_pool_chk_list);
++	spin_unlock_bh(&mdev->sta_poll_chk_lock);
+ 
+ 	mutex_unlock(&mdev->mutex);
+ 
+@@ -1576,6 +1584,7 @@
+ 	struct mt76_dev *mdev = mphy->dev;
+ 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+ 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
++	struct sta_pool_check *sta_pool_rm = NULL, *sta_pool_tmp = NULL;
+ 	unsigned long rem = sta->valid_links ?: BIT(0);
+ 
+ 	cancel_delayed_work(&msta->vif->beacon_mon_work);
+@@ -1587,6 +1596,17 @@
+ 	mt7996_mac_sta_remove_links(dev, vif, sta, rem | msta->valid_links);
+ 
+ 	mutex_unlock(&mdev->mutex);
++
++	spin_lock_bh(&mdev->sta_poll_chk_lock);
++	list_for_each_entry_safe(sta_pool_rm, sta_pool_tmp, &mdev->sta_pool_chk_list, list){
++			if(sta_pool_rm->sta_pointer == (void *)sta){
++					list_del(&sta_pool_rm->list);
++					kfree(sta_pool_rm);
++					goto out;
++			}
++	}
++out:
++	spin_unlock_bh(&mdev->sta_poll_chk_lock);	
+ }
+ 
+ static int
+@@ -2058,24 +2078,31 @@
+ 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+ 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+ 	struct mt7996_sta_link *msta_link;
+-	struct rate_info *rate;
++	//struct rate_info *rate;
+ 
+ 	mutex_lock(&dev->mt76.mutex);
+ 	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+ 	if (!msta_link)
+ 		goto out;
+-
++	
++#if 0
+ 	rate = &msta_link->wcid.rate;
+ 	if (rate->legacy || rate->flags) {
+ 		sinfo->txrate = *rate;
+ 		sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BITRATE);
+ 	}
+-
++#endif
++	sinfo->txrate = msta_link->wcid.rate;
++	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BITRATE);
++#if 0
+ 	rate = &msta_link->wcid.rx_rate;
+ 	if (rate->legacy || rate->flags) {
+ 		sinfo->rxrate = *rate;
+ 		sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BITRATE);
+ 	}
++#endif
++	sinfo->rxrate = msta_link->wcid.rx_rate;
++	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BITRATE);
+ 
+ 	sinfo->tx_failed = msta_link->wcid.stats.tx_failed;
+ 	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_FAILED);
+diff -urN old/mt7996/mcu.c new/mt7996/mcu.c
+--- old/mt7996/mcu.c	2025-06-19 14:46:46.531525000 +0800
++++ new/mt7996/mcu.c	2025-07-04 17:06:15.036585000 +0800
+@@ -600,6 +600,9 @@
+ 		if (gi)
+ 			tmp_rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
+ 		break;
++		
++	case MT_PHY_TYPE_PLR:
++		break;
+ 	case MT_PHY_TYPE_HE_SU:
+ 	case MT_PHY_TYPE_HE_EXT_SU:
+ 	case MT_PHY_TYPE_HE_TB:
+@@ -4735,11 +4738,10 @@
+ 		ret = -EINVAL;
+ 		goto out;
+ 	}
+-
+ 	hdr = (const void *)(fw->data + fw->size - sizeof(*hdr));
+-	strscpy(dev->ram_build_date[ram_type],
+-		hdr->build_date,
+-		sizeof(hdr->build_date));
++	memcpy(dev->ram_build_date[ram_type],
++	       hdr->build_date,
++	       sizeof(dev->ram_build_date[ram_type])> sizeof(hdr->build_date) ? sizeof(hdr->build_date) : sizeof(dev->ram_build_date[ram_type]));
+ 	dev_info(dev->mt76.dev, "%s Firmware Version: %.10s, Build Time: %.15s\n",
+ 		 fw_type, hdr->fw_ver, hdr->build_date);
+ 
+diff -urN old/mt7996/mt7996.h new/mt7996/mt7996.h
+--- old/mt7996/mt7996.h	2025-06-19 14:46:46.551448000 +0800
++++ new/mt7996/mt7996.h	2025-07-04 16:58:42.628564000 +0800
+@@ -443,7 +443,10 @@
+ 
+ 	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
+ };
+-
++struct sta_pool_check{
++	void *sta_pointer;
++	struct list_head list;
++};
+ struct mt7996_vif_link {
+ 	struct mt76_vif_link mt76; /* must be first */
+ 
+@@ -1380,10 +1383,12 @@
+ static inline bool
+ mt7996_vow_should_enable(struct mt7996_dev *dev)
+ {
+-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+-	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
+-	                                NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
+-	       mtk_wed_device_active(&dev->mt76.mmio.wed);
++//#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++#if 1
++//	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
++//	                                NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
++//	       mtk_wed_device_active(&dev->mt76.mmio.wed);
++	return true;
+ #else
+ 	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
+ 									NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
+diff -urN old/mt7996/mtk_debugfs.c new/mt7996/mtk_debugfs.c
+--- old/mt7996/mtk_debugfs.c	2025-06-19 14:46:46.412457000 +0800
++++ new/mt7996/mtk_debugfs.c	2025-07-04 17:18:15.756491000 +0800
+@@ -3471,6 +3471,331 @@
+ 	.llseek = default_llseek,
+ };
+ 
++unsigned long int counter_base[BAND_NUM]={0};
++inline void show_wifi_offload_counter(unsigned short int band)
++{
++	unsigned long int *Counter_Base;
++	
++	if(counter_base[band]==0) return;
++	else Counter_Base = (unsigned long int *)counter_base[band];
++	printk("[%s debug counter ]\n", (band==0)?"2.4G/5G":"6G");	
++	printk("get packet while count:\t\t%u\n", NPU_COUNTER(Counter_Base,WHILE_COUNT));
++	printk("RX_DESC_DDONE\t\t\t%u\n", NPU_COUNTER(Counter_Base,RX_DESC_DDONE));
++	printk("ALL_GET_PKT_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,ALL_GET_PKT_COUNT));
++				//printk("ACCESS_PACKET\t\t\t%lu\n", NPU_COUNTER(Counter_Base,ACCESS_PACKET));
++	printk("DROP_PACKETS\t\t\t%u\n", NPU_COUNTER(Counter_Base,DROP_PACKETS));
++	printk("TO_TDMA_COUNT\t\t\t%u\n", NPU_COUNTER(Counter_Base,TO_QDMA_COUNT));
++				//printk("ALL_ENQ_PKT_COUNT\t\t%lu\n", NPU_COUNTER(Counter_Base,ALL_ENQ_PKT_COUNT));
++				//printk("ENQ_BUFID_FIAL_COUNT\t\t%lu\n", NPU_COUNTER(Counter_Base,ENQ_BUFID_FIAL_COUNT));
++				//printk("ENQ_BUFID_ERROR_COUNT:\t\t%lu\n",NPU_COUNTER(Counter_Base, ENQ_BUFID_ERROR_COUNT));
++	printk("GET_BUFID_FAIL\t\t\t%u\n", NPU_COUNTER(Counter_Base,GET_BUFID_FAIL));
++				//printk("NO_BUFID\t\t\t%lu\n", NPU_COUNTER(Counter_Base,NO_BUFID));
++	printk("SCATTER_CNT_MORE1\t\t%u\n", NPU_COUNTER(Counter_Base, SCATTER_CNT_MORE1));
++	printk("BIGGER_PACKET\t\t\t%u\n", NPU_COUNTER(Counter_Base,BIGGER_PACKET));
++	printk("SCATTER_PKT_ONE_BUFID\t\t%u\n", NPU_COUNTER(Counter_Base, SCATTER_PKT_ONE_BUFID));
++	printk("ENQ_BIGPKT_TOSRAM_FAIL_COUNT\t%u\n", NPU_COUNTER(Counter_Base, ENQ_BIGPKT_TOSRAM_FAIL_COUNT));
++	printk("------Enq & Deq Counter----------\n");
++	printk("ENQ_DEQ_WHILE_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,ENQ_DEQ_WHILE_COUNT));
++	printk("ENQ_SRAM_COUNT:\t\t\t%u\n",NPU_COUNTER(Counter_Base,ENQ_SRAM_COUNT));
++	printk("ENQ_SRAM_FULL_COUNT:\t\t%u\n",NPU_COUNTER(Counter_Base,ENQ_SRAM_FULL_COUNT));
++	printk("ENQ_SRAM_FAIL_COUNT:\t\t%u\n",NPU_COUNTER(Counter_Base,ENQ_SRAM_FAIL_COUNT));
++	printk("DEQ_SRAM_COUNT:\t\t\t%u\nDEQ_SRAM_FAIL_BUFID_COUNT:\t%u\nDEQ_SRAM_FAIL_LEN_COUNT:\t\t%u\n",NPU_COUNTER(Counter_Base,DEQ_SRAM_COUNT),NPU_COUNTER(Counter_Base, DEQ_SRAM_FAIL_BUFID_COUNT), NPU_COUNTER(Counter_Base,DEQ_SRAM_FAIL_LEN_COUNT));
++				//printk("DEQ_SRAM_NO_INFO_COUNT\t\t%lu\n", NPU_COUNTER(Counter_Base, DEQ_SRAM_NO_INFO_COUNT));
++	printk("TO_HOSTAPD_COUNT\t%u\n", NPU_COUNTER(Counter_Base, TO_HOSTAPD_COUNT));
++				//printk("ENQ_DRAM_FAIL_COUNT:\t\t%lu\n",NPU_COUNTER(Counter_Base, ENQ_DRAM_FAIL_COUNT));
++	printk("HOST_APD_ERROR_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base, HOST_APD_ERROR_COUNT));
++
++	printk("HOSTADPT_API_Q_FULL:\t\t%u\n", NPU_COUNTER(Counter_Base, HOSTADPT_API_Q_FULL));
++	printk("API_HOSTADPT_SEND:\t\t%u\n", NPU_COUNTER(Counter_Base, API_HOSTADPT_SEND));
++	printk("RX_G4_PKT_NO_SN:\t\t\t%u\n", NPU_COUNTER(Counter_Base, RX_G4_PKT_NO_SN));
++	printk("------pipe queue----------\n");
++	printk("RX_PIPE_Q_FULL:\t\t\t%u\n", NPU_COUNTER(Counter_Base, RX_PIPE_Q_FULL));
++	printk("RX_PIPE_Q3_Q4_FULL:\t\t\t%u\n", NPU_COUNTER(Counter_Base, RX_PIPE_Q3_Q4_FULL));
++	printk("PIPE_Q3_ENQ:\t\t\t%u\n", NPU_COUNTER(Counter_Base, PIPE_Q3_ENQ));
++	printk("PIPE_Q3_DEQ:\t\t\t%u\n", NPU_COUNTER(Counter_Base, PIPE_Q3_DEQ));
++	printk("PIPE_Q4_ENQ:\t\t\t%u\n", NPU_COUNTER(Counter_Base, PIPE_Q4_ENQ));
++	printk("PIPE_Q4_DEQ:\t\t\t%u\n", NPU_COUNTER(Counter_Base, PIPE_Q4_DEQ));
++	printk("------Enq & Deq scatter packet Counter----------\n");
++	printk("NO_BIGPKT_COUNT:\t%u\n", NPU_COUNTER(Counter_Base, NO_BIGPKT_COUNT));
++	printk("GET_BUFID_FOR_BIGPKT_FAIL:\t%u\n", NPU_COUNTER(Counter_Base, GET_BUFID_FOR_BIGPKT_FAIL));
++	printk("BIGPKT_TO_HOSTADPT_ERROR_COUNT:\t%u\n", NPU_COUNTER(Counter_Base, BIGPKT_TO_HOSTADPT_ERROR_COUNT));
++	 
++	printk("ENQ_BIGPKT_SRAM_FULL_COUNT:\t%u\n", NPU_COUNTER(Counter_Base, ENQ_BIGPKT_SRAM_FULL_COUNT));
++	printk("ENQ_BIGPKT_SRAM_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base, ENQ_BIGPKT_SRAM_COUNT));
++	printk("CHECK_BIGPKT:\t\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT));
++	printk("CHECK_BIGPKT2:\t\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT2));
++	printk("CHECK_BIGPKT_ISLAST:\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT_ISLAST));
++	printk("CHECK_BIGPKT_IDX_FAIL:\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT_IDX_FAIL));
++	printk("CHECK_BIGPKT_CNT_FAIL:\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT_CNT_FAIL));
++	printk("CHECK_BIGPKT_FAIL:\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT_FAIL));
++	printk("CHECK_BIGPKT_OVER_RETRY:\t\t%u\n", NPU_COUNTER(Counter_Base, CHECK_BIGPKT_OVER_RETRY));
++	printk("BIGPKT_TO_HOSTAPD_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,BIGPKT_TO_HOSTAPD_COUNT ));
++	printk("BIGPKT_DESC_FREE_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,BIGPKT_DESC_FREE_COUNT ));
++	printk("------TDMA----------\n");
++	printk("TDMA_TXDESC_FULL_COUNT: \t\t%u\n", NPU_COUNTER(Counter_Base,TDMA_TXDESC_FULL_COUNT ));
++	printk("TDMA_TXDESC_FULL_COUNT2: \t\t%u\n", NPU_COUNTER(Counter_Base,TDMA_TXDESC_FULL_COUNT2 ));
++	
++
++	printk("------BA Counter----------\n");
++	printk("BA1(in order):\t\t\t%u\nBA2(Dupl Packet):\t\t%u\nBA3(old packet):\t\t\t%u\nBA4(with in window):\t\t%u\nBA5(surpasses Win):\t\t%u\nBA_AMSDU:\t\t\t%u\n!AMPDU_COUNT:\t\t\t%u\n",
++		NPU_COUNTER(Counter_Base, BA_IN_ORDER_PKT_COUNT),NPU_COUNTER(Counter_Base, BA_DUPL_PKT_COUNT), NPU_COUNTER(Counter_Base,BA_OLD_PKT_COUNT), NPU_COUNTER(Counter_Base,BA_WITHIN_WS_PKT_COUNT), 
++		NPU_COUNTER(Counter_Base, BA_POP_PKT_COUNT), NPU_COUNTER(Counter_Base, BA_AMSDU_COUNT),  NPU_COUNTER(Counter_Base, AMPDU_COUNT));
++				//printk("BA_NO_PKT_IN_LIST_COUNT:\t%lu\n", NPU_COUNTER(Counter_Base, BA_NO_PKT_IN_LIST_COUNT));
++				//printk("BA_NOT_DATA_PKT_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base, BA_NOT_DATA_PKT_COUNT));
++	printk("BA_NO_MEM_COUNT:\t\t\t%u\n", NPU_COUNTER(Counter_Base, BA_NO_MEM_COUNT));
++				//printk("BA_NODE_ALLOC_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base, BA_NODE_ALLOC_COUNT));
++				//printk("BA_NODE_ALLOC_FAIL:\t\t%lu\n", NPU_COUNTER(Counter_Base, BA_NODE_ALLOC_FAIL));
++	printk("BA_AMSDU_MISS:\t\t\t%u\n", NPU_COUNTER(Counter_Base, BA_AMSDU_MISS));
++				//printk("BA_TIMEOUT_FLUSH:\t\t%lu\n", NPU_COUNTER(Counter_Base, BA_TIMEOUT_FLUSH));
++	printk("BA_TIMEOUT_FLUSH100:\t\t%u\n", NPU_COUNTER(Counter_Base, BA_TIMEOUT_FLUSH100));
++	printk("BA_TIMEOUT_FLUSH250:\t\t%u\n", NPU_COUNTER(Counter_Base, BA_TIMEOUT_FLUSH250));
++	printk("BA_ENQ_DUP_SEQ:\t\t\t%u\n", NPU_COUNTER(Counter_Base, BA_ENQ_DUP_SEQ));
++	printk("BA_REORDERING_NODE_ALLOC_COUNT\t%u\n", NPU_COUNTER(Counter_Base,BA_REORDERING_NODE_ALLOC_COUNT));
++	printk("BA_REORDERING_NODE_ALLOC_DRAM_COUNT\t%u\n", NPU_COUNTER(Counter_Base,BA_REORDERING_NODE_ALLOC_DRAM_COUNT));
++	printk("BA_REORDERING_NODE_FREE_COUNT\t%u\n", NPU_COUNTER(Counter_Base,BA_REORDERING_NODE_FREE_COUNT));
++	printk("BA_REORDERINT_NODE_ALLOC_FAIL\t%u\n", NPU_COUNTER(Counter_Base,BA_REORDERINT_NODE_ALLOC_FAIL));
++	printk("BA_ENQ_QLEN_ERROR_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,BA_ENQ_QLEN_ERROR_COUNT));
++	printk("BA_WCID_ERROR:\t\t\t%u\n", NPU_COUNTER(Counter_Base,BA_WCID_ERROR));
++	printk("BA_BAR_WCID_ERROR:\t\t\t%u\n", NPU_COUNTER(Counter_Base,BAR_WCID_ERROR));
++				
++	//printk("------TDMA return Counter----------\n");
++				//printk("TDMA_RETURN_UNBIND_COUNT:\t%lu\n", NPU_COUNTER(Counter_Base, QDMA_RETURN_UNBIND_COUNT));
++				//printk("TDMA_RETURN_FAIL_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base, QDMA_RETURN_FAIL_COUNT));
++				//printk("TDMA_RETURN_OK_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base, QDMA_RETURN_OK_COUNT));
++	printk("============ TEMP_DBG ==========\n");
++	printk("ENQ_PKT_TO_SLOWPATH_CASE1\t\t%u\n", NPU_COUNTER(Counter_Base,ENQ_PKT_TO_SLOWPATH_CASE1));
++	printk("ENQ_PKT_TO_SLOWPATH_CASE2\t\t%u\n", NPU_COUNTER(Counter_Base,ENQ_PKT_TO_SLOWPATH_CASE2));
++	printk("ENQ_PKT_TO_SLOWPATH_CASE3\t\t%u\n", NPU_COUNTER(Counter_Base,ENQ_PKT_TO_SLOWPATH_CASE3));
++	printk("ENQ_PIPELINE_PKT_CNT\t\t%u\n", NPU_COUNTER(Counter_Base,ENQ_PIPELINE_PKT_CNT));
++	printk("DEQ_PIPELINE_PKT_CNT\t\t%u\n", NPU_COUNTER(Counter_Base,DEQ_PIPELINE_PKT_CNT));
++	printk("TDMA_TXRING_SEND\t\t%u\n", NPU_COUNTER(Counter_Base,TDMA_TXRING_SEND));
++	//printk("BUFID_FREE_CASE1\t\t%lu\n", NPU_COUNTER(Counter_Base,BUFID_FREE_CASE1));
++
++	printk("========= RRO related ======== \n");
++	printk("0:MSDU_PG_2G_PKT 1:IND_CMD_WHILE\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_PG_2G_PKT));
++	printk("0:MSDU_PG_5G_PKT 1:IND_CMD_DESC\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_PG_5G_PKT));
++	printk("0:MSDU_PG_6G_PKT 1:IND_CMD_SIG_FAIL\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_PG_6G_PKT));
++	printk("0:MSDU_PG_READ_FAIL 1:OLD_DUP_PKT\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_PG_READ_FAIL));
++	printk("0:RRO EXCEPT PKT 1:ALLOW_OLD_PN_CHK_PKT\t\t%u\n", NPU_COUNTER(Counter_Base,BUFID_FREE_CASE1));
++	printk("0:PN_CHECK_FAIL 1:SP_TOKEN\t\t%u\n", NPU_COUNTER(Counter_Base,PN_CHECK_FAIL));
++	printk("SKB_BUFID_STATE_ABNORMAL1\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_BUFID_STATE_ABNORMAL1));
++	printk("SKB_BUFID_STATE_ABNORMAL2\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_BUFID_STATE_ABNORMAL2));
++	printk("SKB_BUFID_STATE_ABNORMAL3\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_BUFID_STATE_ABNORMAL3));
++
++	Counter_Base = (unsigned long int *)counter_base[2];
++
++	printk("============ TDMA Counter =============\n");
++	//printk("TDMA_TXDESC_NULL_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TXDESC_NULL_COUNT));
++	printk("TDMA_UNBIND_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,QDMA_UNBIND_COUNT));
++				//printk("TDMA_TO_PPE_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TO_PPE_COUNT));
++	printk("TDMA_DONE_COUNT:\t\t\t%u\n", NPU_COUNTER(Counter_Base,QDMA_DONE_COUNT));
++	printk("TDMA_FREE_BUFID_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,QDMA_FREE_BUFID_COUNT));
++	printk("TDMA_TO_ENQ_FAIL_COUNT:\t\t%u\n", NPU_COUNTER(Counter_Base,QDMA_TO_ENQ_FAIL_COUNT));
++				//printk("TDMA_TO_ENQ_FAIL_COUNT2:\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TO_ENQ_FAIL_COUNT2));
++	printk("TDMA_TX_DSCP_IDX_INVALID:\t%u\n", NPU_COUNTER(Counter_Base,QDMA_TX_DSCP_IDX_INVALID));
++	printk("TDMA_TX_DSCP_INFO_ERROR:\t\t%u\n", NPU_COUNTER(Counter_Base,QDMA_TX_DSCP_INFO_ERROR));
++	printk("TDMA_DONE_DROP_BIT_ERROR:\t%u\n", NPU_COUNTER(Counter_Base,QDMA_DONE_DROP_BIT_ERROR));
++				//printk("TDMA_TXDESC_PUSH_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TXDESC_PUSH_COUNT));
++				//printk("TDMA_TXDESC_PUSH2_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TXDESC_PUSH2_COUNT));
++				//printk("TDMA_TXDESC_POP_COUNT:\t\t%lu\n", NPU_COUNTER(Counter_Base,QDMA_TXDESC_POP_COUNT));
++
++	printk("============ Bufid Counter ==========\n");
++	printk("SKB_ALLOC_BUFID_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_ALLOC_BUFID_COUNT));
++	printk("SKB_FREE_BUFID_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_FREE_BUFID_COUNT));
++	printk("SKB_BUFID_ALLOC_FAIL\t\t%u\n", NPU_COUNTER(Counter_Base,SKB_BUFID_ALLOC_FAIL));
++	printk("BMGR0_BUFID_OVERFLOW\t\t%u\n", NPU_COUNTER(Counter_Base,BMGR0_BUFID_OVERFLOW));
++
++	printk("============ Hostadpt API Counter ==========\n");
++	printk("API_BUFF_SEND_BIGPKT\t\t%u\n", NPU_COUNTER(Counter_Base,API_BUFF_SEND_BIGPKT));
++	printk("API_BUFF_SEND_NOMALPKT\t\t%u\n", NPU_COUNTER(Counter_Base,API_BUFF_SEND_NOMALPKT));
++	printk("HOSTADPT_API_DONE_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,HOSTADPT_API_DONE_COUNT));
++
++	printk("======= RRO MSDU PG SKB counter =======\n");
++	printk("MSDU_SKB_ALLOC_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_SKB_ALLOC_COUNT));
++	printk("MSDU_SKB_FREE_BUFID_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_SKB_FREE_BUFID_COUNT));
++	printk("MSDU_SKB_BUFID_ALLOC_FAIL\t\t%u\n", NPU_COUNTER(Counter_Base,MSDU_SKB_BUFID_ALLOC_FAIL));
++	return;
++}
++
++inline void show_wifi_offload_tx_counter(unsigned short int band)
++{
++	unsigned long int *Counter_Base;
++	
++	if(counter_base[band]==0) return;
++	else Counter_Base = (unsigned long int *)counter_base[band];
++	printk("------WIFI TX (band%d)----------\n", band);
++	printk("TDMA_RX_GET_PKT: \t\t%u\n", NPU_COUNTER(Counter_Base,TDMA_RX_GET_PKT));
++	printk("TX_PKT_FROM_HOSTADPT: \t\t%u\n", NPU_COUNTER(Counter_Base,TX_PKT_FROM_HOSTADPT));
++	printk("TX_FULL_DESC: \t\t\t%u\n", NPU_COUNTER(Counter_Base,TX_FULL_DESC));
++	printk("TX_DONE_GET_PKT: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_DONE_GET_PKT));
++	printk("TX_SLOW_PATH_Q_FULL: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_SLOW_PATH_Q_FULL));
++	printk("TX_SLOW_PATH_TXRING_FULL: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_SLOW_PATH_TXRING_FULL));
++	printk("TX_SLOW_PATH_TOO_MUCH_PKT: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_SLOW_PATH_TOO_MUCH_PKT));
++	//printk("TX_PKT_FROM_HOSTADP: \t\t%lu(band%d)\n", NPU_COUNTER(Counter_Base,TX_PKT_FROM_HOSTADP),band);
++	Counter_Base = (unsigned long int *)counter_base[2];
++	printk("TX_SKB_ALLOC_BUFID_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,TX_SKB_ALLOC_BUFID_COUNT));
++	printk("TX_SKB_FREE_BUFID_COUNT\t\t%u\n", NPU_COUNTER(Counter_Base,TX_SKB_FREE_BUFID_COUNT));
++	printk("TX_SKB_BUFID_ALLOC_FAIL\t\t%u\n", NPU_COUNTER(Counter_Base,TX_SKB_BUFID_ALLOC_FAIL));
++	printk("TX_DONE_VER_ABNORMAL: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_DONE_VER_ABNORMAL));
++	printk("TX_DONE_TOKEN_LEAK: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_DONE_TOKEN_LEAK));
++	printk("TX_BUF_POOL_ABNORMAL_ALLOC: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_BUF_POOL_ABNORMAL_ALLOC));
++	printk("TX_BUF_POOL_ABNORMAL_FREE: \t\t%u\n", NPU_COUNTER(Counter_Base, TX_BUF_POOL_ABNORMAL_FREE));
++	printk("WIFI_TX_TOKEN_ABNORMAL: \t\t%u\n", NPU_COUNTER(Counter_Base, WIFI_TX_TOKEN_ABNORMAL));
++	printk("WIFI_TX_MSDU_PKT: \t\t%u\n", NPU_COUNTER(Counter_Base, WIFI_TX_MSDU_PKT));
++	return;
++}
++
++void npu_wifi_offload_get_dbg_counter_address(struct mt7996_dev *dev)
++{
++    int i=0;
++	struct airoha_npu *npu;
++    //unsigned long int counter_base[band_num]={0};
++	u32 val;
++	printk("%s:%d !!!\n",__func__,__LINE__);
++	npu = rcu_dereference(dev->mt76.mmio.npu);
++	if(!npu)
++	{
++		printk("%s:%d npu load fail !!!!!\n",__func__,__LINE__);
++		return;
++	}
++	printk("%s:%d !!!\n",__func__,__LINE__);
++    for(i = 0; i< (BAND_NUM-1); i++)
++    {
++		if (airoha_npu_wlan_get_dbg_counter_address(npu, i, &val)) {
++			printk("%s:%d band:%d get dbg counter addr error \n",__func__,__LINE__,i);
++			return;
++		} 
++        if(i == 2)
++        {
++            
++            counter_base[i] = (unsigned long int)ioremap((phys_addr_t)val, (UCOUNTER_BOTTOM * sizeof(unsigned int)));
++        }
++        else
++        {
++            counter_base[i] = (unsigned long int)ioremap((phys_addr_t)val, (COUNTER_BOTTOM * sizeof(unsigned int)));
++        }
++		
++        printk("counter_base[%d]=%lx(%x) \n", i,counter_base[i],val);
++    }
++    return;
++}
++
++void print_npu_wifi_offload_dbg_counter(struct mt7996_dev *dev , unsigned short int band)
++{
++    if(counter_base[2] == 0)
++    {
++        npu_wifi_offload_get_dbg_counter_address(dev);
++    }
++    show_wifi_offload_counter(band);   
++    return;
++}
++
++
++void print_npu_tx_wifi_offload_dbg_counter(struct mt7996_dev *dev , unsigned short int band)
++{
++    if(counter_base[2] == 0)
++    {
++        npu_wifi_offload_get_dbg_counter_address(dev);
++    }
++    show_wifi_offload_tx_counter(band);   
++    return;
++}
++
++
++
++static ssize_t
++npu_wifioffload_dbg_set(struct file *file, const char __user *user_buf,
++			size_t count, loff_t *ppos)
++{
++	struct mt7996_phy *phy = file->private_data;
++	struct mt7996_dev *dev = phy->dev;
++	char buf[16];
++	int ret = 0;
++	u16 val;
++	if (count >= sizeof(buf))
++		return -EINVAL;
++
++	if (copy_from_user(buf, user_buf, count))
++		return -EFAULT;
++
++	if (count && buf[count - 1] == '\n')
++		buf[count - 1] = '\0';
++	else
++		buf[count] = '\0';
++
++	if (kstrtou16(buf, 0, &val))
++		return -EINVAL;
++
++	switch (val) {
++	case 0:
++	case 1:
++		printk("[%s debug counter]\n",(val==0)?"2.4G/5G":"6G");
++		print_npu_wifi_offload_dbg_counter(dev, val);
++		break;
++	default:
++		printk("plz echo 0(2.4G) or 1(5G).\n");
++		break;
++	}
++
++	return ret ? ret : count;
++}
++
++
++static ssize_t
++npu_tx_wifioffload_dbg_set(struct file *file, const char __user *user_buf,
++			size_t count, loff_t *ppos)
++{
++	struct mt7996_phy *phy = file->private_data;
++	struct mt7996_dev *dev = phy->dev;
++	char buf[16];
++	int ret = 0;
++	u16 val;
++	if (count >= sizeof(buf))
++		return -EINVAL;
++
++	if (copy_from_user(buf, user_buf, count))
++		return -EFAULT;
++
++	if (count && buf[count - 1] == '\n')
++		buf[count - 1] = '\0';
++	else
++		buf[count] = '\0';
++
++	if (kstrtou16(buf, 0, &val))
++		return -EINVAL;
++
++	switch (val) {
++	case 0:
++	case 1:
++		printk("[%s tx debug counter]\n",(val==0)?"2.4G/5G":"6G");
++		print_npu_tx_wifi_offload_dbg_counter(dev, val);
++		break;
++	default:
++		printk("plz echo 0(2.4G) or 1(5G).\n");
++		break;
++	}
++
++	return ret ? ret : count;
++}
++
++
++
++static const struct file_operations fops_npu_wifioffload_dbg_counter = {
++	.write = npu_wifioffload_dbg_set,
++	.read = NULL,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++static const struct file_operations fops_npu_wifioffload_tx_dbg_counter = {
++	.write = npu_tx_wifioffload_dbg_set,
++	.read = NULL,
++	.open = simple_open,
++	.llseek = default_llseek,
++};
++
++
++
+ /* PSE INFO */
+ static struct bmac_queue_info_t pse_queue_empty_info[] = {
+ 	{"CPU Q0",  ENUM_UMAC_CPU_PORT_1,     ENUM_UMAC_CTX_Q_0},
+@@ -4688,6 +5013,12 @@
+ 	debugfs_create_file("amsdu_algo", 0600, dir, dev, &fops_amsdu_algo);
+ 	debugfs_create_file("amsdu_para", 0600, dir, dev, &fops_amsdu_para);
+ 
++	/*npu debug count*/
++	debugfs_create_file("npu_wifioffload_dbg_counter", 0600, dir, dev, &fops_npu_wifioffload_dbg_counter);
++
++	/*npu wifi tx count*/
++	debugfs_create_file("npu_wifioffload_tx_dbg_counter", 0600, dir, dev, &fops_npu_wifioffload_tx_dbg_counter);	
++
+ 	/* Drop counters */
+ 	debugfs_create_file("tx_drop_stats", 0400, dir, dev, &mt7996_tx_drop_fops);
+ 	debugfs_create_file("rx_drop_stats", 0400, dir, dev, &mt7996_rx_drop_fops);
+diff -urN old/mt7996/mtk_debug.h new/mt7996/mtk_debug.h
+--- old/mt7996/mtk_debug.h	2025-06-19 14:46:45.190493000 +0800
++++ new/mt7996/mtk_debug.h	2025-07-04 17:19:19.910482000 +0800
+@@ -3033,4 +3033,183 @@
+ 	BMAC_GROUP_VLD_5 = 0x10,
+ };
+ 
++/*npu offload Counter*/
++enum COUNTER_OFFSET{
++	GET_BUFID_FAIL = 0,		//00v
++	WHILE_COUNT = 1,		//01v
++	RX_DESC_DDONE,			//02
++	ALL_GET_PKT_COUNT,		//03v
++	DROP_PACKETS,			//04v
++	//ENQ_BUFID_FIAL_COUNT,		//05v
++	//ALL_ENQ_PKT_COUNT,		//06v
++	ENQ_DEQ_WHILE_COUNT,		//07v
++	ENQ_SRAM_COUNT,			//08v
++	ENQ_SRAM_FULL_COUNT,		//09vv
++	ENQ_SRAM_FAIL_COUNT,		//09v
++	DEQ_SRAM_COUNT,			//11v
++	DEQ_SRAM_FAIL_BUFID_COUNT,	//12v
++	DEQ_SRAM_FAIL_LEN_COUNT,	//13v
++	//DEQ_SRAM_NO_INFO_COUNT,		//14v
++	TO_HOSTAPD_COUNT,			//15vv
++	//ENQ_DRAM_FAIL_COUNT,		//16v
++	//ENQ_BUFID_ERROR_COUNT,		//17v
++	BA_IN_ORDER_PKT_COUNT,		//18v
++	BA_DUPL_PKT_COUNT,		//19v
++	BA_OLD_PKT_COUNT,		//20v
++	BA_WITHIN_WS_PKT_COUNT,		//21v
++	BA_POP_PKT_COUNT,		//22v
++	//BA_NO_PKT_IN_LIST_COUNT,	//23v
++	BA_AMSDU_COUNT,			//24v
++	AMPDU_COUNT,			//25v
++	//BA_NOT_DATA_PKT_COUNT,		//26v
++	//BA_RETURN_ERROR_COUNT,		//27v
++	BA_NO_MEM_COUNT,		//28v
++	TO_QDMA_COUNT,			//29v
++	TO_QDMA_COUNT_88,
++	TO_QDMA_COUNT_512,
++	TO_QDMA_COUNT_1518,
++	TO_QDMA_BYTE_LO,
++	TO_QDMA_BYTE_HI,
++	//ACCESS_PACKET,			//30v
++	HOST_APD_ERROR_COUNT,		//31v
++	//QDMA_RETURN_UNBIND_COUNT,	//32v
++	QDMA_RETURN_FAIL_COUNT,		//33v
++	//QDMA_RETURN_OK_COUNT,		//34v
++	SCATTER_CNT_MORE1,		//35v
++	BIGGER_PACKET,			//36v
++	ENQ_BIGPKT_TOSRAM_FAIL_COUNT,   //
++	SCATTER_PKT_ONE_BUFID,
++	GET_BUFID_FOR_BIGPKT_FAIL,
++	BIGPKT_TO_HOSTADPT_ERROR_COUNT,
++	API_HOSTADPT_SEND,
++	ENQ_BIGPKT_SRAM_FULL_COUNT,
++	ENQ_BIGPKT_SRAM_COUNT,
++	NO_BIGPKT_COUNT,
++	CHECK_BIGPKT,
++	CHECK_BIGPKT2,
++	CHECK_BIGPKT_OK,
++	CHECK_BIGPKT_ISLAST,
++	CHECK_BIGPKT_IDX_FAIL,
++	CHECK_BIGPKT_CNT_FAIL,
++	CHECK_BIGPKT_FAIL,
++	CHECK_BIGPKT_OVER_RETRY,
++	BIGPKT_TO_HOSTAPD_COUNT,
++	BIGPKT_DESC_FREE_COUNT,	
++	//BA_NODE_ALLOC_FAIL,	 	//37
++	//BA_NODE_ALLOC_COUNT,		//38
++	BA_AMSDU_MISS,			//39
++	//BA_TIMEOUT_FLUSH,		//40
++	BA_TIMEOUT_FLUSH100,		//42
++	BA_TIMEOUT_FLUSH250,		//43
++	BA_ENQ_DUP_SEQ,			//vv
++	BA_REORDERING_NODE_FREE_COUNT,	//10vv
++	BA_REORDERINT_NODE_ALLOC_FAIL, 	//11vv
++	BA_REORDERING_NODE_ALLOC_COUNT,	//12vv
++	BA_REORDERING_NODE_ALLOC_DRAM_COUNT,//vv
++	BA_ENQ_QLEN_ERROR_COUNT,
++	BA_WCID_ERROR,
++	HOSTADPT_API_Q_FULL,
++	ALL_GET_PKT_COUNT_512,	
++	ALL_GET_PKT_COUNT_1518,	
++	ALL_GET_PKT_COUNT_OTHER,
++	TDMA_TXDESC_FULL_COUNT,
++	TDMA_TXDESC_FULL_COUNT2,
++	TDMA_RX_GET_PKT,
++	RX_G4_PKT_NO_SN,
++	BAR_WCID_ERROR,
++	RX_PIPE_Q_FULL,
++	RX_PIPE_Q3_Q4_FULL,
++	PIPE_Q3_ENQ,
++	PIPE_Q3_DEQ,
++	PIPE_Q4_ENQ,
++	PIPE_Q4_DEQ,
++	ENQ_PKT_TO_SLOWPATH_CASE1,
++	ENQ_PKT_TO_SLOWPATH_CASE2,
++	ENQ_PKT_TO_SLOWPATH_CASE3,
++	ENQ_PIPELINE_PKT_CNT,
++	DEQ_PIPELINE_PKT_CNT,
++	TDMA_TXRING_SEND,
++	BUFID_FREE_CASE1,
++	MSDU_PG_2G_PKT,
++	MSDU_PG_5G_PKT,
++	MSDU_PG_6G_PKT,
++	MSDU_PG_READ_FAIL,
++	TX_PKT_FROM_HOSTADPT,
++	TX_FULL_DESC,
++	TX_DONE_GET_PKT,
++	TX_SLOW_PATH_Q_FULL,
++	TX_SLOW_PATH_TXRING_FULL,
++	TX_SLOW_PATH_TOO_MUCH_PKT,
++	PN_CHECK_FAIL,
++	SKB_BUFID_STATE_ABNORMAL1,	//err state when freeing skb(setting to BUF_IN_POOL)
++	SKB_BUFID_STATE_ABNORMAL2,	//err state when filling skb to Refill ring(setting to BUF_IN_RING)
++	SKB_BUFID_STATE_ABNORMAL3,	//err state when checking skb from rxdmad_c ring(setting to BUF_FROM_RING)
++#ifdef TCSUPPORT_WLAN_INODE
++	PPE_RX_NULL_COUNT,
++	PPE_RX_SEND_COUNT,
++	CPU_RX_NULL_COUNT,
++	CPU_RX_SEND_COUNT,
++	CPU_TX_ERR_COUNT,
++	CPU_TX_SEND_COUNT,
++	NPU_RX_RECV_COUNT,
++	SKB_MALLOC_FAIL,
++	SKB_MALLOC_CNT,
++	SKB_FREE_CNT,
++	//below for rx path
++	//ENQ_SRAM_FAIL_COUNT,
++	//ENQ_SRAM_COUNT,
++	//DEQ_SRAM_COUNT,
++	//DEQ_SRAM_FAIL_BUFID_COUNT,
++	//DEQ_SRAM_FAIL_LEN_COUNT,
++	//TO_HOSTAPD_COUNT,
++	//HOST_APD_ERROR_COUNT,
++	ENQ_DEQ_WHILE_COUNT_C3,
++	PPE_RX_ERROR_COUNT1,
++	PPE_RX_ERROR_COUNT2,
++	PPE_RX_ERROR_COUNT3,
++	PPE_RX_ERROR_COUNT4,
++	PPE_RX_ERROR_COUNT5,
++#endif
++	COUNTER_BOTTOM			//47
++};
++#define NPU_COUNTER_NUM				COUNTER_BOTTOM
++enum COUNTER_OFFSET_UTIL{
++	QDMA_TXDESC_NULL_COUNT=0,	//0vv
++	QDMA_FREE_BUFID_COUNT,		//1vv
++	QDMA_UNBIND_COUNT,		//2vv
++	QDMA_TO_ENQ_FAIL_COUNT,		//3vv
++	QDMA_TO_ENQ_FAIL_COUNT2,	//4
++	//QDMA_TO_PPE_COUNT,		//5
++	QDMA_DONE_COUNT,		//6vv
++	SKB_FREE_BUFID_COUNT,		//7vv
++	SKB_ALLOC_BUFID_COUNT,		//8vv
++	SKB_BUFID_ALLOC_FAIL,		//9vv
++	QDMA_TX_DSCP_IDX_INVALID,	//13vv
++	QDMA_TX_DSCP_INFO_ERROR,	//14vv
++	QDMA_DONE_DROP_BIT_ERROR,		//15
++	API_BUFF_SEND_BIGPKT,
++	API_BUFF_SEND_NOMALPKT,
++	HOSTADPT_API_DONE_COUNT,
++	BMGR0_BUFID_OVERFLOW,
++	MSDU_SKB_FREE_BUFID_COUNT,
++	MSDU_SKB_BUFID_ALLOC_FAIL,
++	MSDU_SKB_ALLOC_COUNT,
++	TX_SKB_FREE_BUFID_COUNT,		//7vv
++	TX_SKB_ALLOC_BUFID_COUNT,		//8vv
++	TX_SKB_BUFID_ALLOC_FAIL,		//9vv
++	TX_DONE_VER_ABNORMAL,
++	TX_DONE_TOKEN_LEAK,
++	TX_BUF_POOL_ABNORMAL_ALLOC,
++	TX_BUF_POOL_ABNORMAL_FREE,
++	WIFI_TX_TOKEN_ABNORMAL,
++	WIFI_TX_MSDU_PKT,
++	//QDMA_TXDESC_PUSH_COUNT,		//16
++	//QDMA_TXDESC_PUSH2_COUNT,	//17
++	//QDMA_TXDESC_POP_COUNT,		//18
++	UCOUNTER_BOTTOM			//19
++};
++#define UTIL_COUNTER_NUM			UCOUNTER_BOTTOM
++#define BAND_NUM	4
++#define NPU_COUNTER(addr,i)		(*((unsigned int *)((unsigned long int)addr + (i << 2))))
++
+ #endif
+diff -urN old/mt7996/pci.c new/mt7996/pci.c
+--- old/mt7996/pci.c	2025-06-19 14:46:46.560481000 +0800
++++ new/mt7996/pci.c	2025-07-04 17:25:51.196472000 +0800
+@@ -196,7 +196,50 @@
+ 		dev_warn(dev->mt76.dev,
+ 			 "failed setting npu wlan rx pcie address\n");
+ }
+-
++extern void (*tx_token_pending_free)(struct mt76_dev *dev);
++struct mt76_txwi_cache *
++mt76_token_release_npu(struct mt76_dev *dev, int token, bool *wake)
++{
++	struct mt76_txwi_cache *txwi;
++	txwi = idr_remove(&dev->token, token);
++	if (txwi) {
++		struct mt76_phy *phy = mt76_dev_phy(dev, txwi->phy_idx);
++
++		dev->token_count--;
++		phy->tokens--;
++
++#ifdef CONFIG_NET_MEDIATEK_SOC_WED
++		if (mtk_wed_device_active(&dev->mmio.wed) &&
++		    token >= dev->mmio.wed.wlan.token_start &&
++		    --dev->wed_token_count == 0)
++			wake_up(&dev->tx_wait);
++#endif
++	}
++ 
++	if (dev->token_count < dev->token_size - MT76_TOKEN_FREE_THR &&
++	    dev->phy.q_tx[0]->blocked)
++		*wake = true;
++	return txwi;
++}
++void token_peding_free(struct mt76_dev *dev){
++	int msdu_id;
++	struct mt76_txwi_cache *txwi;
++	struct mt76_txwi_cache *txwi_tmp;
++	bool wake = false;
++	idr_for_each_entry(&dev->token, txwi, msdu_id) {
++		if(jiffies_to_msecs(jiffies - txwi->jiffies) < 20000)
++			continue;
++		txwi_tmp = mt76_token_release_npu(dev, msdu_id, &wake);
++		if (!txwi_tmp)
++			continue;
++		mt76_connac_txp_skb_unmap(dev, txwi_tmp);
++		if(txwi_tmp->skb)
++			napi_consume_skb(txwi_tmp->skb, 1);	
++		txwi_tmp->skb = NULL;
++		mt76_put_txwi(dev, txwi_tmp);
++		txwi_tmp->jiffies = 0;
++	}	
++}
+ static void mt7996_npu_pci_hw_init(struct mt7996_dev *dev, struct pci_dev *pdev)
+ {
+ 	struct airoha_npu *npu;
+@@ -208,7 +251,7 @@
+ 		printk("%s:%d npu init fail !!!!!\n",__func__,__LINE__);
+ 		goto out;
+ 	}
+-
++	tx_token_pending_free = token_peding_free;
+ 	mt7996_npu_wlan_offload_init(dev, npu, pdev);
+ 	mt76_npu_init_rxd(&dev->mt76, npu);
+ 	mt76_npu_init_txd(&dev->mt76, npu, MT7996_TX_RING_SIZE);
+@@ -266,6 +309,9 @@
+ 		return PTR_ERR(dev);
+ 
+ 	mdev = &dev->mt76;
++	if (!is_mt7992(mdev))
++		rro_mode = MT76_HWRRO_DISABLE;
++	
+ 	switch (rro_mode) {
+ 	case MT76_HWRRO_V3:
+ 		mdev->hwrro_mode = rro_mode;
+diff -urN old/npu.c new/npu.c
+--- old/npu.c	2025-06-19 14:46:46.566460000 +0800
++++ new/npu.c	2025-07-04 15:43:01.230906000 +0800
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2025 AIROHA Inc
+  * Author: Lorenzo Bianconi <lorenzo@kernel.org>
+  */
++#include <linux/kernel.h>
+ #include <net/flow_offload.h>
+ #include <net/pkt_cls.h>
+ 
+@@ -13,6 +14,9 @@
+ #define MT76_NPU_RX_BUF_SIZE	(1800 + \
+ 				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+ 
++static bool npu_enable = true;
++module_param(npu_enable, bool, 0644);
++
+ static int mt76_npu_fill_rx_queue(struct mt76_dev *dev, struct mt76_queue *q)
+ {
+ 	int nframes = 0;
+@@ -503,6 +507,13 @@
+ 	struct airoha_npu *npu;
+ 	int err = 0;
+ 
++	/* NPU offloading is only supported for MT7992 */
++	if (!is_mt7992(dev))
++		return -EINVAL;
++
++	if (!npu_enable)
++		return -EINVAL;
++	
+ 	mutex_lock(&dev->mutex);
+ 
+ 	npu = airoha_npu_get(dev->dev, NULL);
+@@ -527,6 +538,10 @@
+ 		goto unlock;
+ 	}
+ 
++	err = airoha_npu_wlan_init_reserved_memory(npu);
++	if (err)
++		goto unlock;
++	
+ 	dev->dma_dev = npu->dev;
+ 	rcu_assign_pointer(dev->mmio.npu, npu);
+ 	rcu_assign_pointer(dev->mmio.ppe_dev, ppe_dev);
+diff -urN old/tx.c new/tx.c
+--- old/tx.c	2025-06-19 14:46:46.573435000 +0800
++++ new/tx.c	2025-07-04 17:28:21.437461000 +0800
+@@ -858,7 +858,9 @@
+ 		mt76_worker_schedule(&dev->tx_worker);
+ }
+ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked);
+-
++#define TOKEN_FREE_CHECK_THR 3500
++void (*tx_token_pending_free)(struct mt76_dev *dev) = NULL;
++EXPORT_SYMBOL(tx_token_pending_free);
+ int __mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
+ 			 u8 phy_idx, int token_start)
+ {
+@@ -873,7 +875,10 @@
+ 
+ 	if (phy->tokens >= dev->token_threshold)
+ 		goto out;
+-
++	if (mt76_npu_device_active(dev)){
++			if(phy->tokens >= TOKEN_FREE_CHECK_THR && tx_token_pending_free)
++					tx_token_pending_free(dev);
++	}
+ 	token = idr_alloc(&dev->token, *ptxwi, token_start,
+ 			  token_start + dev->token_size, GFP_ATOMIC);
+ 	if (token >= token_start) {
