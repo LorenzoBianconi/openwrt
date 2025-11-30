@@ -238,6 +238,10 @@
 
 &gdm4 {
 	status = "okay";
+};
+
+&port0 {
+	status = "okay";
 
 	phy-handle = <&as21xx_1>;
 	phy-mode = "usxgmii";
