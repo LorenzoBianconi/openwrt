@@ -915,9 +915,14 @@
 			gdm4: ethernet@4 {
 				compatible = "airoha,eth-mac";
 				reg = <4>;
-				pcs = <&eth_pcs>;
 
-				status = "disabled";
+				port0: ethernet-port@0 {
+					compatible = "airoha,eth-port";
+					reg = <0>;
+					pcs = <&eth_pcs>;
+
+					status = "disabled";
+				};
 			};
 		};
 
