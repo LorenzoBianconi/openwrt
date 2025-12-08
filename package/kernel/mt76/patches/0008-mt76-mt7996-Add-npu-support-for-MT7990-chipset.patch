@@ -1,10 +1,10 @@
 From 84ea9b3a5c96cd301ce3118f0f1c541c1a5efe31 Mon Sep 17 00:00:00 2001
-Message-ID: <84ea9b3a5c96cd301ce3118f0f1c541c1a5efe31.1764714198.git.lorenzo@kernel.org>
-In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
-References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
+Message-ID: <84ea9b3a5c96cd301ce3118f0f1c541c1a5efe31.1765186381.git.lorenzo@kernel.org>
+In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
+References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Sat, 25 Oct 2025 00:19:40 +0200
-Subject: [PATCH 08/17] mt76: mt7996: Add npu support for MT7990 chipset
+Subject: [PATCH 08/18] mt76: mt7996: Add npu support for MT7990 chipset
 
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---

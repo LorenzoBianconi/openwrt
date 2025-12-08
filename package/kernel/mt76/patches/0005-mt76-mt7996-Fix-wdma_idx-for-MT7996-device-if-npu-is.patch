@@ -1,10 +1,10 @@
 From 5d74c38a8d7ecad5e9b4e847d7fd7893addf54e5 Mon Sep 17 00:00:00 2001
-Message-ID: <5d74c38a8d7ecad5e9b4e847d7fd7893addf54e5.1764714198.git.lorenzo@kernel.org>
-In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
-References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
+Message-ID: <5d74c38a8d7ecad5e9b4e847d7fd7893addf54e5.1765186381.git.lorenzo@kernel.org>
+In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
+References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Fri, 24 Oct 2025 23:42:21 +0200
-Subject: [PATCH 05/17] mt76: mt7996: Fix wdma_idx for MT7996 device if npu is
+Subject: [PATCH 05/18] mt76: mt7996: Fix wdma_idx for MT7996 device if npu is
  enabled
 
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>

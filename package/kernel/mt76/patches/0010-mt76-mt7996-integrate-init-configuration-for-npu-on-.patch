@@ -1,10 +1,10 @@
 From 3604dfb90543ce48e35990acb0aa9dcfa544c81d Mon Sep 17 00:00:00 2001
-Message-ID: <3604dfb90543ce48e35990acb0aa9dcfa544c81d.1764714198.git.lorenzo@kernel.org>
-In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
-References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
+Message-ID: <3604dfb90543ce48e35990acb0aa9dcfa544c81d.1765186381.git.lorenzo@kernel.org>
+In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
+References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Thu, 27 Nov 2025 10:01:39 +0100
-Subject: [PATCH 10/17] mt76: mt7996: integrate init configuration for npu on
+Subject: [PATCH 10/18] mt76: mt7996: integrate init configuration for npu on
  MT7990
 
 ---

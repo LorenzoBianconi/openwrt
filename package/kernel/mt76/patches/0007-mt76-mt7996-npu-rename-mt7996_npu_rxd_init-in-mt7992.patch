@@ -1,10 +1,10 @@
 From e75141248e053b2c7934a6c640e8ace5a0dbd36e Mon Sep 17 00:00:00 2001
-Message-ID: <e75141248e053b2c7934a6c640e8ace5a0dbd36e.1764714198.git.lorenzo@kernel.org>
-In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
-References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1764714198.git.lorenzo@kernel.org>
+Message-ID: <e75141248e053b2c7934a6c640e8ace5a0dbd36e.1765186381.git.lorenzo@kernel.org>
+In-Reply-To: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
+References: <6b7faf9dc0f8ea8c7701273a96e3d81257d7c6d7.1765186381.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Sat, 25 Oct 2025 13:37:20 +0200
-Subject: [PATCH 07/17] mt76: mt7996: npu: rename mt7996_npu_rxd_init() in
+Subject: [PATCH 07/18] mt76: mt7996: npu: rename mt7996_npu_rxd_init() in
  mt7992_npu_rxd_init()
 
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
