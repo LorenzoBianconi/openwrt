@@ -18,7 +18,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1755,7 +1755,7 @@ static int airhoha_set_gdm2_loopback(str
+@@ -1754,7 +1754,7 @@ static int airhoha_set_gdm2_loopback(str
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(2));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(2));
  
@@ -27,7 +27,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	if (src_port < 0)
  		return src_port;
  
-@@ -3329,7 +3329,7 @@ static const char * const en7581_xsi_rst
+@@ -3373,17 +3373,17 @@ static const char * const en7581_xsi_rst
  	"xfp-mac",
  };
  
@@ -35,8 +35,20 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +static int airoha_en7581_get_sport(struct airoha_gdm_port *port, int nbq)
  {
  	switch (port->id) {
- 	case 3:
-@@ -3389,7 +3389,7 @@ static const char * const an7583_xsi_rst
+-	case 3:
++	case AIROHA_GDM3_IDX:
+ 		/* 7581 SoC supports PCIe serdes on GDM3 port */
+ 		if (nbq == 4)
+ 			return HSGMII_LAN_7581_PCIE0_SRCPORT;
+ 		if (nbq == 5)
+ 			return HSGMII_LAN_7581_PCIE1_SRCPORT;
+ 		break;
+-	case 4:
++	case AIROHA_GDM4_IDX:
+ 		/* 7581 SoC supports eth and usb serdes on GDM4 port */
+ 		if (!nbq)
+ 			return HSGMII_LAN_7581_ETH_SRCPORT;
+@@ -3433,15 +3433,15 @@ static const char * const an7583_xsi_rst
  	"xfp-mac",
  };
  
@@ -44,8 +56,18 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +static int airoha_an7583_get_sport(struct airoha_gdm_port *port, int nbq)
  {
  	switch (port->id) {
- 	case 3:
-@@ -3444,7 +3444,7 @@ static const struct airoha_eth_soc_data
+-	case 3:
++	case AIROHA_GDM3_IDX:
+ 		/* 7583 SoC supports eth serdes on GDM3 port */
+ 		if (!nbq)
+ 			return HSGMII_LAN_7583_ETH_SRCPORT;
+ 		break;
+-	case 4:
++	case AIROHA_GDM4_IDX:
+ 		/* 7583 SoC supports PCIe and USB serdes on GDM4 port */
+ 		if (!nbq)
+ 			return HSGMII_LAN_7583_PCIE_SRCPORT;
+@@ -3488,7 +3488,7 @@ static const struct airoha_eth_soc_data
  	.num_xsi_rsts = ARRAY_SIZE(en7581_xsi_rsts_names),
  	.num_ppe = 2,
  	.ops = {
@@ -54,7 +76,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		.get_dev_from_sport = airoha_en7581_get_dev_from_sport,
  	},
  };
-@@ -3455,7 +3455,7 @@ static const struct airoha_eth_soc_data
+@@ -3499,7 +3499,7 @@ static const struct airoha_eth_soc_data
  	.num_xsi_rsts = ARRAY_SIZE(an7583_xsi_rsts_names),
  	.num_ppe = 1,
  	.ops = {

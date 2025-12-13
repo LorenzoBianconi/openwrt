@@ -548,7 +548,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	if (!port)
  		return -ENOMEM;
 -	}
--
+ 
 -	qdma = &eth->qdma[index % AIROHA_MAX_NUM_QDMA];
 -	dev->netdev_ops = &airoha_netdev_ops;
 -	dev->ethtool_ops = &airoha_ethtool_ops;
@@ -563,7 +563,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	dev->dev.of_node = np;
 -	dev->irq = qdma->irq_banks[0].irq;
 -	SET_NETDEV_DEV(dev, eth->dev);
- 
+-
 -	/* reserve hw queues for HTB offloading */
 -	err = netif_set_real_num_tx_queues(dev, AIROHA_NUM_TX_RING);
 -	if (err)
@@ -588,7 +588,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	port->id = id;
  	eth->ports[p] = port;
  
-@@ -3080,23 +3122,7 @@ static int airoha_alloc_gdm_port(struct
+@@ -3080,14 +3122,7 @@ static int airoha_alloc_gdm_port(struct
  	if (err)
  		return err;
  
@@ -596,47 +596,37 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	if (airhoa_is_phy_external(port)) {
 -		err = airoha_setup_phylink(dev);
 -		if (err)
--			goto free_metadata_dst;
+-			return err;
 -	}
 -#endif
--
--	err = register_netdev(dev);
--	if (err)
--		goto free_metadata_dst;
--
 -	return 0;
--
--free_metadata_dst:
--	airoha_metadata_dst_free(port);
--	return err;
 +	return airoha_alloc_gdm_device(eth, port, np);
  }
  
- static int airoha_probe(struct platform_device *pdev)
-@@ -3199,17 +3225,24 @@ error_hw_cleanup:
+ static int airoha_register_gdm_devices(struct airoha_eth *eth)
+@@ -3101,7 +3136,7 @@ static int airoha_register_gdm_devices(s
+ 		if (!port)
+ 			continue;
+ 
+-		err = register_netdev(port->dev);
++		err = register_netdev(port->dev->dev);
+ 		if (err)
+ 			return err;
+ 	}
+@@ -3213,6 +3248,7 @@ error_hw_cleanup:
  
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
  		struct airoha_gdm_port *port = eth->ports[i];
 +		struct airoha_gdm_dev *dev;
  
--		if (port && port->dev->reg_state == NETREG_REGISTERED) {
--			unregister_netdev(port->dev);
--			airoha_metadata_dst_free(port);
-+		if (!port)
-+			continue;
-+
-+		airoha_metadata_dst_free(port);
- #if defined(CONFIG_PCS_AIROHA)
--			if (airhoa_is_phy_external(port)) {
--				phylink_destroy(port->phylink);
--				airoha_pcs_destroy(port->pcs);
--			}
--#endif
-+		if (port->phylink) {
-+			phylink_destroy(port->phylink);
-+			airoha_pcs_destroy(port->pcs);
+ 		if (!port)
+ 			continue;
+@@ -3224,8 +3260,12 @@ error_hw_cleanup:
+ 			airoha_pcs_destroy(port->pcs);
  		}
-+#endif
+ #endif
+-		if (port->dev->reg_state == NETREG_REGISTERED)
+-			unregister_netdev(port->dev);
 +		if (!port->dev)
 +			continue;
 +
@@ -646,7 +636,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  	free_netdev(eth->napi_dev);
  	platform_set_drvdata(pdev, NULL);
-@@ -3229,19 +3262,24 @@ static void airoha_remove(struct platfor
+@@ -3245,19 +3285,24 @@ static void airoha_remove(struct platfor
  
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
  		struct airoha_gdm_port *port = eth->ports[i];

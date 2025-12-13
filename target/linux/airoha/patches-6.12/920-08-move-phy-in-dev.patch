@@ -1,6 +1,6 @@
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1633,7 +1633,7 @@ static int airoha_dev_open(struct net_de
+@@ -1632,7 +1632,7 @@ static int airoha_dev_open(struct net_de
  
  #if defined(CONFIG_PCS_AIROHA)
  	if (airhoa_is_phy_external(port)) {
@@ -9,7 +9,7 @@
  					     netdev->dev.of_node, 0);
  		if (err) {
  			netdev_err(netdev, "%s: could not attach PHY: %d\n",
-@@ -1641,7 +1641,7 @@ static int airoha_dev_open(struct net_de
+@@ -1640,7 +1640,7 @@ static int airoha_dev_open(struct net_de
  			return err;
  		}
  
@@ -18,7 +18,7 @@
  	}
  #endif
  
-@@ -1701,8 +1701,8 @@ static int airoha_dev_stop(struct net_de
+@@ -1700,8 +1700,8 @@ static int airoha_dev_stop(struct net_de
  
  #if defined(CONFIG_PCS_AIROHA)
  	if (airhoa_is_phy_external(port)) {
@@ -114,7 +114,7 @@
  
  	return 0;
  }
-@@ -3259,18 +3259,17 @@ error_hw_cleanup:
+@@ -3303,18 +3303,17 @@ error_hw_cleanup:
  			continue;
  
  		airoha_metadata_dst_free(port);
@@ -139,7 +139,7 @@
  			if (dev->dev->reg_state == NETREG_REGISTERED)
  				unregister_netdev(dev->dev);
  		}
-@@ -3299,19 +3298,17 @@ static void airoha_remove(struct platfor
+@@ -3343,19 +3342,17 @@ static void airoha_remove(struct platfor
  			continue;
  
  		airoha_metadata_dst_free(port);

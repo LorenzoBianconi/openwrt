@@ -1,0 +1,172 @@
+From 71a09b4c2e1d075fce9c0ae09e044dbde36bffba Mon Sep 17 00:00:00 2001
+Message-ID: <71a09b4c2e1d075fce9c0ae09e044dbde36bffba.1765628489.git.lorenzo@kernel.org>
+In-Reply-To: <533ca4c0e73e768cd82fe76fb30f814043f1f718.1765628489.git.lorenzo@kernel.org>
+References: <533ca4c0e73e768cd82fe76fb30f814043f1f718.1765628489.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Sat, 13 Dec 2025 09:45:09 +0100
+Subject: [nf-next 11/11] net: airoha: Add ethtool priv_flags callbacks
+
+Introduce ethtool priv_flags callbacks in order to allow the user to
+select if the configured device will be used as hw lan or wan.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 66 ++++++++++++++++++++++--
+ drivers/net/ethernet/airoha/airoha_eth.h | 31 +++++++++--
+ 2 files changed, 88 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1787,18 +1787,24 @@ static int airoha_dev_init(struct net_de
+ 	airoha_set_macaddr(dev, netdev->dev_addr);
+ 
+ 	switch (port->id) {
+-	case 3:
+-	case 4:
++	case AIROHA_GDM3_IDX:
++	case AIROHA_GDM4_IDX:
+ 		/* If GDM2 is active we can't enable loopback */
+-		if (!eth->ports[1]) {
++		if (!eth->ports[1] && !airhoa_get_wan_gdm_dev(eth)) {
+ 			int err;
+ 
+ 			err = airhoha_set_gdm2_loopback(dev);
+ 			if (err)
+ 				return err;
++
++			dev->flags |= AIROHA_DEV_FLAG_WAN;
+ 		}
+ 		fallthrough;
+-	case 2:
++	case AIROHA_GDM2_IDX:
++		/* GDM2 is always used as wan */
++		if (port->id == AIROHA_GDM2_IDX)
++			dev->flags |= AIROHA_DEV_FLAG_WAN;
++
+ 		if (airoha_ppe_is_enabled(eth, 1)) {
+ 			/* For PPE2 always use secondary cpu port. */
+ 			fe_cpu_port = FE_PSE_PORT_CDM2;
+@@ -2156,6 +2162,56 @@ airoha_ethtool_get_rmon_stats(struct net
+ 	} while (u64_stats_fetch_retry(&port->stats.syncp, start));
+ }
+ 
++static int airoha_ethtool_set_priv_flags(struct net_device *netdev,
++					 u32 priv_flags)
++{
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
++	struct airoha_eth *eth = port->qdma->eth;
++
++	switch (port->id) {
++	case AIROHA_GDM1_IDX: /* GDM1 is always used as lan */
++	case AIROHA_GDM2_IDX: /* GDM2 is always used as wan */
++		return -EOPNOTSUPP;
++	case AIROHA_GDM3_IDX:
++	case AIROHA_GDM4_IDX:
++		if (priv_flags & AIROHA_DEV_FLAG_WAN) {
++			int err;
++
++			/* GDM2 is available, this port mus be used as lan */
++			if (eth->ports[1])
++				return -EBUSY;
++
++			/* Verify the wan device is not already configured */
++			if (airhoa_get_wan_gdm_dev(eth) != dev)
++				return -EBUSY;
++
++			err = airhoha_set_gdm2_loopback(dev);
++			if (err)
++				return err;
++
++			dev->flags |= AIROHA_DEV_FLAG_WAN;
++		} else if (dev->flags & AIROHA_DEV_FLAG_WAN) {
++			/* Reset to default the wan port configuration */
++			airoha_fe_rmw(eth, REG_FE_WAN_PORT, WAN0_MASK,
++				      FIELD_PREP(WAN0_MASK, AIROHA_GDM2_IDX));
++			dev->flags &= ~AIROHA_DEV_FLAG_WAN;
++		}
++		airoha_set_macaddr(dev, netdev->dev_addr);
++
++		break;
++	}
++
++	return 0;
++}
++
++static u32 airoha_ethtool_get_priv_flags(struct net_device *netdev)
++{
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++
++	return dev->flags;
++}
++
+ static int airoha_qdma_set_chan_tx_sched(struct airoha_gdm_port *port,
+ 					 int channel, enum tx_sched_mode mode,
+ 					 const u16 *weights, u8 n_weights)
+@@ -2864,6 +2920,8 @@ static const struct ethtool_ops airoha_e
+ 	.get_eth_mac_stats      = airoha_ethtool_get_mac_stats,
+ 	.get_rmon_stats		= airoha_ethtool_get_rmon_stats,
+ 	.get_link		= ethtool_op_get_link,
++	.set_priv_flags		= airoha_ethtool_set_priv_flags,
++	.get_priv_flags		= airoha_ethtool_get_priv_flags,
+ };
+ 
+ #if defined(CONFIG_PCS_AIROHA)
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -532,6 +532,7 @@ struct airoha_qdma {
+ 	struct airoha_queue q_rx[AIROHA_NUM_RX_RING];
+ };
+ 
++#define AIROHA_DEV_FLAG_WAN	BIT(0)
+ struct airoha_gdm_dev {
+ 	struct airoha_gdm_port *port;
+ 	struct net_device *dev;
+@@ -542,6 +543,7 @@ struct airoha_gdm_dev {
+ 	struct phylink_pcs *pcs;
+ #endif
+ 
++	u32 flags;
+ 	int nbq;
+ };
+ 
+@@ -642,15 +644,34 @@ u32 airoha_rmw(void __iomem *base, u32 o
+ #define airoha_qdma_clear(qdma, offset, val)			\
+ 	airoha_rmw((qdma)->regs, (offset), (val), 0)
+ 
++static inline struct airoha_gdm_dev *
++airhoa_get_wan_gdm_dev(struct airoha_eth *eth)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
++		struct airoha_gdm_port *port = eth->ports[i];
++		int j;
++
++		if (!port)
++			continue;
++
++		for (j = 0; j < ARRAY_SIZE(port->devs); j++) {
++			struct airoha_gdm_dev *dev = port->devs[j];
++
++			if (dev && (dev->flags & AIROHA_DEV_FLAG_WAN))
++				return dev;
++		}
++	}
++
++	return NULL;
++}
++
+ static inline bool airhoa_is_lan_gdm_dev(struct airoha_gdm_dev *dev)
+ {
+ 	struct airoha_gdm_port *port = dev->port;
+ 
+-	/* GDM1 port on EN7581 SoC is connected to the lan dsa switch.
+-	 * GDM{2,3,4} can be used as wan port connected to an external
+-	 * phy module.
+-	 */
+-	return port->id == 1;
++	return airhoa_get_wan_gdm_dev(port->qdma->eth) != dev;
+ }
+ 
+ static inline bool airoha_is_7581(struct airoha_eth *eth)
