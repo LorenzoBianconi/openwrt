@@ -362,7 +362,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  	free_netdev(eth->napi_dev);
  
-@@ -3357,6 +3412,37 @@ static int airoha_en7581_get_src_port_id
+@@ -3357,6 +3412,39 @@ static int airoha_en7581_get_src_port_id
  	return -EINVAL;
  }
  
@@ -375,8 +375,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	*dev = 0;
 +	switch (sport) {
 +	case 0x10 ... 0x14:
++		*port = 0; /* GDM1 */
++		break;
 +	case 0x2:
-+		*port = 0; /* GDM1 or GDM2 */
++		*port = 1; /* GDM2 */
 +		break;
 +	case HSGMII_LAN_7581_PCIE1_SRCPORT:
 +		*dev = 1;
@@ -400,7 +402,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static const char * const an7583_xsi_rsts_names[] = {
  	"hsi0-mac",
  	"hsi1-mac",
-@@ -3385,6 +3471,34 @@ static int airoha_an7583_get_src_port_id
+@@ -3385,6 +3471,36 @@ static int airoha_an7583_get_src_port_id
  	return -EINVAL;
  }
  
@@ -413,8 +415,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	*dev = 0;
 +	switch (sport) {
 +	case 0x10 ... 0x14:
++		*port = 0; /* GDM1 */
++		break;
 +	case 0x2:
-+		*port = 0; /* GDM1 or GDM2 */
++		*port = 1; /* GDM2 */
 +		break;
 +	case HSGMII_LAN_7583_ETH_SRCPORT:
 +		*port = 2; /* GDM3 */
