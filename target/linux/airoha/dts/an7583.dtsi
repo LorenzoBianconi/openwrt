@@ -349,7 +349,7 @@
 
 	thermal-zones {
 		cpu_thermal: cpu-thermal {
-			polling-delay-passive = <10000>;
+			polling-delay-passive = <1000>;
 			polling-delay = <5000>;
 
 			thermal-sensors = <&thermal 0>;
@@ -362,7 +362,7 @@
 				};
 
 				cpu-critical {
-					temperature = <110000>;
+					temperature = <120000>;
 					hysteresis = <1000>;
 					type = "critical";
 				};
