@@ -3,7 +3,7 @@ new file mode 100644
 index 00000000000..2aac185264b
 --- /dev/null
 +++ b/arch/arm/dts/an7581-nokia-valyrian-u-boot.dtsi
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,104 @@
 +// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 +
 +/ {
@@ -99,6 +99,10 @@ index 00000000000..2aac185264b
 +			};
 +		};
 +	};
++};
++
++&eth {
++	status = "okay";
 +};
 +
 +&gdm1 {
