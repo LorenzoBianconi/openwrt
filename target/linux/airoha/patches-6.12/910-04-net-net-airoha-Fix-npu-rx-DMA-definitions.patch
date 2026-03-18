@@ -1,0 +1,98 @@
+From patchwork Fri Jan  2 11:29:38 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Lorenzo Bianconi <lorenzo@kernel.org>
+X-Patchwork-Id: 14365037
+X-Patchwork-Delegate: kuba@kernel.org
+Received: from smtp.kernel.org (aws-us-west-2-korg-mail-1.web.codeaurora.org
+ [10.30.226.201])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id C1D512F5A10
+	for <netdev@vger.kernel.org>; Fri,  2 Jan 2026 11:30:16 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org;
+ arc=none smtp.client-ip=10.30.226.201
+ARC-Seal: i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1767353416; cv=none;
+ b=Izf6qiUcu4DQPQdo0ZqQxo3oCPgNQp36N/wTHCz/KikDWbaFNkrxxoHvfaXTFAsGFAqtCoyfwRfiI7uwqoB0NSx7ETVVykDRaRmGgzJRGVjritOlG18j9gnCoP6c19Kb2BqAuOfjX2mJzWmC3mAFdJiYeBxsxL+Wx5R6b6zV6jg=
+ARC-Message-Signature: i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1767353416; c=relaxed/simple;
+	bh=or02hWfFzsrtbur0hDbE8xSMzdZ9lK0cgMTmu6IuI1c=;
+	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:To:Cc;
+ b=bsxpbX0PHJ9BYzDwenon8J3tt65qomPkN/bfFTieTUaCkKzrL2qHksMMF+jjmpfIbM5INf8N8MrseExmd1+uUUELQTZT4u12UB8E7tkNfbw9hiDw6hQsnzYHHO79SCs1rfKh7MveKDDdcZ49yVYQlwioOJB50OD69ssBwjvkE9A=
+ARC-Authentication-Results: i=1; smtp.subspace.kernel.org;
+ dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org
+ header.b=BNAJOBvn; arc=none smtp.client-ip=10.30.226.201
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org
+ header.b="BNAJOBvn"
+Received: by smtp.kernel.org (Postfix) with ESMTPSA id CF640C116B1;
+	Fri,  2 Jan 2026 11:30:15 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=kernel.org;
+	s=k20201202; t=1767353416;
+	bh=or02hWfFzsrtbur0hDbE8xSMzdZ9lK0cgMTmu6IuI1c=;
+	h=From:Date:Subject:To:Cc:From;
+	b=BNAJOBvnChOOKtFTVFL8KxwB20Vn7X0ibQxbfoB34v8eD4R5njBLnXLefMLCnsVse
+	 vFJgObKrbjpCr1+msGtAbnS7c5TYCb74cbR1vKm/VK2jflGtCQBJMd8vnasiVwmmVg
+	 i0nNXvSXDsKM4kmjSz2VyoPtmPCHryOHasoMe57Hp3TcG4HYmPcSW7L3fnTCmcBr1h
+	 dL0HrBj5bRKfNgOtfS/W7vLp4WqsrJhUJQ/6Flyti5TooJZ4YAuKTR0k8A8mAA4nPE
+	 92cVOVLBoxBegoQXpXweOf87zVGXxKeWjLDkr4pij5WLnO8r34r13kyEVs7mF+o30V
+	 GiAzpM/Hpr9EQ==
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Fri, 02 Jan 2026 12:29:38 +0100
+Subject: [PATCH net] net: airoha: Fix npu rx DMA definitions
+Precedence: bulk
+X-Mailing-List: netdev@vger.kernel.org
+List-Id: <netdev.vger.kernel.org>
+List-Subscribe: <mailto:netdev+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:netdev+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Message-Id: 
+ <20260102-airoha-npu-dma-rx-def-fixes-v1-1-205fc6bf7d94@kernel.org>
+X-B4-Tracking: v=1; b=H4sIAAAAAAAC/x3MMQqAMAxA0auUzAbaIqJeRRxiGzWDVVIUQby7x
+ fHx4T+QWYUz9OYB5Uuy7KnAVQbCSmlhlFgM3vrGOuuRRPeVMB0nxo1Qb4w84yw3Z2xt3TruJuc
+ DQTkcyn8og2F83w/EDYPCbQAAAA==
+X-Change-ID: 20260102-airoha-npu-dma-rx-def-fixes-80481e9b12ca
+To: Andrew Lunn <andrew+netdev@lunn.ch>,
+ "David S. Miller" <davem@davemloft.net>, Eric Dumazet <edumazet@google.com>,
+ Paolo Abeni <pabeni@redhat.com>, Jakub Kicinski <kuba@kernel.org>
+Cc: netdev@vger.kernel.org, Lorenzo Bianconi <lorenzo@kernel.org>,
+ linux-arm-kernel@lists.infradead.org, linux-mediatek@lists.infradead.org
+X-Mailer: b4 0.14.2
+X-Patchwork-Delegate: kuba@kernel.org
+
+Fix typos in npu rx DMA descriptor definitions.
+
+Fixes: b3ef7bdec66fb ("net: airoha: Add airoha_offload.h header")
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ include/linux/soc/airoha/airoha_offload.h | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+
+---
+base-commit: dbf8fe85a16a33d6b6bd01f2bc606fc017771465
+change-id: 20260102-airoha-npu-dma-rx-def-fixes-80481e9b12ca
+
+Best regards,
+
+--- a/include/linux/soc/airoha/airoha_offload.h
++++ b/include/linux/soc/airoha/airoha_offload.h
+@@ -71,12 +71,12 @@ static inline void airoha_ppe_dev_check_
+ #define NPU_RX1_DESC_NUM	512
+ 
+ /* CTRL */
+-#define NPU_RX_DMA_DESC_LAST_MASK	BIT(29)
+-#define NPU_RX_DMA_DESC_LEN_MASK	GENMASK(28, 15)
+-#define NPU_RX_DMA_DESC_CUR_LEN_MASK	GENMASK(14, 1)
++#define NPU_RX_DMA_DESC_LAST_MASK	BIT(27)
++#define NPU_RX_DMA_DESC_LEN_MASK	GENMASK(26, 14)
++#define NPU_RX_DMA_DESC_CUR_LEN_MASK	GENMASK(13, 1)
+ #define NPU_RX_DMA_DESC_DONE_MASK	BIT(0)
+ /* INFO */
+-#define NPU_RX_DMA_PKT_COUNT_MASK	GENMASK(31, 28)
++#define NPU_RX_DMA_PKT_COUNT_MASK	GENMASK(31, 29)
+ #define NPU_RX_DMA_PKT_ID_MASK		GENMASK(28, 26)
+ #define NPU_RX_DMA_SRC_PORT_MASK	GENMASK(25, 21)
+ #define NPU_RX_DMA_CRSN_MASK		GENMASK(20, 16)

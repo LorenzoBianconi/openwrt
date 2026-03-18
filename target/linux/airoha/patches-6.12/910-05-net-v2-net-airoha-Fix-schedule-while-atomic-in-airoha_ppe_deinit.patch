@@ -1,0 +1,113 @@
+From patchwork Mon Jan  5 08:43:31 2026
+Content-Type: text/plain; charset="utf-8"
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+X-Patchwork-Submitter: Lorenzo Bianconi <lorenzo@kernel.org>
+X-Patchwork-Id: 14366424
+X-Patchwork-Delegate: kuba@kernel.org
+Received: from smtp.kernel.org (aws-us-west-2-korg-mail-1.web.codeaurora.org
+ [10.30.226.201])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by smtp.subspace.kernel.org (Postfix) with ESMTPS id 4376D312836
+	for <netdev@vger.kernel.org>; Mon,  5 Jan 2026 08:43:49 +0000 (UTC)
+Authentication-Results: smtp.subspace.kernel.org;
+ arc=none smtp.client-ip=10.30.226.201
+ARC-Seal: i=1; a=rsa-sha256; d=subspace.kernel.org; s=arc-20240116;
+	t=1767602629; cv=none;
+ b=B3TtbHTQf/CMpp96MGau2szyQOGFslMTs+5fYLyo3AH09UziuoCSJLhiSiZzYf+z27D35EDt79hpdPFw+d23V7/IyvSXCaz7Z1E7/uplQXStEbNAh2yGP7drzNbUTGkzJkXp1wq+Y9CRsKlhbJsvD78Qm82lE9DL/2CKb8BLIkE=
+ARC-Message-Signature: i=1; a=rsa-sha256; d=subspace.kernel.org;
+	s=arc-20240116; t=1767602629; c=relaxed/simple;
+	bh=waNyVge8NYPcsyHa3vlJh2SgD9ALMl/hI611CV/VDkE=;
+	h=From:Date:Subject:MIME-Version:Content-Type:Message-Id:To:Cc;
+ b=fMxm5jWjlGmNzvFZXD+Geyg1LJxnKzJSFXiud8AuW4XeepbEG3fkuSGyEWEC0tnmRI7rXN+FYZJZLt4tPBQX9adCPrPb5ISfLWY6VbLkBudiYGIhdq/qKur+XYT6OxOxk9cnDl+t4+ZAg5dRYWp8qaBDtg84rZ3eusy8l6F/+GU=
+ARC-Authentication-Results: i=1; smtp.subspace.kernel.org;
+ dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org
+ header.b=IQIVFs1r; arc=none smtp.client-ip=10.30.226.201
+Authentication-Results: smtp.subspace.kernel.org;
+	dkim=pass (2048-bit key) header.d=kernel.org header.i=@kernel.org
+ header.b="IQIVFs1r"
+Received: by smtp.kernel.org (Postfix) with ESMTPSA id 64E8CC116D0;
+	Mon,  5 Jan 2026 08:43:48 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=kernel.org;
+	s=k20201202; t=1767602629;
+	bh=waNyVge8NYPcsyHa3vlJh2SgD9ALMl/hI611CV/VDkE=;
+	h=From:Date:Subject:To:Cc:From;
+	b=IQIVFs1rpYvr1nF3+vIATUcJMMDPKv1fgAcx5+vn6ZOt1tEkEInaT+C43KDts5ptF
+	 Wh9XHOhlH9BCij0ZMd0PXurCD7ZYw8qu0Mtw/VY56pqg/boW7ZjzDCU9wpzuTxiACm
+	 J3R7HicmNMfftwoVA1Lpd0e5bQBPsp6gbaeuqHWsan9lkCU1KH1sIF8qTgZRoe1/Ny
+	 ZMxBv/vuwuTMJ3kWwKCaZBCs010vTyL2guA8lzkKNJ0kBqR7NKs/5EDbL/v9quVdF9
+	 W3r/jhwD5UUbGOOF3kIJr9PBxuqsiQAitYSfvCXXho1SOv7LUksZYu4JbjVTnKJ8UD
+	 bDGowLfvo0e3A==
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Mon, 05 Jan 2026 09:43:31 +0100
+Subject: [PATCH net v2] net: airoha: Fix schedule while atomic in
+ airoha_ppe_deinit()
+Precedence: bulk
+X-Mailing-List: netdev@vger.kernel.org
+List-Id: <netdev.vger.kernel.org>
+List-Subscribe: <mailto:netdev+subscribe@vger.kernel.org>
+List-Unsubscribe: <mailto:netdev+unsubscribe@vger.kernel.org>
+MIME-Version: 1.0
+Message-Id: <20260105-airoha-fw-ethtool-v2-1-3b32b158cc31@kernel.org>
+X-B4-Tracking: v=1; b=H4sIAAAAAAAC/32NQQ6CMBBFr0JmbQ0drUFX3sOwKO1AJxJKpgQ1p
+ He3cgDzV+8n//0NEglTglu1gdDKieNUAA8VuGCngRT7woA1Go14UpYlBqv6l6IlLDGOCnVvzl2
+ N7tp0UHazUM/v3floCwdOS5TPfrHqX/vPtmpV4juvzaVxpjH3J8lE4zHKAG3O+QutZT55swAAA
+ A==
+X-Change-ID: 20251223-airoha-fw-ethtool-21f54b02c98b
+To: Andrew Lunn <andrew+netdev@lunn.ch>,
+ "David S. Miller" <davem@davemloft.net>, Eric Dumazet <edumazet@google.com>,
+ Jakub Kicinski <kuba@kernel.org>, Paolo Abeni <pabeni@redhat.com>,
+ Lorenzo Bianconi <lorenzo@kernel.org>
+Cc: linux-arm-kernel@lists.infradead.org,
+ linux-mediatek@lists.infradead.org, netdev@vger.kernel.org
+X-Mailer: b4 0.14.2
+X-Patchwork-Delegate: kuba@kernel.org
+
+airoha_ppe_deinit() runs airoha_npu_ppe_deinit() in atomic context.
+airoha_npu_ppe_deinit routine allocates ppe_data buffer with GFP_KERNEL
+flag. Rely on rcu_replace_pointer in airoha_ppe_deinit routine in order
+to fix schedule while atomic issue in airoha_npu_ppe_deinit() since we
+do not need atomic context there.
+
+Fixes: 00a7678310fe3 ("net: airoha: Introduce flowtable offload support")
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+Changes in v2:
+- Update commit log.
+- Link to v1: https://lore.kernel.org/r/20251223-airoha-fw-ethtool-v1-1-1dbd1568c585@kernel.org
+---
+ drivers/net/ethernet/airoha/airoha_ppe.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+
+---
+base-commit: c303e8b86d9dbd6868f5216272973292f7f3b7f1
+change-id: 20251223-airoha-fw-ethtool-21f54b02c98b
+
+Best regards,
+
+diff --git a/drivers/net/ethernet/airoha/airoha_ppe.c b/drivers/net/ethernet/airoha/airoha_ppe.c
+index 0caabb0c3aa06948e46ad087c50eba5babc81994..2221bafaf7c9fed73dcf8d30ff3b1c5eecc463d4 100644
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -1547,13 +1547,16 @@ void airoha_ppe_deinit(struct airoha_eth *eth)
+ {
+ 	struct airoha_npu *npu;
+ 
+-	rcu_read_lock();
+-	npu = rcu_dereference(eth->npu);
++	mutex_lock(&flow_offload_mutex);
++
++	npu = rcu_replace_pointer(eth->npu, NULL,
++				  lockdep_is_held(&flow_offload_mutex));
+ 	if (npu) {
+ 		npu->ops.ppe_deinit(npu);
+ 		airoha_npu_put(npu);
+ 	}
+-	rcu_read_unlock();
++
++	mutex_unlock(&flow_offload_mutex);
+ 
+ 	rhashtable_destroy(&eth->ppe->l2_flows);
+ 	rhashtable_destroy(&eth->flow_table);
