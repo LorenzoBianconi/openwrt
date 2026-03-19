@@ -505,3 +505,29 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	} ops;
  };
  
+--- a/drivers/net/ethernet/airoha/airoha_ppe.c
++++ b/drivers/net/ethernet/airoha/airoha_ppe.c
+@@ -163,6 +163,7 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+ 
+ 		for (p = 0; p < ARRAY_SIZE(eth->ports); p++) {
+ 			struct airoha_gdm_port *port = eth->ports[p];
++			int j;
+ 
+ 			airoha_fe_rmw(eth, REG_PPE_MTU(i, p),
+ 				      FP0_EGRESS_MTU_MASK |
+@@ -174,7 +175,14 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+ 			if (!port)
+ 				continue;
+ 
+-			airoha_ppe_set_cpu_port(port->dev, i);
++			for (j = 0; j < ARRAY_SIZE(port->devs); j++) {
++				struct airoha_gdm_dev *dev = port->devs[j];
++
++				if (!dev)
++					continue;
++
++				airoha_ppe_set_cpu_port(dev, i);
++			}
+ 		}
+ 	}
+ }

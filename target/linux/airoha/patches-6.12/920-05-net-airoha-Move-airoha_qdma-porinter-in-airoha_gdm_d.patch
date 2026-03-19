@@ -20,7 +20,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -79,9 +79,10 @@ static bool airhoa_is_phy_external(struc
+@@ -79,9 +79,10 @@ static bool airoha_is_phy_external(struc
  }
  #endif
  
@@ -32,7 +32,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	struct airoha_eth *eth = dev->eth;
  	u32 val, reg;
  
- 	reg = airhoa_is_lan_gdm_port(port) ? REG_FE_LAN_MAC_H
+ 	reg = airoha_is_lan_gdm_port(port) ? REG_FE_LAN_MAC_H
 @@ -93,7 +94,7 @@ static void airoha_set_macaddr(struct ai
  	airoha_fe_wr(eth, REG_FE_MAC_LMIN(reg), val);
  	airoha_fe_wr(eth, REG_FE_MAC_LMAX(reg), val);
@@ -127,21 +127,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u32 val, pse_port, chan, nbq;
  	int src_port;
  
-@@ -1787,14 +1788,14 @@ static int airoha_dev_init(struct net_de
- {
- 	struct airoha_gdm_dev *dev = netdev_priv(netdev);
- 	struct airoha_gdm_port *port = dev->port;
--	struct airoha_eth *eth = port->eth;
-+	struct airoha_eth *eth = dev->eth;
- 	u32 fe_cpu_port;
- 	u8 ppe_id;
+@@ -1764,9 +1766,9 @@ static int airoha_dev_init(struct net_device *netdev)
+ 	int i;
  
-	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
+ 	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
 -	port->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
--	netdev->irq = port->qdma->irq_banks[0].irq;
+-	dev->dev->irq = port->qdma->irq_banks[0].irq;
 -	airoha_set_macaddr(port, netdev->dev_addr);
 +	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
-+	netdev->irq = dev->qdma->irq_banks[0].irq;
++	dev->dev->irq = dev->qdma->irq_banks[0].irq;
 +	airoha_set_macaddr(dev, netdev->dev_addr);
  
  	switch (port->id) {
@@ -155,15 +149,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			if (err)
  				return err;
  		}
-@@ -1810,7 +1810,7 @@ static int airoha_dev_init(struct net_de
- 		}
- 		fallthrough;
- 	default: {
--		u8 qdma_id = port->qdma - &eth->qdma[0];
-+		u8 qdma_id = dev->qdma - &eth->qdma[0];
+@@ -1785,7 +1787,7 @@ static int airoha_dev_init(struct net_device *netdev)
+ 	}
  
- 		/* For PPE1 select cpu port according to the running QDMA. */
- 		fe_cpu_port = qdma_id ? FE_PSE_PORT_CDM2 : FE_PSE_PORT_CDM1;
+ 	for (i = 0; i < eth->soc->num_ppe; i++)
+-		airoha_ppe_set_cpu_port(port, i);
++		airoha_ppe_set_cpu_port(dev, i);
+ 
+ 	return 0;
+ }
 @@ -1840,7 +1841,7 @@ static void airoha_dev_get_stats64(struc
  	struct airoha_gdm_port *port = dev->port;
  	unsigned int start;
@@ -187,8 +181,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #endif
  }
  
--static int airoha_get_fe_port(struct airoha_gdm_port *port)
-+static int airoha_get_fe_port(struct airoha_gdm_dev *dev)
+-int airoha_get_fe_port(struct airoha_gdm_port *port)
++int airoha_get_fe_port(struct airoha_gdm_dev *dev)
  {
 -	struct airoha_qdma *qdma = port->qdma;
 -	struct airoha_eth *eth = qdma->eth;
@@ -279,7 +273,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	airoha_qdma_rmw(port->qdma, REG_CHAN_QOS_MODE(channel >> 3),
 +	airoha_qdma_rmw(dev->qdma, REG_CHAN_QOS_MODE(channel >> 3),
  			CHAN_QOS_MODE_MASK(channel),
- 			mode << __ffs(CHAN_QOS_MODE_MASK(channel)));
+ 			__field_prep(CHAN_QOS_MODE_MASK(channel), mode));
  
 @@ -2260,9 +2257,9 @@ static int airoha_qdma_get_tx_ets_stats(
  {
@@ -354,45 +348,38 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	if (!tc_can_offload(netdev))
  		return -EOPNOTSUPP;
-@@ -2900,7 +2900,7 @@ static int airoha_dev_setup_tc_block_cb(
- 	struct airoha_gdm_dev *dev = container_of(config, struct airoha_gdm_dev,
- 						  phylink_config);
- 	struct airoha_gdm_port *port = dev->port;
--	struct airoha_eth *eth = port->eth;
-+	struct airoha_eth *eth = dev->eth;
- 	u32 frag_size_tx, frag_size_rx;
- 
- 	switch (speed) {
-@@ -3000,7 +3000,7 @@ static int airoha_dev_setup_tc_block_cb(
- 	dev->dev = netdev;
- 	dev->port = port;
- 	port->dev = dev;
--	port->eth = eth;
-+	dev->eth = eth;
- 
- #if defined(CONFIG_PCS_AIROHA)
- 	if (airhoa_is_phy_external(port)) {
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -533,6 +533,8 @@ struct airoha_qdma {
+@@ -533,6 +533,7 @@ struct airoha_qdma {
  
  struct airoha_gdm_dev {
  	struct airoha_gdm_port *port;
 +	struct airoha_qdma *qdma;
-+	struct airoha_eth *eth;
  	struct net_device *dev;
  
  #if defined(CONFIG_PCS_AIROHA)
-@@ -533,8 +533,6 @@ struct airoha_qdma {
+@@ -533,7 +533,6 @@ struct airoha_qdma {
  };
  
  struct airoha_gdm_port {
 -	struct airoha_qdma *qdma;
--	struct airoha_eth *eth;
  	struct airoha_gdm_dev *dev;
  	int id;
  
-@@ -666,7 +666,7 @@ void airoha_ppe_check_skb(struct airoha_
+@@ -651,18 +651,18 @@ static inline bool airoha_is_7583(struct airoha_eth *eth)
+ 	return eth->soc->version == 0x7583;
+ }
+ 
+-int airoha_get_fe_port(struct airoha_gdm_port *port);
++int airoha_get_fe_port(struct airoha_gdm_dev *dev);
+ bool airoha_is_valid_gdm_dev(struct airoha_eth *eth,
+ 			     struct airoha_gdm_dev *dev);
+ 
+-void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id);
++void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id);
+ bool airoha_ppe_is_enabled(struct airoha_eth *eth, int index);
+ void airoha_ppe_check_skb(struct airoha_ppe_dev *dev, struct sk_buff *skb,
+ 			  u16 hash, bool rx_wlan);
  int airoha_ppe_setup_tc_block_cb(struct airoha_ppe_dev *dev, void *type_data);
  int airoha_ppe_init(struct airoha_eth *eth);
  void airoha_ppe_deinit(struct airoha_eth *eth);
@@ -403,7 +390,30 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  						  u32 hash);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -1400,11 +1400,12 @@ void airoha_ppe_check_skb(struct airoha_
+@@ -85,10 +85,10 @@ static u32 airoha_ppe_get_timestamp(struct airoha_ppe *ppe)
+ 	return FIELD_GET(AIROHA_FOE_IB1_BIND_TIMESTAMP, timestamp);
+ }
+ 
+-void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id)
++void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id)
+ {
+-	struct airoha_qdma *qdma = port->qdma;
+-	u8 fport = airoha_get_fe_port(port);
++	struct airoha_qdma *qdma = dev->qdma;
++	u8 fport = airoha_get_fe_port(dev);
+ 	struct airoha_eth *eth = qdma->eth;
+ 	u8 qdma_id = qdma - &eth->qdma[0];
+ 	u32 fe_cpu_port;
+@@ -174,7 +174,7 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+ 			if (!port)
+ 				continue;
+ 
+-			airoha_ppe_set_cpu_port(port, i);
++			airoha_ppe_set_cpu_port(port->dev, i);
+ 		}
+ 	}
+ }
+@@ -1421,11 +1421,12 @@ void airoha_ppe_check_skb(struct airoha_ppe_dev *dev, struct sk_buff *skb,
  	airoha_ppe_foe_insert_entry(ppe, skb, hash, rx_wlan);
  }
  

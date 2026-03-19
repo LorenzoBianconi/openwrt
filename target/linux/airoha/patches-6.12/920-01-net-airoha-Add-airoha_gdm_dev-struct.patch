@@ -161,7 +161,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -1778,9 +1783,10 @@ static int airhoha_set_gdm2_loopback(str
+@@ -1751,16 +1756,17 @@ static int airhoha_set_gdm2_loopback(struct airoha_gdm_port *port)
  	return 0;
  }
  
@@ -169,18 +169,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +static int airoha_dev_init(struct net_device *netdev)
  {
 -	struct airoha_gdm_port *port = netdev_priv(dev);
+-	struct airoha_eth *eth = port->eth;
 +	struct airoha_gdm_dev *dev = netdev_priv(netdev);
 +	struct airoha_gdm_port *port = dev->port;
-	struct airoha_eth *eth = port->eth;
-	u32 fe_cpu_port;
-	u8 ppe_id;
-@@ -1778,8 +1783,8 @@ static int airhoha_set_gdm2_loopback(str
++	struct airoha_eth *eth = dev->eth;
+ 	int i;
  
  	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
  	port->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
 -	port->dev->irq = port->qdma->irq_banks[0].irq;
 -	airoha_set_macaddr(port, dev->dev_addr);
-+	netdev->irq = port->qdma->irq_banks[0].irq;
++	dev->dev->irq = port->qdma->irq_banks[0].irq;
 +	airoha_set_macaddr(port, netdev->dev_addr);
  
  	switch (port->id) {
@@ -492,7 +491,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	struct airoha_gdm_dev *dev = container_of(config, struct airoha_gdm_dev,
 +						  phylink_config);
 +	struct airoha_gdm_port *port = dev->port;
-+	struct airoha_eth *eth = port->eth;
++	struct airoha_eth *eth = dev->eth;
  	u32 frag_size_tx, frag_size_rx;
  
  	switch (speed) {
@@ -613,7 +612,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	dev->dev = netdev;
 +	dev->port = port;
 +	port->dev = dev;
-+	port->eth = eth;
++	dev->eth = eth;
 +
 +#if defined(CONFIG_PCS_AIROHA)
 +	if (airhoa_is_phy_external(port)) {
@@ -791,6 +790,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +struct airoha_gdm_dev {
 +	struct airoha_gdm_port *port;
 +	struct net_device *dev;
++	struct airoha_eth *eth;
 +
 +#if defined(CONFIG_PCS_AIROHA)
 +	struct phylink *phylink;
@@ -801,7 +801,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +
  struct airoha_gdm_port {
  	struct airoha_qdma *qdma;
-	struct airoha_eth *eth;
+-	struct airoha_eth *eth;
 -	struct net_device *dev;
 +	struct airoha_gdm_dev *dev;
  	int id;
@@ -816,9 +816,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	DECLARE_BITMAP(qos_sq_bmap, AIROHA_NUM_QOS_CHANNELS);
 @@ -651,8 +657,8 @@ static inline bool airoha_is_7583(struct
- 	return eth->soc->version == 0x7583;
  }
  
+ int airoha_get_fe_port(struct airoha_gdm_port *port);
 -bool airoha_is_valid_gdm_port(struct airoha_eth *eth,
 -			      struct airoha_gdm_port *port);
 +bool airoha_is_valid_gdm_dev(struct airoha_eth *eth,

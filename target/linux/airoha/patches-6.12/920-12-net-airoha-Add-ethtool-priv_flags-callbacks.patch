@@ -32,16 +32,14 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	netif_tx_start_all_queues(netdev);
  	err = airoha_set_vip_for_gdm_port(dev, true);
  	if (err)
-@@ -1792,11 +1797,74 @@ static int airoha_enable_gdm2_loopback(s
+@@ -1757,36 +1762,113 @@ static int airoha_enable_gdm2_loopback(struct airoha_gdm_dev *dev)
  	return 0;
  }
  
 -static int airoha_dev_init(struct net_device *netdev)
-+static int airhoa_disable_gdm2_loopback(struct airoha_gdm_dev *dev)
- {
--	struct airoha_gdm_dev *dev = netdev_priv(netdev);
--	struct airoha_gdm_port *port = dev->port;
- 	struct airoha_eth *eth = dev->eth;
++static int airoha_disable_gdm2_loopback(struct airoha_gdm_dev *dev)
++{
++	struct airoha_eth *eth = dev->eth;
 +	u32 pse_port;
 +	int src_port;
 +
@@ -102,85 +100,57 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	return NULL;
 +}
 +
-+static void airoha_dev_set_qdma(struct net_device *netdev)
-+{
-+	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-+	struct airoha_gdm_port *port = dev->port;
-+	struct airoha_eth *eth = dev->eth;
- 	u32 fe_cpu_port;
- 	u8 ppe_id;
++static void airoha_dev_set_qdma(struct airoha_gdm_dev *dev)
+ {
+-	struct airoha_gdm_dev *dev = netdev_priv(netdev);
+-	struct airoha_gdm_port *port = dev->port;
+ 	struct airoha_eth *eth = dev->eth;
+ 	int i;
  
-@@ -2000,36 +2000,51 @@ static int airoha_enable_gdm2_loopback(
- 	switch (port->id) {
- 	case AIROHA_GDM3_IDX:
- 	case AIROHA_GDM4_IDX:
-+	case AIROHA_GDM2_IDX:
-+		if (airoha_ppe_is_enabled(eth, 1)) {
-+			/* For PPE2 always use secondary cpu port. */
-+			fe_cpu_port = FE_PSE_PORT_CDM2;
-+			ppe_id = 1;
-+			break;
-+		}
-+		fallthrough;
-+	default:
-+		u8 qdma_id = dev->qdma - &eth->qdma[0];
+ 	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
+ 	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_dev(dev)];
+ 	dev->dev->irq = dev->qdma->irq_banks[0].irq;
+-	airoha_set_macaddr(dev, netdev->dev_addr);
 +
-+		/* For PPE1 select cpu port according to the running QDMA. */
-+		fe_cpu_port = qdma_id ? FE_PSE_PORT_CDM2 : FE_PSE_PORT_CDM1;
-+		ppe_id = 0;
-+		break;
-+	}
-+
-+	airoha_fe_rmw(eth, REG_PPE_DFT_CPORT0(ppe_id),
-+		      DFT_CPORT_MASK(port->id),
-+		      __field_prep(DFT_CPORT_MASK(port->id), fe_cpu_port));
++	for (i = 0; i < eth->soc->num_ppe; i++)
++		airoha_ppe_set_cpu_port(dev, i);
 +}
 +
 +static int airoha_dev_init(struct net_device *netdev)
 +{
 +	struct airoha_gdm_dev *dev = netdev_priv(netdev);
 +	struct airoha_gdm_port *port = dev->port;
-+
-+	switch (port->id) {
-+	case AIROHA_GDM3_IDX:
-+	case AIROHA_GDM4_IDX:
+ 
+ 	switch (port->id) {
++	case AIROHA_GDM2_IDX:
++		/* GDM2 is always used as wan */
++		dev->flags |= PRIV_FLAG_WAN;
++		break;
+ 	case AIROHA_GDM3_IDX:
+-	case AIROHA_GDM4_IDX:
+-		/* If GDM2 is active we can't enable loopback */
+-		if (!eth->ports[1]) {
++	case AIROHA_GDM4_IDX: {
 +		struct airoha_eth *eth = dev->eth;
 +
- 		/* If GDM2 is active we can't enable loopback */
--		if (!eth->ports[1]) {
 +		if (!eth->ports[1] && !airoha_get_wan_gdm_dev(eth)) {
  			int err;
  
  			err = airoha_enable_gdm2_loopback(dev);
  			if (err)
  				return err;
- 		}
--		fallthrough;
--	case AIROHA_GDM2_IDX:
--		if (airoha_ppe_is_enabled(eth, 1)) {
--			/* For PPE2 always use secondary cpu port. */
--			fe_cpu_port = FE_PSE_PORT_CDM2;
--			ppe_id = 1;
--			break;
--		}
--		fallthrough;
--	default: {
--		u8 qdma_id = dev->qdma - &eth->qdma[0];
--
--		/* For PPE1 select cpu port according to the running QDMA. */
--		fe_cpu_port = qdma_id ? FE_PSE_PORT_CDM2 : FE_PSE_PORT_CDM1;
--		ppe_id = 0;
--		break;
--	}
--	}
--
--	airoha_fe_rmw(eth, REG_PPE_DFT_CPORT0(ppe_id),
--		      DFT_CPORT_MASK(port->id),
--		      __field_prep(DFT_CPORT_MASK(port->id), fe_cpu_port));
-+		break;
-+	}
 +
-+	airoha_dev_set_qdma(netdev);
++			dev->flags |= PRIV_FLAG_WAN;
+ 		}
+ 		break;
++	}
+ 	default:
+ 		break;
+ 	}
+ 
+-	for (i = 0; i < eth->soc->num_ppe; i++)
+-		airoha_ppe_set_cpu_port(dev, i);
++	airoha_dev_set_qdma(dev);
 +	airoha_set_macaddr(dev, netdev->dev_addr);
  
  	return 0;
@@ -238,7 +208,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		case AIROHA_GDM4_IDX: {
 +			int err;
 +
-+			err = airhoa_disable_gdm2_loopback(dev);
++			err = airoha_disable_gdm2_loopback(dev);
 +			if (err)
 +				return err;
 +			break;
@@ -249,7 +219,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		dev->flags &= ~PRIV_FLAG_WAN;
 +	}
 +
-+	airoha_dev_set_qdma(netdev);
++	airoha_dev_set_qdma(dev);
 +
 +	return 0;
 +}
@@ -351,13 +321,13 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  struct airoha_gdm_dev {
  	struct airoha_gdm_port *port;
  	struct airoha_qdma *qdma;
- 	struct airoha_eth *eth;
  	struct net_device *dev;
+ 	struct airoha_eth *eth;
  
 +	u32 flags;
  	int nbq;
- };
  
+ #if defined(CONFIG_PCS_AIROHA)
 @@ -645,13 +650,7 @@ u32 airoha_rmw(void __iomem *base, u32 o
  
  static inline bool airoha_is_lan_gdm_dev(struct airoha_gdm_dev *dev)

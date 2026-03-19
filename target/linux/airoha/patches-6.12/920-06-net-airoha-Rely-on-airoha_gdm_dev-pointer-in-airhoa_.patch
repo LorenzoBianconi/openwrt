@@ -40,7 +40,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
 -	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
 +	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_dev(dev)];
- 	netdev->irq = dev->qdma->irq_banks[0].irq;
+ 	dev->dev->irq = dev->qdma->irq_banks[0].irq;
  	airoha_set_macaddr(dev, netdev->dev_addr);
  
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
