@@ -187,27 +187,27 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  				 struct device_node *np, int index)
  {
 @@ -2938,6 +3067,12 @@ static int airoha_alloc_gdm_port(struct
- 	if (err)
- 		return err;
+	port->id = id;
+	eth->ports[p] = port;
  
 +	if (airhoa_is_phy_external(port)) {
 +		err = airoha_setup_phylink(dev);
 +		if (err)
-+			goto free_metadata_dst;
++			return err;
 +	}
 +
- 	err = register_netdev(dev);
- 	if (err)
- 		goto free_metadata_dst;
+ 	return airoha_metadata_dst_alloc(port);
+ }
+ 
 @@ -3053,6 +3188,10 @@ error_hw_cleanup:
- 		if (port && port->dev->reg_state == NETREG_REGISTERED) {
+ 
+ 		if (port->dev->reg_state == NETREG_REGISTERED)
  			unregister_netdev(port->dev);
- 			airoha_metadata_dst_free(port);
-+			if (airhoa_is_phy_external(port)) {
-+				phylink_destroy(port->phylink);
-+				airoha_pcs_destroy(port->pcs);
-+			}
- 		}
++		if (airhoa_is_phy_external(port)) {
++			phylink_destroy(port->phylink);
++			airoha_pcs_destroy(port->pcs);
++		}
+		airoha_metadata_dst_free(port);
  	}
  	free_netdev(eth->napi_dev);
 @@ -3080,6 +3219,10 @@ static void airoha_remove(struct platfor

@@ -75,9 +75,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct airoha_gdm_port *port = dev->port;
 -	struct airoha_qdma *qdma = port->qdma;
 +	struct airoha_qdma *qdma = dev->qdma;
+	u32 pse_port = FE_PSE_PORT_PPE1;
  
  #if defined(CONFIG_PCS_AIROHA)
- 	if (airhoa_is_phy_external(port)) {
 @@ -1649,7 +1651,7 @@ static int airoha_dev_open(struct net_de
  #endif
  
@@ -87,11 +87,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	if (err)
  		return err;
  
-@@ -1677,12 +1679,11 @@ static int airoha_dev_open(struct net_de
- static int airoha_dev_stop(struct net_device *netdev)
+@@ -1677,11 +1679,11 @@ static int airoha_dev_open(struct net_de
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
--	struct airoha_gdm_port *port = dev->port;
+ 	struct airoha_gdm_port *port = dev->port;
 -	struct airoha_qdma *qdma = port->qdma;
 +	struct airoha_qdma *qdma = dev->qdma;
  	int i, err;
@@ -128,17 +127,21 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u32 val, pse_port, chan, nbq;
  	int src_port;
  
-@@ -1787,12 +1788,12 @@ static int airoha_dev_init(struct net_de
+@@ -1787,14 +1788,14 @@ static int airoha_dev_init(struct net_de
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
  	struct airoha_gdm_port *port = dev->port;
--	struct airoha_qdma *qdma = port->qdma;
-+	struct airoha_qdma *qdma = dev->qdma;
- 	struct airoha_eth *eth = qdma->eth;
- 	u32 pse_port, fe_cpu_port;
+-	struct airoha_eth *eth = port->eth;
++	struct airoha_eth *eth = dev->eth;
+ 	u32 fe_cpu_port;
  	u8 ppe_id;
  
+	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
+-	port->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
+-	netdev->irq = port->qdma->irq_banks[0].irq;
 -	airoha_set_macaddr(port, netdev->dev_addr);
++	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
++	netdev->irq = dev->qdma->irq_banks[0].irq;
 +	airoha_set_macaddr(dev, netdev->dev_addr);
  
  	switch (port->id) {
@@ -152,6 +155,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			if (err)
  				return err;
  		}
+@@ -1810,7 +1810,7 @@ static int airoha_dev_init(struct net_de
+ 		}
+ 		fallthrough;
+ 	default: {
+-		u8 qdma_id = port->qdma - &eth->qdma[0];
++		u8 qdma_id = dev->qdma - &eth->qdma[0];
+ 
+ 		/* For PPE1 select cpu port according to the running QDMA. */
+ 		fe_cpu_port = qdma_id ? FE_PSE_PORT_CDM2 : FE_PSE_PORT_CDM1;
 @@ -1840,7 +1841,7 @@ static void airoha_dev_get_stats64(struc
  	struct airoha_gdm_port *port = dev->port;
  	unsigned int start;
@@ -342,70 +354,41 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	if (!tc_can_offload(netdev))
  		return -EOPNOTSUPP;
-@@ -3037,6 +3031,7 @@ static int airoha_setup_phylink(struct n
- #endif
+@@ -2900,7 +2900,7 @@ static int airoha_dev_setup_tc_block_cb(
+ 	struct airoha_gdm_dev *dev = container_of(config, struct airoha_gdm_dev,
+ 						  phylink_config);
+ 	struct airoha_gdm_port *port = dev->port;
+-	struct airoha_eth *eth = port->eth;
++	struct airoha_eth *eth = dev->eth;
+ 	u32 frag_size_tx, frag_size_rx;
  
- static int airoha_alloc_gdm_device(struct airoha_eth *eth,
-+				   struct airoha_qdma *qdma,
- 				   struct airoha_gdm_port *port,
- 				   struct device_node *np)
- {
-@@ -3062,7 +3057,7 @@ static int airoha_alloc_gdm_device(struc
- 	netdev->features |= netdev->hw_features;
- 	netdev->vlan_features = netdev->hw_features;
- 	netdev->dev.of_node = np;
--	netdev->irq = port->qdma->irq_banks[0].irq;
-+	netdev->irq = qdma->irq_banks[0].irq;
- 	SET_NETDEV_DEV(netdev, eth->dev);
- 
- 	/* reserve hw queues for HTB offloading */
-@@ -3082,6 +3077,7 @@ static int airoha_alloc_gdm_device(struc
- 
- 	dev = netdev_priv(netdev);
+ 	switch (speed) {
+@@ -3000,7 +3000,7 @@ static int airoha_dev_setup_tc_block_cb(
  	dev->dev = netdev;
-+	dev->qdma = qdma;
  	dev->port = port;
  	port->dev = dev;
- 	dev->eth = eth;
-@@ -3094,6 +3090,7 @@ static int airoha_alloc_gdm_port(struct
- {
- 	const __be32 *id_ptr = of_get_property(np, "reg", NULL);
- 	struct airoha_gdm_port *port;
-+	struct airoha_qdma *qdma;
- 	int err, p;
- 	u32 id;
+-	port->eth = eth;
++	dev->eth = eth;
  
-@@ -3119,7 +3116,7 @@ static int airoha_alloc_gdm_port(struct
- 	if (!port)
- 		return -ENOMEM;
- 
--	port->qdma = &eth->qdma[index % AIROHA_MAX_NUM_QDMA];
-+	qdma = &eth->qdma[index % AIROHA_MAX_NUM_QDMA];
- 	u64_stats_init(&port->stats.syncp);
- 	spin_lock_init(&port->stats.lock);
- 	port->id = id;
-@@ -3137,7 +3134,7 @@ static int airoha_alloc_gdm_port(struct
- 	}
- #endif
- 
--	return airoha_alloc_gdm_device(eth, port, np);
-+	return airoha_alloc_gdm_device(eth, qdma, port, np);
- }
- 
- static int airoha_register_gdm_devices(struct airoha_eth *eth)
+ #if defined(CONFIG_PCS_AIROHA)
+ 	if (airhoa_is_phy_external(port)) {
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -533,12 +533,12 @@ struct airoha_qdma {
+@@ -533,6 +533,8 @@ struct airoha_qdma {
  
  struct airoha_gdm_dev {
  	struct airoha_gdm_port *port;
 +	struct airoha_qdma *qdma;
++	struct airoha_eth *eth;
  	struct net_device *dev;
- 	struct airoha_eth *eth;
+ 
+ #if defined(CONFIG_PCS_AIROHA)
+@@ -533,8 +533,6 @@ struct airoha_qdma {
  };
  
  struct airoha_gdm_port {
 -	struct airoha_qdma *qdma;
+-	struct airoha_eth *eth;
  	struct airoha_gdm_dev *dev;
  	int id;
  

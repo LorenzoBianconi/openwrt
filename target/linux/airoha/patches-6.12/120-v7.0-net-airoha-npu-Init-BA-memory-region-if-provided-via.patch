@@ -33,5 +33,5 @@ index 22f72c146065..a56b3780bb62 100644
  	return airoha_npu_wlan_msg_send(npu, 0, cmd, &val, sizeof(val),
  					GFP_KERNEL);
 -- 
-2.51.0
+2.53.0
 

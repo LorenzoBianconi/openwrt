@@ -1,26 +1,29 @@
-From ae628c9e5b16c88866d225c8cc2a390c88aac4e1 Mon Sep 17 00:00:00 2001
-Message-ID: <ae628c9e5b16c88866d225c8cc2a390c88aac4e1.1771966444.git.lorenzo@kernel.org>
-In-Reply-To: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
-References: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
+From bf3471e6e6c02137dc0d26caa783ac1849f9aab8 Mon Sep 17 00:00:00 2001
 From: Lorenzo Bianconi <lorenzo@kernel.org>
-Date: Tue, 23 Dec 2025 09:04:20 +0100
-Subject: [bpf-next 07/16] net: airoha: Fix GDM2 loopback configuration for USB
- serdes
+Date: Fri, 6 Mar 2026 09:07:27 +0100
+Subject: [PATCH] net: airoha: Make flow control source port mapping dependent
+ on nbq parameter
 
-This is a preliminary patch in order to fix Flow Control source port
-mapping for USB serdes since nbq parameter needs to be read from DTS.
+Flow control source port mapping for USB serdes needs to be configured
+according to the GDM port nbq parameter. This is a preliminary patch
+since nbq parameter is specific for the given port serdes and needs to
+be read from the DTS (in the current codebase is assigned statically).
 
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Link: https://patch.msgid.link/20260306-airoha-fix-loopback-for-usb-serdes-v2-1-319de9c96826@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 ---
  drivers/net/ethernet/airoha/airoha_eth.c  | 10 ++++++----
  drivers/net/ethernet/airoha/airoha_regs.h |  5 +----
  2 files changed, 7 insertions(+), 8 deletions(-)
 
+diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c
+index 09acbe669536..7b47d9e066ce 100644
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1776,10 +1776,12 @@ static int airhoha_set_gdm2_loopback(str
+@@ -1729,10 +1729,12 @@ static int airhoha_set_gdm2_loopback(struct airoha_gdm_port *port)
  		      SP_CPORT_MASK(val),
- 		      FE_PSE_PORT_CDM2 << __ffs(SP_CPORT_MASK(val)));
+ 		      __field_prep(SP_CPORT_MASK(val), FE_PSE_PORT_CDM2));
  
 -	if (port->id != AIROHA_GDM3_IDX && airoha_is_7581(eth))
 -		airoha_fe_rmw(eth, REG_SRC_PORT_FC_MAP6,
@@ -30,14 +33,16 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		u32 mask = FC_ID_OF_SRC_PORT_MASK(nbq);
 +
 +		airoha_fe_rmw(eth, REG_SRC_PORT_FC_MAP6, mask,
-+			      AIROHA_GDM2_IDX << __ffs(mask));
++			      __field_prep(mask, AIROHA_GDM2_IDX));
 +	}
  
  	return 0;
  }
+diff --git a/drivers/net/ethernet/airoha/airoha_regs.h b/drivers/net/ethernet/airoha/airoha_regs.h
+index ed4e3407f4a0..29878b954c77 100644
 --- a/drivers/net/ethernet/airoha/airoha_regs.h
 +++ b/drivers/net/ethernet/airoha/airoha_regs.h
-@@ -388,10 +388,7 @@
+@@ -376,10 +376,7 @@
  #define SP_CPORT_MASK(_n)		GENMASK(3 + ((_n) << 2), ((_n) << 2))
  
  #define REG_SRC_PORT_FC_MAP6		0x2298
@@ -49,3 +54,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  #define REG_CDM5_RX_OQ1_DROP_CNT	0x29d4
  
+-- 
+2.53.0
+

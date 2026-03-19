@@ -90,30 +90,30 @@ Signed-off-by: Mikhail Kshevetskiy <mikhail.kshevetskiy@iopsys.eu>
  static int airoha_alloc_gdm_port(struct airoha_eth *eth,
  				 struct device_node *np, int index)
 @@ -3070,11 +3080,13 @@ static int airoha_alloc_gdm_port(struct
- 	if (err)
- 		return err;
+ 	port->id = id;
+ 	eth->ports[p] = port;
  
 +#if defined(CONFIG_PCS_AIROHA)
  	if (airhoa_is_phy_external(port)) {
  		err = airoha_setup_phylink(dev);
  		if (err)
- 			goto free_metadata_dst;
+ 			return err;
  	}
 +#endif
  
- 	err = register_netdev(dev);
- 	if (err)
+ 	return airoha_metadata_dst_alloc(port);
+ }
 @@ -3191,10 +3203,12 @@ error_hw_cleanup:
- 		if (port && port->dev->reg_state == NETREG_REGISTERED) {
+ 
+ 		if (port->dev->reg_state == NETREG_REGISTERED)
  			unregister_netdev(port->dev);
- 			airoha_metadata_dst_free(port);
 +#if defined(CONFIG_PCS_AIROHA)
- 			if (airhoa_is_phy_external(port)) {
- 				phylink_destroy(port->phylink);
- 				airoha_pcs_destroy(port->pcs);
- 			}
+		if (airhoa_is_phy_external(port)) {
+			phylink_destroy(port->phylink);
+			airoha_pcs_destroy(port->pcs);
+		}
 +#endif
- 		}
+		airoha_metadata_dst_free(port);
  	}
  	free_netdev(eth->napi_dev);
 @@ -3222,10 +3236,12 @@ static void airoha_remove(struct platfor

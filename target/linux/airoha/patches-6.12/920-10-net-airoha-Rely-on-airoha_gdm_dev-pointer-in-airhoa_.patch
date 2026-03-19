@@ -28,11 +28,20 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct airoha_eth *eth = dev->eth;
  	u32 val, reg;
  
--	reg = airhoa_is_lan_gdm_port(port) ? REG_FE_LAN_MAC_H
+-	reg = airoha_is_lan_gdm_port(port) ? REG_FE_LAN_MAC_H
 -					   : REG_FE_WAN_MAC_H;
-+	reg = airhoa_is_lan_gdm_dev(dev) ? REG_FE_LAN_MAC_H : REG_FE_WAN_MAC_H;
++	reg = airoha_is_lan_gdm_dev(dev) ? REG_FE_LAN_MAC_H : REG_FE_WAN_MAC_H;
  	val = (addr[0] << 16) | (addr[1] << 8) | addr[2];
  	airoha_fe_wr(eth, reg, val);
+ 
+@@ -324,7 +324,7 @@ static int airoha_ppe_foe_entry_prepare(
+ 	u8 ppe_id;
+ 
+ 	/* QDMA0 is used for lan ports while QDMA1 is used for WAN ports */
+-	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_port(port)];
++	dev->qdma = &eth->qdma[!airoha_is_lan_gdm_dev(dev)];
+ 	netdev->irq = dev->qdma->irq_banks[0].irq;
+ 	airoha_set_macaddr(dev, netdev->dev_addr);
  
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
@@ -40,8 +49,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #define airoha_qdma_clear(qdma, offset, val)			\
  	airoha_rmw((qdma)->regs, (offset), (val), 0)
  
--static inline bool airhoa_is_lan_gdm_port(struct airoha_gdm_port *port)
-+static inline bool airhoa_is_lan_gdm_dev(struct airoha_gdm_dev *dev)
+-static inline bool airoha_is_lan_gdm_port(struct airoha_gdm_port *port)
++static inline bool airoha_is_lan_gdm_dev(struct airoha_gdm_dev *dev)
  {
 +	struct airoha_gdm_port *port = dev->port;
 +
@@ -54,8 +63,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			/* For downlink traffic consume SRAM memory for hw
  			 * forwarding descriptors queue.
  			 */
--			if (airhoa_is_lan_gdm_port(port))
-+			if (airhoa_is_lan_gdm_dev(dev))
+-			if (airoha_is_lan_gdm_port(port))
++			if (airoha_is_lan_gdm_dev(dev))
  				val |= AIROHA_FOE_IB2_FAST_PATH;
  			if (dsa_port >= 0)
  				val |= FIELD_PREP(AIROHA_FOE_IB2_NBQ,
