@@ -70,6 +70,17 @@ define Device/airoha_an7581-evb-emmc
 endef
 TARGET_DEVICES += airoha_an7581-evb-emmc
 
+define Device/airoha_an7581-evb-emmc-eagle
+  DEVICE_VENDOR := Airoha
+  DEVICE_MODEL := AN7581 Evaluation Board (EMMC) Eagle
+  DEVICE_DTS := an7581-evb-emmc-eagle
+  DEVICE_PACKAGES := kmod-i2c-an7581
+  ARTIFACT/preloader.bin := an7581-preloader rfb
+  ARTIFACT/bl31-uboot.fip := an7581-bl31-uboot rfb
+  ARTIFACTS := preloader.bin bl31-uboot.fip
+endef
+TARGET_DEVICES += airoha_an7581-evb-emmc-eagle
+
 define Device/gemtek_w1700k-ubi
   DEVICE_VENDOR := Gemtek
   DEVICE_MODEL := W1700K
