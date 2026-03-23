@@ -5,10 +5,10 @@
 /memreserve/ 0x80000000 0x200000;
 
 #include "an7581-evb-emmc.dtsi"
-#include "an7581-npu-mt7996.dtsi"
+#include "an7581-npu-mt7992.dtsi"
 
 / {
-	model = "Airoha AN7581 Evaluation Board";
+	model = "Airoha AN7581 Evaluation Board (KITE)";
 	compatible = "airoha,an7581-evb", "airoha,an7581", "airoha,en7581";
 
 	aliases {

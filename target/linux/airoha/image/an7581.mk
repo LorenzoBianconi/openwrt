@@ -62,6 +62,17 @@ define Device/airoha_an7581-evb-emmc
 endef
 TARGET_DEVICES += airoha_an7581-evb-emmc
 
+define Device/airoha_an7581-evb-emmc-kite
+  DEVICE_VENDOR := Airoha
+  DEVICE_MODEL := AN7581 Evaluation Board (EMMC + KITE)
+  DEVICE_DTS := an7581-evb-emmc-kite
+  DEVICE_PACKAGES := aeonsemi-as21xxx-firmware airoha-en8811h-firmware kmod-mt7992-firmware kmod-i2c-an7581 kmod-sound-soc-an7581-wm8960 kmod-sound-an7581-pcm
+  ARTIFACT/preloader.bin := an7581-preloader rfb
+  ARTIFACT/bl31-uboot.fip := append-as21x1x-firmware rfb | append-en8811h-firmware rfb | an7581-bl31-uboot rfb
+  ARTIFACTS := preloader.bin bl31-uboot.fip
+endef
+TARGET_DEVICES += airoha_an7581-evb-emmc-kite
+
 define Device/nokia_valyrian
   DEVICE_VENDOR := Nokia
   DEVICE_MODEL := Valyrian
