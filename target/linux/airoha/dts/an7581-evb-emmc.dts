@@ -228,6 +228,10 @@
 	};
 };
 
+&pciephy {
+	status = "okay";
+};
+
 &pcie0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pcie0_rst_pins>;
