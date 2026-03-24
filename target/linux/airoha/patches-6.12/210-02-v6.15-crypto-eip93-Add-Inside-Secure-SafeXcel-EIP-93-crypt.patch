@@ -3718,7 +3718,7 @@ index 000000000000..0b38a567da0e
 +
 +static struct platform_driver eip93_crypto_driver = {
 +	.probe = eip93_crypto_probe,
-+	.remove_new = eip93_crypto_remove,
++	.remove = eip93_crypto_remove,
 +	.driver = {
 +		.name = "inside-secure-eip93",
 +		.of_match_table = eip93_crypto_of_match,
@@ -4229,5 +4229,5 @@ index 000000000000..0490b8d15131
 +
 +#endif
 -- 
-2.51.0
+2.53.0
 

@@ -1,3 +1,24 @@
+From 0ceeadc7b53a041d89d5843f6bf0ccb7c98b0b4f Mon Sep 17 00:00:00 2001
+From: Aleksander Jan Bajkowski <olek2@wp.pl>
+Date: Sun, 11 Jan 2026 14:20:32 +0100
+Subject: [PATCH] crypto: inside-secure/eip93 - unregister only available
+ algorithm
+
+EIP93 has an options register. This register indicates which crypto
+algorithms are implemented in silicon. Supported algorithms are
+registered on this basis. Unregister algorithms on the same basis.
+Currently, all algorithms are unregistered, even those not supported
+by HW. This results in panic on platforms that don't have all options
+implemented in silicon.
+
+Fixes: 9739f5f93b78 ("crypto: eip93 - Add Inside Secure SafeXcel EIP-93 crypto engine support")
+Signed-off-by: Aleksander Jan Bajkowski <olek2@wp.pl>
+Acked-by: Antoine Tenart <atenart@kernel.org>
+Signed-off-by: Herbert Xu <herbert@gondor.apana.org.au>
+---
+ .../crypto/inside-secure/eip93/eip93-main.c   | 92 +++++++++++--------
+ 1 file changed, 53 insertions(+), 39 deletions(-)
+
 diff --git a/drivers/crypto/inside-secure/eip93/eip93-main.c b/drivers/crypto/inside-secure/eip93/eip93-main.c
 index 3cdc3308dcac..b7fd9795062d 100644
 --- a/drivers/crypto/inside-secure/eip93/eip93-main.c
@@ -135,4 +156,5 @@ index 3cdc3308dcac..b7fd9795062d 100644
  }
  
 -- 
-2.47.3
+2.53.0
+
