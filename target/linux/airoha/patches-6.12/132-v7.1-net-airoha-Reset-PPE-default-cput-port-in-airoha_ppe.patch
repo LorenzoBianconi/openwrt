@@ -1,7 +1,7 @@
 From df8e1e4a2eb5f8ecdef36c502601e8afbc6ad891 Mon Sep 17 00:00:00 2001
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Wed, 24 Dec 2025 17:29:33 +0100
-Subject: [PATCH 01/14] net: airoha: Reset PPE default cput port in
+Subject: [PATCH] net: airoha: Reset PPE default cput port in
  airoha_ppe_hw_init()
 
 Before this patch the default PPE cpu port used for a specific GDM
