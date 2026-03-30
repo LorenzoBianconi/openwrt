@@ -342,9 +342,9 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  	dev->nbq = nbq;
 +	u64_stats_init(&dev->stats.syncp);
 +	spin_lock_init(&dev->stats.lock);
- 	port->devs[index] = dev;
  
  #if defined(CONFIG_PCS_AIROHA)
+  	if (airhoa_is_phy_external(port)) {
 @@ -3337,8 +3348,6 @@ static int airoha_alloc_gdm_port(struct
  	if (!port)
  		return -ENOMEM;

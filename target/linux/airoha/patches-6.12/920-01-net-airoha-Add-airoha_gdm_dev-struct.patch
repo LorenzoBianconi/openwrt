@@ -611,7 +611,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	dev = netdev_priv(netdev);
 +	dev->dev = netdev;
 +	dev->port = port;
-+	port->dev = dev;
 +	dev->eth = eth;
 +
 +#if defined(CONFIG_PCS_AIROHA)
@@ -621,6 +620,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			return err;
 +	}
 +#endif
++	port->dev = dev;
 +
 +	return 0;
 +}

@@ -189,7 +189,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	int err;
  
  	netdev = devm_alloc_etherdev_mqs(eth->dev, sizeof(*dev),
-@@ -3077,11 +3075,24 @@ static int airoha_alloc_gdm_device(struc
+@@ -3077,10 +3075,23 @@ static int airoha_alloc_gdm_device(struc
  			 netdev->dev_addr);
  	}
  
@@ -208,9 +208,16 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	dev = netdev_priv(netdev);
  	dev->dev = netdev;
  	dev->port = port;
--	port->dev = dev;
  	dev->eth = eth;
 +	dev->nbq = nbq;
+ 
+ #if defined(CONFIG_PCS_AIROHA)
+ 	if (airhoa_is_phy_external(port)) {
+@@ -3077,7 +3075,7 @@ static int airoha_alloc_gdm_device(struc
+ 			return err;
+ 	}
+ #endif
+-	port->dev = dev;
 +	port->devs[index] = dev;
  
  	return 0;
