@@ -1571,6 +1571,14 @@ index 3b7c6f17985d..da08ee90948d 100644
  	},
  	{
  		PHY_ID_MATCH_EXACT(MTK_GPHY_ID_AN7583),
+@@ -1179,6 +1191,7 @@ static struct phy_driver mtk_socphy_driver[] = {
+ MODULE_AUTHOR("Daniel Golle <daniel@makrotopia.org>");
+ MODULE_AUTHOR("SkyLake Huang <SkyLake.Huang@mediatek.com>");
+ MODULE_LICENSE("GPL");
++MODULE_VERSION("01.01.20260306")
+ 
+ MODULE_DEVICE_TABLE(mdio, mtk_socphy_tbl);
+ 
 diff --git a/drivers/net/phy/mediatek/mtk-ge-soc.h b/drivers/net/phy/mediatek/mtk-ge-soc.h
 index 9aaa7e3caa41..db8e96c83a99 100644
 --- a/drivers/net/phy/mediatek/mtk-ge-soc.h
