@@ -49,8 +49,20 @@
 	status = "okay";
 };
 
+&pcm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pcm_pins>;
+};
+
 &en7581_pinctrl {
 	gpio-ranges = <&en7581_pinctrl 0 13 47>;
+
+	pcm_pins: pcm-pins {
+		mux {
+			function = "pcm";
+			groups = "pcm1";
+		};
+	};
 
 	i2s_pins: i2s-pins {
 		mux {
