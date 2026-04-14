@@ -124,7 +124,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	struct airoha_eth *eth = port->qdma->eth;
 +	struct airoha_gdm_port *port = dev->port;
 +	struct airoha_eth *eth = dev->eth;
- 	u32 val, pse_port, chan, nbq;
+ 	u32 val, pse_port, chan;
  	int src_port;
  
 @@ -1764,9 +1766,9 @@ static int airoha_dev_init(struct net_device *netdev)
@@ -238,11 +238,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	do {
  		int i;
  
-@@ -2167,18 +2166,17 @@ static int airoha_qdma_set_chan_tx_sched
+@@ -2167,22 +2166,22 @@ static int airoha_qdma_set_chan_tx_sched
+ 	} while (u64_stats_fetch_retry(&port->stats.syncp, start));
+ }
+ 
+-static int airoha_qdma_set_chan_tx_sched(struct net_device *dev,
++static int airoha_qdma_set_chan_tx_sched(struct net_device *netdev,
  					 int channel, enum tx_sched_mode mode,
  					 const u16 *weights, u8 n_weights)
  {
--	struct airoha_gdm_port *port = dev->port;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
  	int i;
  
  	for (i = 0; i < AIROHA_NUM_TX_RING; i++)
@@ -275,11 +281,23 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			CHAN_QOS_MODE_MASK(channel),
  			__field_prep(CHAN_QOS_MODE_MASK(channel), mode));
  
-@@ -2260,9 +2257,9 @@ static int airoha_qdma_get_tx_ets_stats(
- {
- 	struct airoha_gdm_port *port = dev->port;
+@@ -2260,7 +2257,7 @@ static int airoha_qdma_get_tx_ets_stats(
+ 					     ARRAY_SIZE(w));
+ }
  
+-static int airoha_qdma_get_tx_ets_stats(struct net_device *dev, int channel,
++static int airoha_qdma_get_tx_ets_stats(struct net_device *netdev, int channel,
+ 					struct tc_ets_qopt_offload *opt)
+ {
+  	struct airoha_gdm_port *port = netdev_priv(dev);
+@@ -2260,10 +2257,11 @@ static int airoha_qdma_get_tx_ets_stats(
+ static int airoha_qdma_get_tx_ets_stats(struct net_device *netdev, int channel,
+ 					struct tc_ets_qopt_offload *opt)
+ {
+-	struct airoha_gdm_port *port = netdev_priv(dev);
 -	u64 cpu_tx_packets = airoha_qdma_rr(port->qdma,
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
 +	u64 cpu_tx_packets = airoha_qdma_rr(dev->qdma,
  					    REG_CNTR_VAL(channel << 1));
 -	u64 fwd_tx_packets = airoha_qdma_rr(port->qdma,
@@ -287,11 +305,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  					    REG_CNTR_VAL((channel << 1) + 1));
  	u64 tx_packets = (cpu_tx_packets - port->cpu_tx_packets) +
  			 (fwd_tx_packets - port->fwd_tx_packets);
-@@ -2525,17 +2522,16 @@ static int airoha_qdma_set_tx_rate_limit
+@@ -2525,21 +2522,21 @@ static int airoha_qdma_set_tx_rate_limit
+ 					   mode, val);
+ }
+ 
+-static int airoha_qdma_set_tx_rate_limit(struct net_device *dev,
++static int airoha_qdma_set_tx_rate_limit(struct net_device *netdev,
  					 int channel, u32 rate,
  					 u32 bucket_size)
  {
--	struct airoha_gdm_port *port = dev->port;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
  	int i, err;
  
  	for (i = 0; i <= TRTCM_PEAK_MODE; i++) {
@@ -365,7 +389,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	struct airoha_qdma *qdma;
  	struct airoha_gdm_dev *dev;
  	int id;
- 
+	int nbq;
 @@ -651,18 +651,18 @@ static inline bool airoha_is_7583(struct airoha_eth *eth)
  	return eth->soc->version == 0x7583;
  }

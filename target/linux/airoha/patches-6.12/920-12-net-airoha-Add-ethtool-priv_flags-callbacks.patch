@@ -294,7 +294,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	}
 +}
 +
- static int airoha_qdma_set_chan_tx_sched(struct airoha_gdm_dev *dev,
+ static int airoha_qdma_set_chan_tx_sched(struct net_device *netdev,
  					 int channel, enum tx_sched_mode mode,
  					 const u16 *weights, u8 n_weights)
 @@ -2860,6 +3063,10 @@ static const struct ethtool_ops airoha_e

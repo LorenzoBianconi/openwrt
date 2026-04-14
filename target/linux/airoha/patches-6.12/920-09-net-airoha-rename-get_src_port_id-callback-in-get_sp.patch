@@ -51,18 +51,18 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	.ops = {
 -		.get_src_port_id = airoha_en7581_get_src_port_id,
 +		.get_sport = airoha_en7581_get_sport,
+		.get_vip_port = airoha_en7581_get_vip_port,
  		.get_dev_from_sport = airoha_en7581_get_dev_from_sport,
  	},
- };
 @@ -3516,7 +3516,7 @@ static const struct airoha_eth_soc_data
  	.num_xsi_rsts = ARRAY_SIZE(an7583_xsi_rsts_names),
  	.num_ppe = 1,
  	.ops = {
 -		.get_src_port_id = airoha_an7583_get_src_port_id,
 +		.get_sport = airoha_an7583_get_sport,
+		.get_vip_port = airoha_an7583_get_vip_port,
  		.get_dev_from_sport = airoha_an7583_get_dev_from_sport,
  	},
- };
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -589,7 +589,7 @@ struct airoha_eth_soc_data {
@@ -71,6 +71,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct {
 -		int (*get_src_port_id)(struct airoha_gdm_port *port, int nbq);
 +		int (*get_sport)(struct airoha_gdm_port *port, int nbq);
+		u32 (*get_vip_port)(struct airoha_gdm_port *port, int nbq);
  		int (*get_dev_from_sport)(struct airoha_qdma_desc *desc,
  					  u16 *port, u16 *dev);
- 	} ops;

@@ -21,6 +21,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -111,7 +111,7 @@ static int airoha_qdma_fill_rx_queue(str
+ 	struct airoha_eth *eth = dev->eth;
+ 	u32 vip_port;
+ 
+-	vip_port = eth->soc->ops.get_vip_port(port, port->nbq);
++	vip_port = eth->soc->ops.get_vip_port(port, dev->nbq);
+ 	if (enable) {
+ 		airoha_fe_set(eth, REG_FE_VIP_PORT_EN, vip_port);
+ 		airoha_fe_set(eth, REG_FE_IFC_PORT_EN, vip_port);
 @@ -592,30 +592,26 @@ static int airoha_qdma_fill_rx_queue(str
  	return nframes;
  }
@@ -30,7 +39,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +static struct airoha_gdm_dev *
 +airoha_qdma_get_gdm_dev(struct airoha_eth *eth, struct airoha_qdma_desc *desc)
  {
--	u32 port, sport, msg1 = le32_to_cpu(desc->msg1);
+-	u32 port, sport, msg1 = le32_to_cpu(READ_ONCE(desc->msg1));
 +	struct airoha_gdm_port *port;
 +	u16 p, d;
  
@@ -70,17 +79,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  static int airoha_qdma_rx_process(struct airoha_queue *q, int budget)
 @@ -632,9 +628,8 @@ static int airoha_qdma_rx_process(struct
- 		u32 hash, reason, msg1 = le32_to_cpu(desc->msg1);
- 		struct page *page = virt_to_head_page(e->buf);
- 		u32 desc_ctrl = le32_to_cpu(desc->ctrl);
+ 		struct airoha_queue_entry *e = &q->entry[q->tail];
+ 		struct airoha_qdma_desc *desc = &q->desc[q->tail];
+ 		u32 hash, reason, msg1, desc_ctrl;
 -		struct airoha_gdm_port *port;
 -		struct net_device *netdev;
 -		int data_len, len, p;
 +		struct airoha_gdm_dev *dev;
 +		int data_len, len;
+		struct page *page;
  
- 		if (!(desc_ctrl & QDMA_DESC_DONE_MASK))
- 			break;
+ 		desc_ctrl = le32_to_cpu(READ_ONCE(desc->ctrl));
 @@ -651,12 +646,10 @@ static int airoha_qdma_rx_process(struct
  		if (!len || data_len < len)
  			goto free_frag;
@@ -118,22 +127,11 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			/* PPE module requires untagged packets to work
  			 * properly and it provides DSA port index via the
  			 * DMA descriptor. Report DSA tag to the DSA stack
-@@ -1731,7 +1726,7 @@ static int airhoha_set_gdm2_loopback(str
- {
- 	struct airoha_gdm_port *port = dev->port;
- 	struct airoha_eth *eth = dev->eth;
--	u32 val, pse_port, chan, nbq;
-+	u32 val, pse_port, chan;
- 	int src_port;
- 
- 	/* Forward the traffic to the proper GDM port */
-@@ -1761,9 +1756,7 @@ static int airhoha_set_gdm2_loopback(str
+@@ -1761,7 +1756,7 @@ static int airhoha_set_gdm2_loopback(str
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(AIROHA_GDM2_IDX));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(AIROHA_GDM2_IDX));
  
--	/* XXX: handle XSI_USB_PORT and XSI_PCE1_PORT */
--	nbq = port->id == AIROHA_GDM3_IDX && airoha_is_7581(eth) ? 4 : 0;
--	src_port = eth->soc->ops.get_src_port_id(port, nbq);
+-	src_port = eth->soc->ops.get_src_port_id(port, port->nbq);
 +	src_port = eth->soc->ops.get_src_port_id(port, dev->nbq);
  	if (src_port < 0)
  		return src_port;
@@ -157,6 +155,126 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	       FIELD_PREP(QDMA_ETH_TXMSG_METER_MASK, 0x7f);
  
  	q = &qdma->q_tx[qid];
+@@ -2926,7 +2920,7 @@ bool airoha_is_valid_gdm_dev(struct airo
+ 	return 0;
+ }
+ 
+-static int airoha_tc_htb_alloc_leaf_queue(struct net_device *dev,
++static int airoha_tc_htb_alloc_leaf_queue(struct net_device *netdev,
+ 					  struct tc_htb_qopt_offload *opt)
+ {
+ 	u32 channel = TC_H_MIN(opt->classid) % AIROHA_NUM_QOS_CHANNELS;
+@@ -2926,7 +2920,8 @@ bool airoha_is_valid_gdm_dev(struct airo
+ 	u32 channel = TC_H_MIN(opt->classid) % AIROHA_NUM_QOS_CHANNELS;
+ 	u32 rate = div_u64(opt->rate, 1000) << 3; /* kbps */
+-	int err, num_tx_queues = dev->real_num_tx_queues;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	int err, num_tx_queues = netdev->real_num_tx_queues;
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 
+ 	if (opt->parent_classid != TC_HTB_CLASSID_ROOT) {
+ 		NL_SET_ERR_MSG_MOD(opt->extack, "invalid parent classid");
+@@ -2926,7 +2920,7 @@ bool airoha_is_valid_gdm_dev(struct airo
+ 		return -EINVAL;
+ 	}
+ 
+-	err = airoha_qdma_set_tx_rate_limit(dev, channel, rate, opt->quantum);
++	err = airoha_qdma_set_tx_rate_limit(netdev, channel, rate, opt->quantum);
+ 	if (err) {
+ 		NL_SET_ERR_MSG_MOD(opt->extack,
+ 				   "failed configuring htb offload");
+@@ -2926,9 +2920,9 @@ bool airoha_is_valid_gdm_dev(struct airo
+ 	if (opt->command == TC_HTB_NODE_MODIFY)
+ 		return 0;
+ 
+-	err = netif_set_real_num_tx_queues(dev, num_tx_queues + 1);
++	err = netif_set_real_num_tx_queues(netdev, num_tx_queues + 1);
+ 	if (err) {
+-		airoha_qdma_set_tx_rate_limit(dev, channel, 0, opt->quantum);
++		airoha_qdma_set_tx_rate_limit(netdev, channel, 0, opt->quantum);
+ 		NL_SET_ERR_MSG_MOD(opt->extack,
+ 				   "failed setting real_num_tx_queues");
+ 		return err;
+@@ -2926,12 +2926,13 @@ static int airoha_setup_phylink(struct n
+ 	}
+ }
+ 
+-static void airoha_tc_remove_htb_queue(struct net_device *dev, int queue)
++static void airoha_tc_remove_htb_queue(struct net_device *netdev, int queue)
+ {
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 
+-	netif_set_real_num_tx_queues(dev, dev->real_num_tx_queues - 1);
+-	airoha_qdma_set_tx_rate_limit(dev, queue + 1, 0, 0);
++	netif_set_real_num_tx_queues(netdev, netdev->real_num_tx_queues - 1);
++	airoha_qdma_set_tx_rate_limit(netdev, queue + 1, 0, 0);
+ 	clear_bit(queue, port->qos_sq_bmap);
+ }
+ 
+@@ -2926,11 +2926,12 @@ static int airoha_setup_phylink(struct n
+ 	clear_bit(queue, port->qos_sq_bmap);
+ }
+ 
+-static int airoha_tc_htb_delete_leaf_queue(struct net_device *dev,
++static int airoha_tc_htb_delete_leaf_queue(struct net_device *netdev,
+ 					   struct tc_htb_qopt_offload *opt)
+ {
+ 	u32 channel = TC_H_MIN(opt->classid) % AIROHA_NUM_QOS_CHANNELS;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 
+ 	if (!test_bit(channel, port->qos_sq_bmap)) {
+ 		NL_SET_ERR_MSG_MOD(opt->extack, "invalid queue id");
+@@ -2926,7 +2926,7 @@ static int airoha_setup_phylink(struct n
+ 		return -EINVAL;
+ 	}
+ 
+-	airoha_tc_remove_htb_queue(dev, channel);
++	airoha_tc_remove_htb_queue(netdev, channel);
+ 
+ 	return 0;
+ }
+@@ -2926,9 +2926,10 @@ static int airoha_setup_phylink(struct n
+ 	return 0;
+ }
+ 
+-static int airoha_tc_htb_destroy(struct net_device *dev)
++static int airoha_tc_htb_destroy(struct net_device *netdev)
+ {
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 	int q;
+ 
+ 	for_each_set_bit(q, port->qos_sq_bmap, AIROHA_NUM_QOS_CHANNELS)
+@@ -2926,7 +2926,7 @@ static int airoha_setup_phylink(struct n
+ 	int q;
+ 
+ 	for_each_set_bit(q, port->qos_sq_bmap, AIROHA_NUM_QOS_CHANNELS)
+-		airoha_tc_remove_htb_queue(dev, q);
++		airoha_tc_remove_htb_queue(netdev, q);
+ 
+ 	return 0;
+ }
+@@ -2926,11 +2926,12 @@ static int airoha_setup_phylink(struct n
+ 	return 0;
+ }
+ 
+-static int airoha_tc_get_htb_get_leaf_queue(struct net_device *dev,
++static int airoha_tc_get_htb_get_leaf_queue(struct net_device *netdev,
+ 					    struct tc_htb_qopt_offload *opt)
+ {
+ 	u32 channel = TC_H_MIN(opt->classid) % AIROHA_NUM_QOS_CHANNELS;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 
+ 	if (!test_bit(channel, port->qos_sq_bmap)) {
+ 		NL_SET_ERR_MSG_MOD(opt->extack, "invalid queue id");
 @@ -2926,12 +2920,15 @@ bool airoha_is_valid_gdm_dev(struct airo
  
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
@@ -232,6 +350,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u32 id;
  
  	if (!id_ptr) {
+@@ -3136,8 +3148,6 @@ static int airoha_alloc_gdm_port(struct
+ 		return -ENOMEM;
+ 
+ 	port->id = id;
+-	/* XXX: Read nbq from DTS */
+-	port->nbq = id == AIROHA_GDM3_IDX && airoha_is_7581(eth) ? 4 : 0;
+ 	eth->ports[p] = port;
+ 
+ 	err = airoha_metadata_dst_alloc(port);
 @@ -3136,7 +3148,36 @@ static int airoha_alloc_gdm_port(struct
  	}
  #endif
@@ -390,7 +517,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +					    u16 *port, u16 *dev)
 +{
 +	u32 sport = FIELD_GET(QDMA_ETH_RXMSG_SPORT_MASK,
-+			      le32_to_cpu(desc->msg1));
++			      le32_to_cpu(READ_ONCE(desc->msg1)));
 +
 +	*dev = 0;
 +	switch (sport) {
@@ -430,7 +557,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +					    u16 *port, u16 *dev)
 +{
 +	u32 sport = FIELD_GET(QDMA_ETH_RXMSG_SPORT_MASK,
-+			      le32_to_cpu(desc->msg1));
++			      le32_to_cpu(READ_ONCE(desc->msg1)));
 +
 +	*dev = 0;
 +	switch (sport) {
@@ -460,17 +587,17 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	.version = 0x7581,
  	.xsi_rsts_names = en7581_xsi_rsts_names,
 @@ -3392,6 +3506,7 @@ static const struct airoha_eth_soc_data
- 	.num_ppe = 2,
  	.ops = {
  		.get_src_port_id = airoha_en7581_get_src_port_id,
+ 		.get_vip_port = airoha_en7581_get_vip_port,
 +		.get_dev_from_sport = airoha_en7581_get_dev_from_sport,
  	},
  };
  
 @@ -3402,6 +3517,7 @@ static const struct airoha_eth_soc_data
- 	.num_ppe = 1,
  	.ops = {
  		.get_src_port_id = airoha_an7583_get_src_port_id,
+ 		.get_vip_port = airoha_an7583_get_vip_port,
 +		.get_dev_from_sport = airoha_an7583_get_dev_from_sport,
  	},
  };
@@ -494,19 +621,21 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #if defined(CONFIG_PCS_AIROHA)
  	struct phylink *phylink;
  	struct phylink_config phylink_config;
-@@ -534,7 +535,7 @@ struct airoha_qdma {
+@@ -534,9 +535,8 @@ struct airoha_qdma {
  };
  
  struct airoha_gdm_port {
 -	struct airoha_gdm_dev *dev;
 +	struct airoha_gdm_dev *devs[AIROHA_MAX_NUM_GDM_DEVS];
  	int id;
+-	int nbq;
  
- #if defined(CONFIG_PCS_AIROHA)
+ 	struct airoha_hw_stats stats;
+ 
 @@ -587,6 +590,8 @@ struct airoha_eth_soc_data {
- 	int num_ppe;
  	struct {
  		int (*get_src_port_id)(struct airoha_gdm_port *port, int nbq);
+ 		u32 (*get_vip_port)(struct airoha_gdm_port *port, int nbq);
 +		int (*get_dev_from_sport)(struct airoha_qdma_desc *desc,
 +					  u16 *port, u16 *dev);
  	} ops;
