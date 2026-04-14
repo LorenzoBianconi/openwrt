@@ -501,7 +501,7 @@ index 000000000000..64d0d9f454a2
 +			continue;
 +
 +		irq_desc = &an7581_memif_irq_descs[i];
-+		if (status & BIT(irq_desc->status_bit))
++		if (status & irq_desc->status_bit)
 +			snd_pcm_period_elapsed(memif->substream);
 +	}
 +
