@@ -118,8 +118,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	return 0;
  }
  
--static int airhoha_set_gdm2_loopback(struct airoha_gdm_port *port)
-+static int airhoha_set_gdm2_loopback(struct airoha_gdm_dev *dev)
+-static int airoha_set_gdm2_loopback(struct airoha_gdm_port *port)
++static int airoha_set_gdm2_loopback(struct airoha_gdm_dev *dev)
  {
 -	struct airoha_eth *eth = port->qdma->eth;
 +	struct airoha_gdm_port *port = dev->port;
@@ -144,8 +144,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		if (!eth->ports[1]) {
  			int err;
  
--			err = airhoha_set_gdm2_loopback(port);
-+			err = airhoha_set_gdm2_loopback(dev);
+-			err = airoha_set_gdm2_loopback(port);
++			err = airoha_set_gdm2_loopback(dev);
  			if (err)
  				return err;
  		}

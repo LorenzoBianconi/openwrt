@@ -136,7 +136,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		if (!eth->ports[1] && !airoha_get_wan_gdm_dev(eth)) {
  			int err;
  
- 			err = airoha_enable_gdm2_loopback(dev);
+ 			err = airoha_set_gdm2_loopback(dev);
  			if (err)
  				return err;
 +
@@ -191,7 +191,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		case AIROHA_GDM4_IDX: {
 +			int err;
 +
-+			err = airoha_enable_gdm2_loopback(dev);
++			err = airoha_set_gdm2_loopback(dev);
 +			if (err)
 +				return err;
 +			break;
