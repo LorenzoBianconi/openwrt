@@ -73,7 +73,7 @@ new file mode 100644
 index 000000000000..a72948ae9190
 --- /dev/null
 +++ b/sound/airoha/an7581-pcm.c
-@@ -0,0 +1,800 @@
+@@ -0,0 +1,804 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Airoha ALSA SoC PCM platform driver for AN7581
@@ -397,7 +397,6 @@ index 000000000000..a72948ae9190
 +{
 +	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
 +	struct an7581_pcm_priv *priv = snd_soc_card_get_drvdata(rtd->card);
-+	pr_info("CALL PREPAREA\n");
 +	struct an7581_pcm_desc *desc;
 +	int i;
 +
@@ -540,6 +539,9 @@ index 000000000000..a72948ae9190
 +			regmap_write(priv->map, AN7581_PCM_RPDR,
 +				     AN7581_PCM_RX_POLLING);
 +		}
++
++		regmap_clear_bits(priv->map, AN7581_PCM_PICR,
++				  AN7581_PCM_CFG_VALID);
 +
 +		break;
 +	case SNDRV_PCM_TRIGGER_STOP:
@@ -726,6 +728,9 @@ index 000000000000..a72948ae9190
 +		}
 +
 +		rcu_read_unlock();
++
++		regmap_set_bits(priv->map, AN7581_PCM_PICR,
++				AN7581_PCM_CFG_VALID);
 +	}
 +
 +	return IRQ_HANDLED;
@@ -824,7 +829,6 @@ index 000000000000..a72948ae9190
 +	}
 +
 +	ret = devm_snd_soc_register_card(dev, card);
-+	pr_info("ret %d\n", ret);
 +	if (ret) {
 +		dev_err_probe(dev, ret, "%s snd_soc_register_card fail\n", __func__);
 +		goto err_free_rx;
