@@ -127,6 +127,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u32 val, pse_port, chan;
  	int src_port;
  
+@@ -1715,7 +1716,7 @@ static int airoha_dev_stop(struct net_de
+ 		      __field_prep(SP_CPORT_MASK(val), FE_PSE_PORT_CDM2));
+ 
+ 	for (i = 0; i < eth->soc->num_ppe; i++)
+-		airoha_ppe_set_cpu_port(port, i, AIROHA_GDM2_IDX);
++		airoha_ppe_set_cpu_port(dev, i, AIROHA_GDM2_IDX);
+ 
+ 	if (port->id == AIROHA_GDM4_IDX && airoha_is_7581(eth)) {
+ 		u32 mask = FC_ID_OF_SRC_PORT_MASK(dev->nbq);
 @@ -1764,9 +1766,9 @@ static int airoha_dev_init(struct net_device *netdev)
  	int i;
  
@@ -153,11 +162,12 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  
  	for (i = 0; i < eth->soc->num_ppe; i++)
--		airoha_ppe_set_cpu_port(port, i);
-+		airoha_ppe_set_cpu_port(dev, i);
- 
+-		airoha_ppe_set_cpu_port(port, i,
+-					airoha_get_fe_port(port));
++		airoha_ppe_set_cpu_port(dev, i,
++					airoha_get_fe_port(dev));
+
  	return 0;
- }
 @@ -1840,7 +1841,7 @@ static void airoha_dev_get_stats64(struc
  	struct airoha_gdm_port *port = dev->port;
  	unsigned int start;
@@ -390,7 +400,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct airoha_gdm_dev *dev;
  	int id;
 	int nbq;
-@@ -651,18 +651,18 @@ static inline bool airoha_is_7583(struct airoha_eth *eth)
+@@ -651,19 +651,19 @@ static inline bool airoha_is_7583(struct airoha_eth *eth)
  	return eth->soc->version == 0x7583;
  }
  
@@ -399,8 +409,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  bool airoha_is_valid_gdm_dev(struct airoha_eth *eth,
  			     struct airoha_gdm_dev *dev);
  
--void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id);
-+void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id);
+-void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id,
++void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id,
+ 			     u8 fport);
  bool airoha_ppe_is_enabled(struct airoha_eth *eth, int index);
  void airoha_ppe_check_skb(struct airoha_ppe_dev *dev, struct sk_buff *skb,
  			  u16 hash, bool rx_wlan);
@@ -414,26 +425,26 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  						  u32 hash);
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -85,10 +85,10 @@ static u32 airoha_ppe_get_timestamp(struct airoha_ppe *ppe)
+@@ -85,9 +85,9 @@ static u32 airoha_ppe_get_timestamp(struct airoha_ppe *ppe)
  	return FIELD_GET(AIROHA_FOE_IB1_BIND_TIMESTAMP, timestamp);
  }
  
--void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id)
-+void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id)
+-void airoha_ppe_set_cpu_port(struct airoha_gdm_port *port, u8 ppe_id, u8 fport)
++void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id, u8 fport)
  {
 -	struct airoha_qdma *qdma = port->qdma;
--	u8 fport = airoha_get_fe_port(port);
 +	struct airoha_qdma *qdma = dev->qdma;
-+	u8 fport = airoha_get_fe_port(dev);
  	struct airoha_eth *eth = qdma->eth;
  	u8 qdma_id = qdma - &eth->qdma[0];
  	u32 fe_cpu_port;
-@@ -174,7 +174,7 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+@@ -174,8 +174,8 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
  			if (!port)
  				continue;
  
--			airoha_ppe_set_cpu_port(port, i);
-+			airoha_ppe_set_cpu_port(port->dev, i);
+-			airoha_ppe_set_cpu_port(port, i,
+-						airoha_get_fe_port(port));
++			airoha_ppe_set_cpu_port(port->dev, i,
++						airoha_get_fe_port(dev));
  		}
  	}
  }

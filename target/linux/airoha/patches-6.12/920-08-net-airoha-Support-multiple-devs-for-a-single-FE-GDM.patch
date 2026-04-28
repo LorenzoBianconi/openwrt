@@ -127,6 +127,46 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			/* PPE module requires untagged packets to work
  			 * properly and it provides DSA port index via the
  			 * DMA descriptor. Report DSA tag to the DSA stack
+@@ -683,7 +676,6 @@ static int airoha_qdma_rx_process(struct
+ 
+ 	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
+ 		struct airoha_gdm_port *port = eth->ports[i];
+-		struct airoha_gdm_dev *dev;
+ 		int j;
+ 
+ 		if (!port)
+@@ -683,15 +676,22 @@ static int airoha_qdma_rx_process(struct
+ 		if (!port)
+ 			continue;
+
+-		dev = port->dev;
+-		if (dev->qdma != qdma)
+-			continue;
+-
+-		for (j = 0; j < dev->dev->num_tx_queues; j++) {
+-			if (airoha_qdma_get_txq(qdma, j) != qid)
+-				continue;
+-
+-			netif_wake_subqueue(dev->dev, j);
++		for (j = 0; j < ARRAY_SIZE(port->devs); j++) {
++			struct airoha_gdm_dev *dev = port->devs[j];
++			int k;
++
++			if (!dev)
++				continue;
++
++	 		if (dev->qdma != qdma)
++	 			continue;
++
++			for (k = 0; k < dev->dev->num_tx_queues; k++) {
++	 			if (airoha_qdma_get_txq(qdma, j) != qid)
++	 				continue;
++
++	 			netif_wake_subqueue(dev->dev, k);
++	 		}
+		}
+ 	}
+ 	q->txq_stopped = false;
 @@ -1761,7 +1756,7 @@ static int airhoha_set_gdm2_loopback(str
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(AIROHA_GDM2_IDX));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(AIROHA_GDM2_IDX));
@@ -651,18 +691,20 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  			airoha_fe_rmw(eth, REG_PPE_MTU(i, p),
  				      FP0_EGRESS_MTU_MASK |
-@@ -174,7 +175,14 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
+@@ -174,8 +175,15 @@ static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
  			if (!port)
  				continue;
  
--			airoha_ppe_set_cpu_port(port->dev, i);
+-			airoha_ppe_set_cpu_port(port->dev, i,
+-						airoha_get_fe_port(dev));
 +			for (j = 0; j < ARRAY_SIZE(port->devs); j++) {
 +				struct airoha_gdm_dev *dev = port->devs[j];
 +
 +				if (!dev)
 +					continue;
 +
-+				airoha_ppe_set_cpu_port(dev, i);
++				airoha_ppe_set_cpu_port(dev, i,
++							airoha_get_fe_port(dev));
 +			}
  		}
  	}

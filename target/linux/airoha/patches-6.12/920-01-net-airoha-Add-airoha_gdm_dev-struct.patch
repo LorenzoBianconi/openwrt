@@ -54,6 +54,31 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  			/* PPE module requires untagged packets to work
  			 * properly and it provides DSA port index via the
  			 * DMA descriptor. Report DSA tag to the DSA stack
+@@ -680,19 +682,21 @@ static int airoha_qdma_rx_process(struct
+ 
+ 	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
+ 		struct airoha_gdm_port *port = eth->ports[i];
++		struct airoha_gdm_dev *dev;
+ 		int j;
+ 
+ 		if (!port)
+ 			continue;
+ 
+-		if (port->qdma != qdma)
++		dev = port->dev;
++		if (dev->qdma != qdma)
+ 			continue;
+ 
+-		for (j = 0; j < port->dev->num_tx_queues; j++) {
++		for (j = 0; j < dev->dev->num_tx_queues; j++) {
+ 			if (airoha_qdma_get_txq(qdma, j) != qid)
+ 				continue;
+ 
+-			netif_wake_subqueue(port->dev, j);
++			netif_wake_subqueue(dev->dev, j);
+ 		}
+ 	}
+ 	q->txq_stopped = false;
 @@ -1626,10 +1628,11 @@ static void airoha_update_hw_stats(struc
  	spin_unlock(&port->stats.lock);
  }
@@ -122,12 +147,13 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	if (err)
  		return err;
  
- 	for (i = 0; i < ARRAY_SIZE(qdma->q_tx); i++)
+-	for (i = 0; i < dev->num_tx_queues; i++)
 -		netdev_tx_reset_subqueue(dev, i);
++	for (i = 0; i < netdev->num_tx_queues; i++)
 +		netdev_tx_reset_subqueue(netdev, i);
  
- 	if (atomic_dec_and_test(&qdma->users)) {
- 		airoha_qdma_clear(qdma, REG_QDMA_GLOBAL_CFG,
+ 	airoha_set_gdm_port_fwd_cfg(qdma->eth, REG_GDM_FWD_CFG(port->id),
+ 				    FE_PSE_PORT_DROP);
 @@ -1700,8 +1700,8 @@ static int airoha_dev_stop(struct net_de
  
  #if defined(CONFIG_PCS_AIROHA)
@@ -261,7 +287,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 @@ -1957,7 +1968,7 @@ static netdev_tx_t airoha_dev_xmit(struc
  	u8 fport;
  
- 	qid = skb_get_queue_mapping(skb) % ARRAY_SIZE(qdma->q_tx);
+ 	qid = airoha_qdma_get_txq(qdma, skb_get_queue_mapping(skb));
 -	tag = airoha_get_dsa_tag(skb, dev);
 +	tag = airoha_get_dsa_tag(skb, netdev);
  
@@ -271,8 +297,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	spin_lock_bh(&q->lock);
  
--	txq = netdev_get_tx_queue(dev, qid);
-+	txq = netdev_get_tx_queue(netdev, qid);
+-	txq = skb_get_tx_queue(dev, skb);
++	txq = skb_get_tx_queue(netdev, skb);
  	nr_frags = 1 + skb_shinfo(skb)->nr_frags;
  
  	if (q->queued + nr_frags >= q->ndesc) {
