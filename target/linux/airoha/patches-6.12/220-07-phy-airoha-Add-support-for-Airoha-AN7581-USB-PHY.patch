@@ -513,7 +513,7 @@ index 000000000000..6373e44371bf
 +		break;
 +	case PHY_MODE_PCIE:
 +		/* Only USB2 supports PCIe mode */
-+		if (priv->serdes_port != AIROHA_SCU_SERDES_USB1)
++		if (priv->serdes_port != AIROHA_SCU_SERDES_USB2)
 +			return -EINVAL;
 +
 +		break;
