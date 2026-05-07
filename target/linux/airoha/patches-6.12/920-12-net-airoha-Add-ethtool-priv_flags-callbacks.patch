@@ -32,7 +32,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	netif_tx_start_all_queues(netdev);
  	err = airoha_set_vip_for_gdm_port(dev, true);
  	if (err)
-@@ -1757,37 +1762,114 @@ static int airoha_enable_gdm2_loopback(struct airoha_gdm_dev *dev)
+@@ -1757,37 +1762,115 @@ static int airoha_enable_gdm2_loopback(struct airoha_gdm_dev *dev)
  	return 0;
  }
  
@@ -122,6 +122,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	struct airoha_gdm_dev *dev = netdev_priv(netdev);
 +	struct airoha_gdm_port *port = dev->port;
  
++	airoha_dev_set_qdma(dev);
++
  	switch (port->id) {
 +	case AIROHA_GDM2_IDX:
 +		/* GDM2 is always used as wan */
@@ -152,7 +154,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	for (i = 0; i < eth->soc->num_ppe; i++)
 -		airoha_ppe_set_cpu_port(dev, i,
 -					airoha_get_fe_port(dev));
-+	airoha_dev_set_qdma(dev);
 +	airoha_set_macaddr(dev, netdev->dev_addr);
  
  	return 0;
