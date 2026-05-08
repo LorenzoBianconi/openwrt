@@ -55,7 +55,7 @@ define Device/airoha_an7581-evb-emmc
   DEVICE_VENDOR := Airoha
   DEVICE_MODEL := AN7581 Evaluation Board (EMMC)
   DEVICE_DTS := an7581-evb-emmc
-  DEVICE_PACKAGES := aeonsemi-as21xxx-firmware airoha-en8811h-firmware kmod-mt7996-firmware kmod-i2c-an7581 kmod-sound-soc-an7581-wm8960 kmod-sound-an7581-pcm
+  DEVICE_PACKAGES := kmod-phy-aeonsemi-as21xxx phy-airoha-en8811h kmod-mt7996-firmware kmod-i2c-an7581 kmod-sound-soc-an7581-wm8960 kmod-sound-an7581-pcm
   ARTIFACT/preloader.bin := an7581-preloader rfb
   ARTIFACT/bl31-uboot.fip := append-as21x1x-firmware rfb | append-en8811h-firmware rfb | an7581-bl31-uboot rfb
   ARTIFACTS := preloader.bin bl31-uboot.fip
@@ -66,7 +66,7 @@ define Device/airoha_an7581-evb-emmc-kite
   DEVICE_VENDOR := Airoha
   DEVICE_MODEL := AN7581 Evaluation Board (EMMC + KITE)
   DEVICE_DTS := an7581-evb-emmc-kite
-  DEVICE_PACKAGES := aeonsemi-as21xxx-firmware airoha-en8811h-firmware kmod-mt7992-firmware kmod-i2c-an7581 kmod-sound-soc-an7581-wm8960 kmod-sound-an7581-pcm
+  DEVICE_PACKAGES := kmod-phy-aeonsemi-as21xxx phy-airoha-en8811h kmod-mt7992-firmware kmod-i2c-an7581 kmod-sound-soc-an7581-wm8960 kmod-sound-an7581-pcm
   ARTIFACT/preloader.bin := an7581-preloader rfb
   ARTIFACT/bl31-uboot.fip := append-as21x1x-firmware rfb | append-en8811h-firmware rfb | an7581-bl31-uboot rfb
   ARTIFACTS := preloader.bin bl31-uboot.fip
