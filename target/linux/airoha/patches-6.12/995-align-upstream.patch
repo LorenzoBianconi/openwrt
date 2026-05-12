@@ -415,6 +415,54 @@
  
  	spin_unlock_bh(&q->lock);
  error:
+@@ -2371,13 +2371,13 @@ static int airoha_dev_set_wan_flag(struc
+ 	struct airoha_gdm_port *port = dev->port;
+ 	struct airoha_eth *eth = dev->eth;
+ 
+-	if (!((dev->flags ^ flags) & PRIV_FLAG_WAN))
++	if (!((dev->flags ^ flags) & AIROHA_PRIV_F_WAN))
+ 		return 0;
+ 
+ 	if (netif_running(netdev))
+ 		return -EBUSY;
+ 
+-	if (flags & PRIV_FLAG_WAN) {
++	if (flags & AIROHA_PRIV_F_WAN) {
+ 		struct airoha_gdm_dev *wan_dev;
+ 
+ 		/* Verify the wan device is not already configured */
+@@ -2387,19 +2387,19 @@ static int airoha_dev_set_wan_flag(struc
+ 
+ 		switch (port->id) {
+ 		case AIROHA_GDM2_IDX:
+-			dev->flags |= PRIV_FLAG_WAN;
++			dev->flags |= AIROHA_PRIV_F_WAN;
+ 			airoha_dev_set_qdma(dev);
+ 			break;
+ 		case AIROHA_GDM3_IDX:
+ 		case AIROHA_GDM4_IDX: {
+ 			int err;
+ 
+-			dev->flags |= PRIV_FLAG_WAN;
++			dev->flags |= AIROHA_PRIV_F_WAN;
+ 			airoha_dev_set_qdma(dev);
+ 
+ 			err = airoha_enable_gdm2_loopback(dev);
+ 			if (err) {
+-				dev->flags &= ~PRIV_FLAG_WAN;
++				dev->flags &= ~AIROHA_PRIV_F_WAN;
+ 				return err;
+ 			}
+ 			break;
+@@ -2422,7 +2422,7 @@ static int airoha_dev_set_wan_flag(struc
+ 			break;
+ 		}
+ 
+-		dev->flags &= ~PRIV_FLAG_WAN;
++		dev->flags &= ~AIROHA_PRIV_F_WAN;
+ 		airoha_dev_set_qdma(dev);
+ 	}
+ 
 @@ -2671,18 +2671,17 @@ static int airoha_qdma_get_tx_ets_stats(
  					struct tc_ets_qopt_offload *opt)
  {
