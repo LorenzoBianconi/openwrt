@@ -1,16 +1,13 @@
-From 5154d505f36c0d433d2aadcb7df57d49142f312a Mon Sep 17 00:00:00 2001
-Message-ID: <5154d505f36c0d433d2aadcb7df57d49142f312a.1778237256.git.lorenzo@kernel.org>
+From f2ef20c9841cb8fd11219b00885d99315f21461b Mon Sep 17 00:00:00 2001
+Message-ID: <f2ef20c9841cb8fd11219b00885d99315f21461b.1778513738.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Thu, 7 May 2026 15:07:49 +0200
 Subject: [PATCH] net: neigh: Reallocate headroom if necessary in
  neigh_hh_bridge()
 
-neigh_hh_bridge() assumes there is always enough headroom to copy aligned
-L2 header in the skb. This assumption can trigger the crash reported
-below using the following netfilter configuration:
-
-- iperf3 client (192.168.83.119) --> (br) --> iperf3 server (192.168.83.120)
-- iperf3 client is sending packet for 192.168.83.123 to the bridge device.
+neigh_hh_bridge() assumes the skb always has sufficient headroom to copy
+the aligned  L2 header. This assumption can trigger the crash reported
+below using the following netfilter setup:
 
 $modprobe br_netfilter
 $sysctl -w net.bridge.bridge-nf-call-iptables=1
@@ -18,9 +15,14 @@ $sysctl -w net.bridge.bridge-nf-call-iptables=1
 $root@OpenWrt:~# nft list ruleset
 table ip nat {
         chain prerouting {
+                type nat hook prerouting priority dstnat; policy accept;
                 ip daddr 192.168.83.123 dnat to 192.168.83.120
         }
 }
+
+- iperf3 client (192.168.83.119) --> bridge (192.168.83.118) --> iperf3 server (192.168.83.120)
+
+the iperf3 client is sending packet for 192.168.83.123 to the bridge device.
 
 [ 1579.036575] Unable to handle kernel write to read-only memory at virtual address ffffff8004d76ffe
 [ 1579.045482] Mem abort info:
@@ -86,15 +88,15 @@ Fix the issue reallocating the skb headroom if necessary in neigh_hh_bridge rout
 Fixes: e179e6322ac33 ("netfilter: bridge-netfilter: Fix MAC header handling with IP DNAT")
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---
- include/net/neighbour.h         | 15 +++++++++++----
- net/bridge/br_netfilter_hooks.c |  5 ++++-
- 2 files changed, 15 insertions(+), 5 deletions(-)
+ include/net/neighbour.h         | 16 ++++++++++++----
+ net/bridge/br_netfilter_hooks.c |  7 ++++++-
+ 2 files changed, 18 insertions(+), 5 deletions(-)
 
 diff --git a/include/net/neighbour.h b/include/net/neighbour.h
-index 2dfee6d4258a..4e1222968753 100644
+index 2dfee6d4258a..c2b6196705ef 100644
 --- a/include/net/neighbour.h
 +++ b/include/net/neighbour.h
-@@ -487,16 +487,23 @@ static inline int neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
+@@ -487,16 +487,24 @@ static inline int neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
  }
  
  #if IS_ENABLED(CONFIG_BRIDGE_NETFILTER)
@@ -105,7 +107,8 @@ index 2dfee6d4258a..4e1222968753 100644
 -	unsigned int seq, hh_alen;
 +	unsigned int seq, hh_alen = HH_DATA_ALIGN(ETH_HLEN);
 +
-+	if (unlikely(skb_headroom(skb) < hh_alen)) {
++	if (unlikely(skb_headroom(skb) < hh_alen ||
++		     skb_header_cloned(skb) || skb_shared(skb))) {
 +		skb = skb_expand_head(skb, hh_alen);
 +		if (!skb)
 +			return NULL;
@@ -123,17 +126,19 @@ index 2dfee6d4258a..4e1222968753 100644
  #endif
  
 diff --git a/net/bridge/br_netfilter_hooks.c b/net/bridge/br_netfilter_hooks.c
-index 0ab1c94db4b9..6b59d7eb7906 100644
+index 0ab1c94db4b9..8d21c88c2116 100644
 --- a/net/bridge/br_netfilter_hooks.c
 +++ b/net/bridge/br_netfilter_hooks.c
-@@ -297,7 +297,10 @@ int br_nf_pre_routing_finish_bridge(struct net *net, struct sock *sk, struct sk_
+@@ -297,7 +297,12 @@ int br_nf_pre_routing_finish_bridge(struct net *net, struct sock *sk, struct sk_
  				goto free_skb;
  			}
  
 -			neigh_hh_bridge(&neigh->hh, skb);
 +			skb = neigh_hh_bridge(&neigh->hh, skb);
-+			if (!skb)
++			if (!skb) {
++				neigh_release(neigh);
 +				return -ENOMEM;
++			}
 +
  			skb->dev = br_indev;
  
