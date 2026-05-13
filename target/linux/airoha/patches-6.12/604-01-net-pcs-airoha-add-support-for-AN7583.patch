@@ -47,14 +47,6 @@ diff --git a/drivers/net/pcs/airoha/pcs-airoha-common.c b/drivers/net/pcs/airoha
 index a36d29e389a2..8438837b1150 100644
 --- a/drivers/net/pcs/airoha/pcs-airoha-common.c
 +++ b/drivers/net/pcs/airoha/pcs-airoha-common.c
-@@ -9,6 +9,7 @@
- #include <linux/of.h>
- #include <linux/of_platform.h>
- #include <linux/pcs/pcs-airoha.h>
-+#include <linux/phy/phy.h>
- #include <linux/phylink.h>
- #include <linux/platform_device.h>
- #include <linux/regmap.h>
 @@ -19,6 +20,7 @@
  static void airoha_pcs_setup_scu_eth(struct airoha_pcs_priv *priv,
  				     phy_interface_t interface)
@@ -124,6 +116,14 @@ index a36d29e389a2..8438837b1150 100644
  		break;
  	case AIROHA_PCS_USB:
  		break;
+@@ -152,6 +183,7 @@ static void airoha_pcs_init_usxgmii(struct airoha_pcs_priv *priv, int index)
+ 
+ static void airoha_pcs_init_usxgmii(struct airoha_pcs_priv *priv, int index)
+ {
++	const struct airoha_pcs_match_data *data = priv->data;
+ 	struct airoha_pcs_maps *maps = &priv->maps[index];
+ 
+ 	regmap_set_bits(maps->multi_sgmii, AIROHA_PCS_MULTI_SGMII_MSG_RX_CTRL_0,
 @@ -152,12 +183,18 @@ static void airoha_pcs_init_usxgmii(struct airoha_pcs_priv *priv, int index)
  			AIROHA_PCS_HSGMII_XFI_SEL);
  
@@ -998,15 +998,6 @@ index a3c239da440c..f45eca24750d 100644
  enum xfi_port_type {
  	AIROHA_PCS_ETH,
  	AIROHA_PCS_PON,
-@@ -1237,6 +1655,8 @@ struct airoha_pcs_priv {
- 
- 	struct reset_control_bulk_data rsts[AIROHA_PCS_MAX_NUM_RSTS];
- 
-+	struct phy *phy;
-+
- 	bool manual_rx_calib;
- };
- 
 @@ -1250,6 +1670,11 @@ struct airoha_pcs_port {
  struct airoha_pcs_match_data {
  	enum xfi_port_type port_type;

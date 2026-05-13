@@ -1,50 +1,47 @@
-From f007fc3b34efd860a4ef709e8dc9633f7ac2afa3 Mon Sep 17 00:00:00 2001
+From 5d11640584dd24a1ba23e767c6929314c8ac50cf Mon Sep 17 00:00:00 2001
 From: Christian Marangi <ansuelsmth@gmail.com>
 Date: Fri, 17 Jan 2025 12:40:32 +0100
-Subject: [PATCH 15/20] net: pcs: airoha: add PCS driver for Airoha AN7581 SoC
+Subject: [PATCH 1/2] net: pcs: airoha: add PCS driver for Airoha AN7581 SoC
 
 Add PCS driver for Airoha AN7581 SoC for Ethernet/PON/PCIe/USB SERDES
 and permit usage of external PHY or connected SFP cage. Supported modes
 are USXGMII, 10G-BASER, 2500BASE-X, 1000BASE-X and SGMII.
 
-The driver probe and register the various needed registers and expose
-the pcs_create and pcs_destroy symbol to make them usable by the Airoha
-Ethernet driver.
+The driver probe and register the various needed registers and register as
+a PCS provider for fwnode usage.
 
 Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 ---
  drivers/net/pcs/Kconfig                    |    2 +
  drivers/net/pcs/Makefile                   |    2 +
- drivers/net/pcs/airoha/Kconfig             |   11 +
+ drivers/net/pcs/airoha/Kconfig             |   12 +
  drivers/net/pcs/airoha/Makefile            |    7 +
- drivers/net/pcs/airoha/pcs-airoha-common.c | 1272 ++++++++++++
- drivers/net/pcs/airoha/pcs-airoha.h        | 1306 ++++++++++++
- drivers/net/pcs/airoha/pcs-an7581.c        | 2096 ++++++++++++++++++++
- include/linux/pcs/pcs-airoha.h             |    9 +
- 8 files changed, 4705 insertions(+)
+ drivers/net/pcs/airoha/pcs-airoha-common.c | 1313 ++++++++++++
+ drivers/net/pcs/airoha/pcs-airoha.h        | 1309 ++++++++++++
+ drivers/net/pcs/airoha/pcs-an7581.c        | 2093 ++++++++++++++++++++
+ 7 files changed, 4738 insertions(+)
  create mode 100644 drivers/net/pcs/airoha/Kconfig
  create mode 100644 drivers/net/pcs/airoha/Makefile
  create mode 100644 drivers/net/pcs/airoha/pcs-airoha-common.c
  create mode 100644 drivers/net/pcs/airoha/pcs-airoha.h
  create mode 100644 drivers/net/pcs/airoha/pcs-an7581.c
- create mode 100644 include/linux/pcs/pcs-airoha.h
 
 diff --git a/drivers/net/pcs/Kconfig b/drivers/net/pcs/Kconfig
-index f6aa437473de..56c74bdd483d 100644
+index 874de743b22c..46ff3a2790e3 100644
 --- a/drivers/net/pcs/Kconfig
 +++ b/drivers/net/pcs/Kconfig
-@@ -33,4 +33,6 @@ config PCS_RZN1_MIIC
- 	  on RZ/N1 SoCs. This PCS converts MII to RMII/RGMII or can be set in
- 	  pass-through mode for MII.
+@@ -41,4 +41,6 @@ config PCS_RZN1_MIIC
+ 	  Renesas RZ/N1, RZ/N2H, and RZ/T2H SoCs. This PCS converts MII to
+ 	  RMII/RGMII, or can be set in pass-through mode for MII.
  
 +source "drivers/net/pcs/airoha/Kconfig"
 +
  endmenu
 diff --git a/drivers/net/pcs/Makefile b/drivers/net/pcs/Makefile
-index 4f7920618b90..c4df65abefa6 100644
+index 3005cdd89ab7..91593aa8d926 100644
 --- a/drivers/net/pcs/Makefile
 +++ b/drivers/net/pcs/Makefile
-@@ -8,3 +8,5 @@ obj-$(CONFIG_PCS_XPCS)		+= pcs_xpcs.o
+@@ -9,3 +9,5 @@ obj-$(CONFIG_PCS_XPCS)		+= pcs_xpcs.o
  obj-$(CONFIG_PCS_MTK_LYNXI)	+= pcs-mtk-lynxi.o
  obj-$(CONFIG_PCS_RZN1_MIIC)	+= pcs-rzn1-miic.o
  obj-$(CONFIG_PCS_MTK_USXGMII)	+= pcs-mtk-usxgmii.o
@@ -52,14 +49,15 @@ index 4f7920618b90..c4df65abefa6 100644
 +obj-$(CONFIG_PCS_AIROHA)	+= airoha/
 diff --git a/drivers/net/pcs/airoha/Kconfig b/drivers/net/pcs/airoha/Kconfig
 new file mode 100644
-index 000000000000..ba88cca278b1
+index 000000000000..4ddd527b365f
 --- /dev/null
 +++ b/drivers/net/pcs/airoha/Kconfig
-@@ -0,0 +1,11 @@
+@@ -0,0 +1,12 @@
 +# SPDX-License-Identifier: GPL-2.0-only
 +
 +config PCS_AIROHA
 +	tristate
++	select FWNODE_PCS
 +
 +config PCS_AIROHA_AN7581
 +	tristate "Airoha AN7581 PCS driver"
@@ -82,10 +80,10 @@ index 000000000000..25cb8f090c21
 +endif
 diff --git a/drivers/net/pcs/airoha/pcs-airoha-common.c b/drivers/net/pcs/airoha/pcs-airoha-common.c
 new file mode 100644
-index 000000000000..a36d29e389a2
+index 000000000000..ead0bc808396
 --- /dev/null
 +++ b/drivers/net/pcs/airoha/pcs-airoha-common.c
-@@ -0,0 +1,1272 @@
+@@ -0,0 +1,1312 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (c) 2024 AIROHA Inc
@@ -96,11 +94,13 @@ index 000000000000..a36d29e389a2
 +#include <linux/mfd/syscon.h>
 +#include <linux/of.h>
 +#include <linux/of_platform.h>
-+#include <linux/pcs/pcs-airoha.h>
++#include <linux/pcs/pcs-provider.h>
++#include <linux/phy/phy.h>
 +#include <linux/phylink.h>
 +#include <linux/platform_device.h>
 +#include <linux/regmap.h>
 +#include <linux/reset.h>
++#include <linux/rtnetlink.h>
 +
 +#include "pcs-airoha.h"
 +
@@ -176,8 +176,8 @@ index 000000000000..a36d29e389a2
 +		}
 +
 +		regmap_update_bits(priv->scu, AIROHA_SCU_SSTR,
-+				AIROHA_SCU_PCIE_XSI0_SEL,
-+				xsi_sel);
++				   AIROHA_SCU_PCIE_XSI0_SEL,
++				   xsi_sel);
 +	} else {
 +		switch (interface) {
 +		case PHY_INTERFACE_MODE_SGMII:
@@ -192,8 +192,8 @@ index 000000000000..a36d29e389a2
 +		}
 +
 +		regmap_update_bits(priv->scu, AIROHA_SCU_SSTR,
-+				AIROHA_SCU_PCIE_XSI1_SEL,
-+				xsi_sel);
++				   AIROHA_SCU_PCIE_XSI1_SEL,
++				   xsi_sel);
 +	}
 +}
 +
@@ -233,7 +233,6 @@ index 000000000000..a36d29e389a2
 +
 +static void airoha_pcs_init_usxgmii(struct airoha_pcs_priv *priv, int index)
 +{
-+	const struct airoha_pcs_match_data *data = priv->data;
 +	struct airoha_pcs_maps *maps = &priv->maps[index];
 +
 +	regmap_set_bits(maps->multi_sgmii, AIROHA_PCS_MULTI_SGMII_MSG_RX_CTRL_0,
@@ -400,8 +399,8 @@ index 000000000000..a36d29e389a2
 +	}
 +}
 +
-+static void airoha_pcs_get_state_sgmii(struct airoha_pcs_priv *priv, int index,
-+				       struct phylink_link_state *state)
++static void airoha_pcs_get_state_sgmii(struct airoha_pcs_priv *priv,
++				       int index, struct phylink_link_state *state)
 +{
 +	struct airoha_pcs_maps *maps = &priv->maps[index];
 +	u32 bmsr, lpa;
@@ -1019,58 +1018,6 @@ index 000000000000..a36d29e389a2
 +	.pcs_link_down = airoha_pcs_link_down,
 +};
 +
-+struct phylink_pcs *airoha_pcs_create(struct device *dev)
-+{
-+	struct of_phandle_args out_args;
-+	struct platform_device *pdev;
-+	struct airoha_pcs_port *port;
-+	struct device_node *np;
-+	int index, ret;
-+
-+	ret = of_parse_phandle_with_args(dev->of_node, "pcs-handle",
-+					 "#pcs-cells", 0, &out_args);
-+	if (ret)
-+		return ERR_PTR(ret);
-+
-+	np = out_args.np;
-+	if (out_args.args_count)
-+		index = out_args.args[0];
-+
-+	if (!of_device_is_available(np)) {
-+		of_node_put(np);
-+		return ERR_PTR(-ENODEV);
-+	}
-+
-+	pdev = of_find_device_by_node(np);
-+	of_node_put(np);
-+	if (!pdev || !platform_get_drvdata(pdev)) {
-+		if (pdev)
-+			put_device(&pdev->dev);
-+		return ERR_PTR(-EPROBE_DEFER);
-+	}
-+
-+	port = kzalloc(sizeof(*port), GFP_KERNEL);
-+	if (!port)
-+		return ERR_PTR(-ENOMEM);
-+
-+	port->priv = platform_get_drvdata(pdev);
-+	port->index = index;
-+	port->pcs.ops = &airoha_pcs_ops;
-+	port->pcs.neg_mode = true;
-+	port->pcs.poll = true;
-+
-+	return &port->pcs;
-+}
-+EXPORT_SYMBOL(airoha_pcs_create);
-+
-+void airoha_pcs_destroy(struct phylink_pcs *pcs)
-+{
-+	struct airoha_pcs_port *port = to_airoha_pcs_port(pcs);
-+
-+	kfree(port);
-+}
-+EXPORT_SYMBOL(airoha_pcs_destroy);
-+
 +static int airoha_pcs_init_named_regmap(struct platform_device *pdev,
 +					const char *name, struct regmap **regmap)
 +{
@@ -1222,17 +1169,54 @@ index 000000000000..a36d29e389a2
 +	return airoha_pcs_init_named_regmap(pdev, "pcs_ana", &priv->pcs_ana);
 +}
 +
++static struct phylink_pcs *airoha_pcs_get(struct fwnode_reference_args *pcsspec,
++					  void *data)
++{
++	struct airoha_pcs_priv *priv = data;
++	struct device *dev = priv->dev;
++	int index = 0;
++
++	switch (priv->data->port_type) {
++	case AIROHA_PCS_ETH:
++	case AIROHA_PCS_PON:
++	case AIROHA_PCS_USB:
++		if (pcsspec->nargs) {
++			dev_err(dev, "invalid number of cells in 'pcs' property\n");
++			return ERR_PTR(-EINVAL);
++		}
++
++		break;
++	case AIROHA_PCS_PCIE:
++		if (pcsspec->nargs != 1) {
++			dev_err(dev, "invalid number of cells in 'pcs' property\n");
++			return ERR_PTR(-EINVAL);
++		}
++
++		break;
++	}
++
++	if (pcsspec->nargs)
++		index = pcsspec->args[0];
++
++	return &priv->ports[index].pcs;
++}
++
 +static int airoha_pcs_probe(struct platform_device *pdev)
 +{
 +	const struct airoha_pcs_match_data *data;
 +	struct device *dev = &pdev->dev;
 +	struct airoha_pcs_priv *priv;
-+	int ret;
++	int index, ret;
 +
 +	data = of_device_get_match_data(dev);
 +
 +	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 +	if (!priv)
++		return -ENOMEM;
++
++	priv->ports = devm_kcalloc(dev, data->num_port,
++				   sizeof(*priv->ports), GFP_KERNEL);
++	if (!priv->ports)
 +		return -ENOMEM;
 +
 +	priv->dev = dev;
@@ -1305,12 +1289,62 @@ index 000000000000..a36d29e389a2
 +			priv->manual_rx_calib = true;
 +	}
 +
++	for (index = 0; index < data->num_port; index++) {
++		struct airoha_pcs_port *port = &priv->ports[index];
++
++		port->priv = priv;
++		port->index = index;
++		port->pcs.poll = true;
++		port->pcs.neg_mode = true;
++		port->pcs.ops = &airoha_pcs_ops;
++
++		switch (data->port_type) {
++		case AIROHA_PCS_ETH:
++		case AIROHA_PCS_PON:
++		case AIROHA_PCS_PCIE:
++			__set_bit(PHY_INTERFACE_MODE_10GBASER,
++				  port->pcs.supported_interfaces);
++			__set_bit(PHY_INTERFACE_MODE_USXGMII,
++				  port->pcs.supported_interfaces);
++			fallthrough;
++		case AIROHA_PCS_USB:
++			__set_bit(PHY_INTERFACE_MODE_SGMII,
++				  port->pcs.supported_interfaces);
++			__set_bit(PHY_INTERFACE_MODE_1000BASEX,
++				  port->pcs.supported_interfaces);
++			__set_bit(PHY_INTERFACE_MODE_2500BASEX,
++				  port->pcs.supported_interfaces);
++			break;
++		}
++	}
++
 +	platform_set_drvdata(pdev, priv);
 +
-+	return 0;
++	return fwnode_pcs_add_provider(dev_fwnode(dev), airoha_pcs_get,
++				       priv);
++}
++
++static void airoha_pcs_remove(struct platform_device *pdev)
++{
++	struct airoha_pcs_priv *priv = platform_get_drvdata(pdev);
++	const struct airoha_pcs_match_data *data = priv->data;
++	int i;
++
++	fwnode_pcs_del_provider(dev_fwnode(&pdev->dev));
++
++	rtnl_lock();
++
++	for (i = 0; i < data->num_port; i++) {
++		struct airoha_pcs_port *port = &priv->ports[i];
++
++		phylink_release_pcs(&port->pcs);
++	}
++
++	rtnl_unlock();
 +}
 +
 +static const struct airoha_pcs_match_data an7581_pcs_eth = {
++	.num_port = 1,
 +	.port_type = AIROHA_PCS_ETH,
 +	.alloc_regmap_fields = an7581_pcs_alloc_regmap_fields,
 +	.bringup = an7581_pcs_bringup,
@@ -1319,6 +1353,7 @@ index 000000000000..a36d29e389a2
 +};
 +
 +static const struct airoha_pcs_match_data an7581_pcs_pon = {
++	.num_port = 1,
 +	.port_type = AIROHA_PCS_PON,
 +	.alloc_regmap_fields = an7581_pcs_alloc_regmap_fields,
 +	.bringup = an7581_pcs_bringup,
@@ -1326,6 +1361,7 @@ index 000000000000..a36d29e389a2
 +};
 +
 +static const struct airoha_pcs_match_data an7581_pcs_pcie = {
++	.num_port = 2,
 +	.port_type = AIROHA_PCS_PCIE,
 +	.alloc_regmap_fields = an7581_pcs_pcie_alloc_regmap_fields,
 +	.bringup = an7581_pcs_bringup,
@@ -1333,6 +1369,7 @@ index 000000000000..a36d29e389a2
 +};
 +
 +static const struct airoha_pcs_match_data an7581_pcs_usb = {
++	.num_port = 1,
 +	.port_type = AIROHA_PCS_USB,
 +	.bringup = an7581_pcs_usb_bringup,
 +};
@@ -1352,6 +1389,7 @@ index 000000000000..a36d29e389a2
 +		.of_match_table = airoha_pcs_of_table,
 +	},
 +	.probe = airoha_pcs_probe,
++	.remove = airoha_pcs_remove,
 +};
 +module_platform_driver(airoha_pcs_driver);
 +
@@ -1360,11 +1398,11 @@ index 000000000000..a36d29e389a2
 +MODULE_AUTHOR("Christian Marangi <ansuelsmth@gmail.com>");
 diff --git a/drivers/net/pcs/airoha/pcs-airoha.h b/drivers/net/pcs/airoha/pcs-airoha.h
 new file mode 100644
-index 000000000000..a3c239da440c
+index 000000000000..aac2521caf4e
 --- /dev/null
 +++ b/drivers/net/pcs/airoha/pcs-airoha.h
-@@ -0,0 +1,1306 @@
-+// SPDX-License-Identifier: GPL-2.0
+@@ -0,0 +1,1309 @@
++/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Copyright (c) 2024 AIROHA Inc
 + * Author: Christian Marangi <ansuelsmth@gmail.com>
@@ -2326,7 +2364,6 @@ index 000000000000..a3c239da440c
 +#define   AIROHA_PCS_ANA_2L_RX1_DAC_E0_BYPASS_AEQ BIT(8)
 +#define   AIROHA_PCS_ANA_2L_RX1_DAC_D1_BYPASS_AEQ BIT(0)
 +
-+
 +/* PMA_PHYD */
 +#define AIROHA_PCS_PMA_SS_LCPLL_PWCTL_SETTING_0	0x0
 +#define   AIROHA_PCS_PMA_SW_LCPLL_EN		BIT(24)
@@ -2593,6 +2630,8 @@ index 000000000000..a3c239da440c
 +	const struct airoha_pcs_match_data *data;
 +	phy_interface_t interface;
 +
++	struct airoha_pcs_port *ports;
++
 +	struct regmap *scu;
 +
 +	struct airoha_pcs_maps maps[2];
@@ -2602,6 +2641,8 @@ index 000000000000..a3c239da440c
 +	struct regmap_field **pcs_ana_fields[2];
 +
 +	struct reset_control_bulk_data rsts[AIROHA_PCS_MAX_NUM_RSTS];
++
++	struct phy *phy;
 +
 +	bool manual_rx_calib;
 +};
@@ -2614,16 +2655,17 @@ index 000000000000..a3c239da440c
 +};
 +
 +struct airoha_pcs_match_data {
++	int num_port;
 +	enum xfi_port_type port_type;
 +
 +	int (*alloc_regmap_fields)(struct airoha_pcs_priv *priv);
 +	int (*bringup)(struct airoha_pcs_priv *priv,
-+			int index, phy_interface_t interface);
++		       int index, phy_interface_t interface);
 +	void (*link_up)(struct airoha_pcs_priv *priv, int index);
 +	int (*rxlock_workaround)(struct airoha_pcs_priv *priv, int index);
 +};
 +
-+#define to_airoha_pcs_port(n) container_of(n, struct airoha_pcs_port, pcs);
++#define to_airoha_pcs_port(n) container_of(n, struct airoha_pcs_port, pcs)
 +
 +#ifdef CONFIG_PCS_AIROHA_AN7581
 +int an7581_pcs_alloc_regmap_fields(struct airoha_pcs_priv *priv);
@@ -2663,7 +2705,6 @@ index 000000000000..a3c239da440c
 +{
 +}
 +
-+
 +static inline int an7581_pcs_rxlock_workaround(struct airoha_pcs_priv *priv,
 +					       int index)
 +{
@@ -2672,10 +2713,10 @@ index 000000000000..a3c239da440c
 +#endif
 diff --git a/drivers/net/pcs/airoha/pcs-an7581.c b/drivers/net/pcs/airoha/pcs-an7581.c
 new file mode 100644
-index 000000000000..27aaa1562174
+index 000000000000..22cf7b4b0108
 --- /dev/null
 +++ b/drivers/net/pcs/airoha/pcs-an7581.c
-@@ -0,0 +1,2096 @@
+@@ -0,0 +1,2093 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Copyright (c) 2024 AIROHA Inc
@@ -2688,7 +2729,6 @@ index 000000000000..27aaa1562174
 +#include "pcs-airoha.h"
 +
 +#include <linux/of.h>
-+
 +
 +enum {
 +	AN7581_PCS_CMN_EN,
@@ -3387,7 +3427,7 @@ index 000000000000..27aaa1562174
 +
 +	/* Setup RSTB */
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_JCPLL_RST_DLY],
-+			      AIROHA_PCS_ANA_JCPLL_RST_DLY_150_200);
++			   AIROHA_PCS_ANA_JCPLL_RST_DLY_150_200);
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_JCPLL_PLL_RSTB], 0x1);
 +
 +	/* Enable PLL force selection and Force Disable */
@@ -3398,7 +3438,7 @@ index 000000000000..27aaa1562174
 +
 +	/* Setup SDM */
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_JCPLL_SDM_DI_LS],
-+			      AIROHA_PCS_ANA_JCPLL_SDM_DI_LS_2_23);
++			   AIROHA_PCS_ANA_JCPLL_SDM_DI_LS_2_23);
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_JCPLL_SDM_DI_EN], 0x0);
 +
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_JCPLL_SDM_OUT], 0x0);
@@ -3819,7 +3859,7 @@ index 000000000000..27aaa1562174
 +		regmap_update_bits(pcs_pma, AIROHA_PCS_PMA_DIG_RESERVE_29,
 +				   AIROHA_PCS_PMA_2L_RX_RATE_CTRL,
 +				   FIELD_PREP(AIROHA_PCS_PMA_2L_RX_RATE_CTRL,
-+				   	      rx_rate_ctrl));
++					      rx_rate_ctrl));
 +
 +		regmap_update_bits(pcs_pma, AIROHA_PCS_PMA_ADD_XPON_MODE_1,
 +				   AIROHA_PCS_PMA_XFI_RX_MODE,
@@ -4418,8 +4458,7 @@ index 000000000000..27aaa1562174
 +	dev_dbg(priv->dev, "Selected CDR Pr Idac: %x Fl Out: %x\n", cdr_pr_idac, fl_out);
 +	if (fl_out_diff > 100)
 +		dev_dbg(priv->dev, "Fl Out is %d far from target %d on intermediate calibration.\n",
-+			 fl_out_diff, target_fl_out);
-+
++			fl_out_diff, target_fl_out);
 +
 +	/* Setup Load Band */
 +	regmap_field_write(pcs_ana_fields[AN7581_PCS_CDR_PR_INJ_FORCE_OFF], 0x0);
@@ -4598,7 +4637,6 @@ index 000000000000..27aaa1562174
 +	usleep_range(200, 300);
 +}
 +
-+
 +int an7581_pcs_bringup(struct airoha_pcs_priv *priv, int index,
 +		       phy_interface_t interface)
 +{
@@ -4772,21 +4810,6 @@ index 000000000000..27aaa1562174
 +	 */
 +	return -EINVAL;
 +}
-diff --git a/include/linux/pcs/pcs-airoha.h b/include/linux/pcs/pcs-airoha.h
-new file mode 100644
-index 000000000000..9b17134f7290
---- /dev/null
-+++ b/include/linux/pcs/pcs-airoha.h
-@@ -0,0 +1,9 @@
-+/* SPDX-License-Identifier: GPL-2.0 */
-+
-+#ifndef __LINUX_PCS_AIROHA_H
-+#define __LINUX_PCS_AIROHA_H
-+
-+struct phylink_pcs *airoha_pcs_create(struct device *dev);
-+void airoha_pcs_destroy(struct phylink_pcs *pcs);
-+
-+#endif /* __LINUX_PCS_AIROHA_H */
 -- 
-2.51.0
+2.53.0
 

@@ -473,21 +473,19 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  		if (!port)
  			continue;
-@@ -3278,18 +3324,21 @@ error_hw_cleanup:
+@@ -3278,16 +3324,19 @@ error_hw_cleanup:
+ 		if (!port)
  			continue;
  
- 		airoha_metadata_dst_free(port);
 -		if (!port->dev)
 -			continue;
 -
 -		dev = port->dev;
+-		if (dev->dev->reg_state == NETREG_REGISTERED) {
 -#if defined(CONFIG_PCS_AIROHA)
--		if (airhoa_is_phy_external(port)) {
--			phylink_destroy(dev->phylink);
--			airoha_pcs_destroy(dev->pcs);
--		}
+-			if (airhoa_is_phy_external(port))
+-				phylink_destroy(dev->phylink);
 -#endif
--		if (dev->dev->reg_state == NETREG_REGISTERED)
 -			unregister_netdev(dev->dev);
 +		for (j = 0; j < ARRAY_SIZE(port->devs); j++) {
 +			struct airoha_gdm_dev *dev = port->devs[j];
@@ -495,18 +493,16 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			if (!dev)
 +				continue;
 +
++			if (dev->dev->reg_state == NETREG_REGISTERED) {
 +#if defined(CONFIG_PCS_AIROHA)
-+			if (airhoa_is_phy_external(port)) {
-+				phylink_destroy(dev->phylink);
-+				airoha_pcs_destroy(dev->pcs);
-+			}
++				if (airhoa_is_phy_external(port))
++					phylink_destroy(dev->phylink);
 +#endif
-+			if (dev->dev->reg_state == NETREG_REGISTERED)
 +				unregister_netdev(dev->dev);
-+		}
++			}
+ 		}
+ 		airoha_metadata_dst_free(port);
  	}
- 	free_netdev(eth->napi_dev);
- 	platform_set_drvdata(pdev, NULL);
 @@ -3300,7 +3352,7 @@ static void airoha_remove(struct platfor
  
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
@@ -516,9 +512,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  		if (!port)
  			continue;
-@@ -3315,18 +3365,21 @@ static void airoha_remove(struct platfor
- 
- 		airoha_metadata_dst_free(port);
+@@ -3315,15 +3365,18 @@ static void airoha_remove(struct platfor
+ 		if (!port)
+ 			continue;
  
 -		if (!port->dev)
 -			continue;
@@ -527,28 +523,22 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
 -		dev = port->dev;
 -#if defined(CONFIG_PCS_AIROHA)
--		if (airhoa_is_phy_external(port)) {
+-		if (airhoa_is_phy_external(port))
 -			phylink_destroy(dev->phylink);
--			airoha_pcs_destroy(dev->pcs);
--		}
 -#endif
--		airoha_dev_stop(dev->dev);
 -		unregister_netdev(dev->dev);
 +			if (!dev)
 +				continue;
 +
 +#if defined(CONFIG_PCS_AIROHA)
-+			if (airhoa_is_phy_external(port)) {
++			if (airhoa_is_phy_external(port))
 +				phylink_destroy(dev->phylink);
-+				airoha_pcs_destroy(dev->pcs);
-+			}
 +#endif
-+			airoha_dev_stop(dev->dev);
 +			unregister_netdev(dev->dev);
 +		}
+ 		airoha_metadata_dst_free(port);
  	}
- 	free_netdev(eth->napi_dev);
- 
+ 	airoha_hw_cleanup(eth);
 @@ -3357,6 +3412,39 @@ static int airoha_en7581_get_src_port_id
  	return -EINVAL;
  }
