@@ -1,0 +1,33 @@
+From 484e69758e73b50a38af99ec8d19606d71ad2eee Mon Sep 17 00:00:00 2001
+From: Christian Marangi <ansuelsmth@gmail.com>
+Date: Wed, 13 May 2026 09:14:23 +0200
+Subject: [PATCH] PCI: mediatek: configure PHY mode
+
+Configure correct PCIe mode for PHY that might support different modes like
+USB or PCIe.
+
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+---
+ drivers/pci/controller/pcie-mediatek.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/pci/controller/pcie-mediatek.c b/drivers/pci/controller/pcie-mediatek.c
+index 75722524fe74..dacbe286c5ec 100644
+--- a/drivers/pci/controller/pcie-mediatek.c
++++ b/drivers/pci/controller/pcie-mediatek.c
+@@ -910,6 +910,12 @@ static void mtk_pcie_enable_port(struct mtk_pcie_port *port)
+ 	reset_control_assert(port->reset);
+ 	reset_control_deassert(port->reset);
+ 
++	err = phy_set_mode(port->phy, PHY_MODE_PCIE);
++	if (err) {
++		dev_err(dev, "failed to set PHY mode\n");
++		goto err_phy_init;
++	}
++
+ 	err = phy_init(port->phy);
+ 	if (err) {
+ 		dev_err(dev, "failed to initialize port%d phy\n", port->slot);
+-- 
+2.53.0
+
