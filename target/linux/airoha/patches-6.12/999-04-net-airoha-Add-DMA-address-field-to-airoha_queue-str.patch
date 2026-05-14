@@ -1,0 +1,53 @@
+From ce15249209017c78c30dcd9b61e613efbc71baf9 Mon Sep 17 00:00:00 2001
+Message-ID: <ce15249209017c78c30dcd9b61e613efbc71baf9.1778737555.git.lorenzo@kernel.org>
+In-Reply-To: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+References: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 12 Feb 2026 11:20:27 +0100
+Subject: [PATCH 05/10] net: airoha: Add DMA address field to airoha_queue
+ struct
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 5 ++---
+ drivers/net/ethernet/airoha/airoha_eth.h | 1 +
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1078,7 +1078,6 @@ static int airoha_qdma_init_tx_queue(str
+ {
+ 	struct airoha_eth *eth = qdma->eth;
+ 	int i, qid = q - &qdma->q_tx[0];
+-	dma_addr_t dma_addr;
+ 
+ 	spin_lock_init(&q->lock);
+ 	q->qdma = qdma;
+@@ -1091,7 +1090,7 @@ static int airoha_qdma_init_tx_queue(str
+ 		return -ENOMEM;
+ 
+ 	q->desc = dmam_alloc_coherent(eth->dev, size * sizeof(*q->desc),
+-				      &dma_addr, GFP_KERNEL);
++				      &q->desc_addr, GFP_KERNEL);
+ 	if (!q->desc)
+ 		return -ENOMEM;
+ 
+@@ -1107,7 +1106,7 @@ static int airoha_qdma_init_tx_queue(str
+ 	airoha_qdma_set(qdma, REG_TX_RING_BLOCKING(qid),
+ 			TX_RING_IRQ_BLOCKING_TX_DROP_EN_MASK);
+ 
+-	airoha_qdma_wr(qdma, REG_TX_RING_BASE(qid), dma_addr);
++	airoha_qdma_wr(qdma, REG_TX_RING_BASE(qid), q->desc_addr);
+ 	airoha_qdma_rmw(qdma, REG_TX_CPU_IDX(qid), TX_RING_CPU_IDX_MASK,
+ 			FIELD_PREP(TX_RING_CPU_IDX_MASK, 0));
+ 	airoha_qdma_rmw(qdma, REG_TX_DMA_IDX(qid), TX_RING_DMA_IDX_MASK,
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -189,6 +189,7 @@ struct airoha_queue {
+ 	spinlock_t lock;
+ 	struct airoha_queue_entry *entry;
+ 	struct airoha_qdma_desc *desc;
++	dma_addr_t desc_addr;
+ 	u16 head;
+ 	u16 tail;
+ 

@@ -1,0 +1,60 @@
+From d4211dd79851a321d52cd8544d67fc41dbfc403f Mon Sep 17 00:00:00 2001
+Message-ID: <d4211dd79851a321d52cd8544d67fc41dbfc403f.1778737555.git.lorenzo@kernel.org>
+In-Reply-To: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+References: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 12 Feb 2026 11:27:28 +0100
+Subject: [PATCH 06/10] net: airoha: Introduce airoha_qdma_setup_tx_irq utility
+ routine
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 22 ++++++++++++++--------
+ 1 file changed, 14 insertions(+), 8 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1115,10 +1115,22 @@ static int airoha_qdma_init_tx_queue(str
+ 	return 0;
+ }
+ 
++static void airoha_qdma_setup_tx_irq(struct airoha_tx_irq_queue *irq_q)
++{
++	struct airoha_qdma *qdma = irq_q->qdma;
++	int id = irq_q - &qdma->q_tx_irq[0];
++
++	memset(irq_q->q, 0xff, irq_q->size * sizeof(u32));
++	airoha_qdma_wr(qdma, REG_TX_IRQ_BASE(id), irq_q->dma_addr);
++	airoha_qdma_rmw(qdma, REG_TX_IRQ_CFG(id), TX_IRQ_DEPTH_MASK,
++			FIELD_PREP(TX_IRQ_DEPTH_MASK, irq_q->size));
++	airoha_qdma_rmw(qdma, REG_TX_IRQ_CFG(id), TX_IRQ_THR_MASK,
++			FIELD_PREP(TX_IRQ_THR_MASK, 1));
++}
++
+ static int airoha_qdma_tx_irq_init(struct airoha_tx_irq_queue *irq_q,
+ 				   struct airoha_qdma *qdma, int size)
+ {
+-	int id = irq_q - &qdma->q_tx_irq[0];
+ 	struct airoha_eth *eth = qdma->eth;
+ 
+ 	irq_q->q = dmam_alloc_coherent(eth->dev, size * sizeof(u32),
+@@ -1126,18 +1138,11 @@ static int airoha_qdma_tx_irq_init(struc
+ 	if (!irq_q->q)
+ 		return -ENOMEM;
+ 
+-	memset(irq_q->q, 0xff, size * sizeof(u32));
+ 	irq_q->size = size;
+ 	irq_q->qdma = qdma;
+-
+ 	netif_napi_add_tx(eth->napi_dev, &irq_q->napi,
+ 			  airoha_qdma_tx_napi_poll);
+-
+-	airoha_qdma_wr(qdma, REG_TX_IRQ_BASE(id), irq_q->dma_addr);
+-	airoha_qdma_rmw(qdma, REG_TX_IRQ_CFG(id), TX_IRQ_DEPTH_MASK,
+-			FIELD_PREP(TX_IRQ_DEPTH_MASK, size));
+-	airoha_qdma_rmw(qdma, REG_TX_IRQ_CFG(id), TX_IRQ_THR_MASK,
+-			FIELD_PREP(TX_IRQ_THR_MASK, 1));
++	airoha_qdma_setup_tx_irq(irq_q);
+ 
+ 	return 0;
+ }

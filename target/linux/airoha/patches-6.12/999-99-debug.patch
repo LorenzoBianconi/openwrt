@@ -1,0 +1,122 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -765,6 +765,7 @@ static int airoha_qdma_lro_rx_process(st
+ 		}
+ 	}
+ 
++	//printk("[%s-%d] COUNT:%d\n", __func__, __LINE__, (int)FIELD_GET(QDMA_ETH_RXMSG_AGG_COUNT_MASK, msg2));
+ 	return 0;
+ }
+ 
+@@ -974,7 +975,8 @@ static int airoha_qdma_init_rx_queue(str
+ 		return -ENOMEM;
+ 
+ 	/* Disable LRO by default */
+-	err = airoha_qdma_init_rx_pp(q, false);
++	//err = airoha_qdma_init_rx_pp(q, false);
++	err = airoha_qdma_init_rx_pp(q, true);
+ 	if (err)
+ 		return err;
+ 
+@@ -2473,6 +2475,7 @@ static int airoha_dev_set_features(struc
+ 	u32 val, pse_port, gdm_rxchn_en;
+ 	struct airoha_queue *q;
+ 
++	printk("[%s-%d]\n", __func__, __LINE__);
+ 	if (!(diff & NETIF_F_LRO))
+ 		return 0;
+ 
+@@ -2494,6 +2497,7 @@ static int airoha_dev_set_features(struc
+ 	for (i = 0; i < ARRAY_SIZE(qdma->q_tx_irq); i++)
+ 		napi_disable(&qdma->q_tx_irq[i].napi);
+ 
++#if 0
+ 	/* reset Tx queues */
+ 	for (i = 0; i < ARRAY_SIZE(qdma->q_tx); i++) {
+ 		netdev_tx_reset_subqueue(netdev, i);
+@@ -2502,6 +2506,9 @@ static int airoha_dev_set_features(struc
+ 
+ 		airoha_qdma_cleanup_tx_queue(&qdma->q_tx[i]);
+ 	}
++#endif
++
++	printk("[%s-%d] XXX\n", __func__, __LINE__);
+ 
+ 	/* disable FE GDMA channel */
+ 	gdm_rxchn_en = airoha_fe_rr(eth, REG_GDM_RXCHN_EN(port->id));
+@@ -2519,10 +2526,12 @@ static int airoha_dev_set_features(struc
+ 	if (err)
+ 		return err;
+ 
++	printk("[%s-%d]\n", __func__, __LINE__);
+ 	/* disable Rx DMA */
+ 	airoha_qdma_clear(qdma, REG_QDMA_GLOBAL_CFG,
+ 			  GLOBAL_CFG_RX_DMA_EN_MASK);
+ 
++#if 0
+ 	/* stop rx napi */
+ 	for (i = 0; i < ARRAY_SIZE(qdma->q_rx); i++) {
+ 		q = &qdma->q_rx[i];
+@@ -2535,16 +2544,19 @@ static int airoha_dev_set_features(struc
+ 		napi_disable(&q->napi);
+ 		airoha_qdma_rx_queue_deinit(q);
+ 	}
++#endif
++
++	printk("[%s-%d]\n", __func__, __LINE__);
+ 
+ 	/* reset LRO configuration */
+ 	airoha_fe_lro_disable(eth, qdma_id);
+ 	/* reconfigure tx queues */
+ 	airoha_qdma_reset_tx(qdma);
+ 
++	printk("[%s-%d]\n", __func__, __LINE__);
++
+ 	/* reconfigure rx queues */
+ 	for (i = 0; i < ARRAY_SIZE(qdma->q_rx); i++) {
+-		int err;
+-
+ 		q = &qdma->q_rx[i];
+ 		if (!q->ndesc)
+ 			continue;
+@@ -2552,22 +2564,25 @@ static int airoha_dev_set_features(struc
+ 		if (!airoha_qdma_is_lro_rx_queue(q, qdma))
+ 			continue;
+ 
+-		err = airoha_qdma_init_rx_pp(q, features & NETIF_F_LRO);
+-		if (err)
+-			return err;
++		//err = airoha_qdma_init_rx_pp(q, features & NETIF_F_LRO);
++		//if (err)
++		//	return err;
+ 
+-		airoha_qdma_setup_rx_queue(q);
++		//airoha_qdma_setup_rx_queue(q);
+ 		if (features & NETIF_F_LRO) {
++			printk("[%s-%d] Q(%d) %d\n", __func__, __LINE__, i, lro_queue_index);
+ 			airoha_fe_lro_init_rx_queue(eth, qdma_id,
+ 						    lro_queue_index, i,
+ 						    q->page_pool->p.pool_size,
+ 						    q->buf_size);
+ 			lro_queue_index++;
+ 		}
+-		airoha_qdma_fill_rx_queue(q);
+-		napi_enable(&q->napi);
++		//airoha_qdma_fill_rx_queue(q);
++		//napi_enable(&q->napi);
+ 	}
+ 
++	printk("[%s-%d]\n", __func__, __LINE__);
++
+ 	err = airoha_qdma_init_hfwd_queues(qdma);
+ 	if (err)
+ 		return err;
+@@ -2585,6 +2600,8 @@ static int airoha_dev_set_features(struc
+ 	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
+ 			GLOBAL_CFG_TX_DMA_EN_MASK | GLOBAL_CFG_RX_DMA_EN_MASK);
+ 
++	printk("[%s-%d]\n", __func__, __LINE__);
++
+ 	return 0;
+ }
+ 

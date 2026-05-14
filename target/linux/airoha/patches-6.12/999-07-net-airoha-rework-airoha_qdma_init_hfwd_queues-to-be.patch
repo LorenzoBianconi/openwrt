@@ -1,0 +1,145 @@
+From 4861e8611a0de2306574e5686d89f0241bc1af96 Mon Sep 17 00:00:00 2001
+Message-ID: <4861e8611a0de2306574e5686d89f0241bc1af96.1778737555.git.lorenzo@kernel.org>
+In-Reply-To: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+References: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 12 Feb 2026 12:07:05 +0100
+Subject: [PATCH 08/10] net: airoha: rework airoha_qdma_init_hfwd_queues to be
+ executed during LRO configuration
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 88 +++++++++++++-----------
+ drivers/net/ethernet/airoha/airoha_eth.h |  6 ++
+ 2 files changed, 55 insertions(+), 39 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -1236,53 +1236,63 @@ static void airoha_qdma_cleanup_tx_queue
+ 
+ static int airoha_qdma_init_hfwd_queues(struct airoha_qdma *qdma)
+ {
+-	int size, index, num_desc = HW_DSCP_NUM;
+ 	struct airoha_eth *eth = qdma->eth;
+ 	int id = qdma - &eth->qdma[0];
+-	u32 status, buf_size;
+-	dma_addr_t dma_addr;
+-	const char *name;
+-
+-	name = devm_kasprintf(eth->dev, GFP_KERNEL, "qdma%d-buf", id);
+-	if (!name)
+-		return -ENOMEM;
+-
+-	buf_size = id ? AIROHA_MAX_PACKET_SIZE / 2 : AIROHA_MAX_PACKET_SIZE;
+-	index = of_property_match_string(eth->dev->of_node,
+-					 "memory-region-names", name);
+-	if (index >= 0) {
+-		struct reserved_mem *rmem;
+-		struct device_node *np;
+-
+-		/* Consume reserved memory for hw forwarding buffers queue if
+-		 * available in the DTS
+-		 */
+-		np = of_parse_phandle(eth->dev->of_node, "memory-region",
+-				      index);
+-		if (!np)
+-			return -ENODEV;
+-
+-		rmem = of_reserved_mem_lookup(np);
+-		of_node_put(np);
+-		dma_addr = rmem->base;
+-		/* Compute the number of hw descriptors according to the
+-		 * reserved memory size and the payload buffer size
+-		 */
+-		num_desc = div_u64(rmem->size, buf_size);
+-	} else {
+-		size = buf_size * num_desc;
+-		if (!dmam_alloc_coherent(eth->dev, size, &dma_addr,
+-					 GFP_KERNEL))
++	u32 status;
++	int size;
++
++	if (!qdma->fwd.buf_addr) {
++		const char *name;
++		u32 buf_size;
++		int index;
++
++		name = devm_kasprintf(eth->dev, GFP_KERNEL, "qdma%d-buf", id);
++		if (!name)
+ 			return -ENOMEM;
+-	}
+ 
+-	airoha_qdma_wr(qdma, REG_FWD_BUF_BASE, dma_addr);
++		buf_size = id ? AIROHA_MAX_PACKET_SIZE / 2
++			      : AIROHA_MAX_PACKET_SIZE;
++		index = of_property_match_string(eth->dev->of_node,
++						 "memory-region-names", name);
++		if (index >= 0) {
++			struct reserved_mem *rmem;
++			struct device_node *np;
++
++			/* Consume reserved memory for hw forwarding buffers
++			 * queue if available in the DTS
++			 */
++			np = of_parse_phandle(eth->dev->of_node, "memory-region",
++					      index);
++			if (!np)
++				return -ENODEV;
++
++			rmem = of_reserved_mem_lookup(np);
++			of_node_put(np);
++			qdma->fwd.buf_addr = rmem->base;
++			/* Compute the number of hw descriptors according to
++			 * thereserved memory size and the payload buffer size
++			 */
++			qdma->fwd.num_desc = div_u64(rmem->size, buf_size);
++		} else {
++			qdma->fwd.num_desc = HW_DSCP_NUM;
++			size = buf_size * qdma->fwd.num_desc;
++			if (!dmam_alloc_coherent(eth->dev, size,
++						 &qdma->fwd.buf_addr,
++						 GFP_KERNEL))
++				return -ENOMEM;
++		}
++	}
++	airoha_qdma_wr(qdma, REG_FWD_BUF_BASE, qdma->fwd.buf_addr);
+ 
+-	size = num_desc * sizeof(struct airoha_qdma_fwd_desc);
+-	if (!dmam_alloc_coherent(eth->dev, size, &dma_addr, GFP_KERNEL))
+-		return -ENOMEM;
++	if (!qdma->fwd.dscp_addr) {
++		size = qdma->fwd.num_desc *
++		       sizeof(struct airoha_qdma_fwd_desc);
++		if (!dmam_alloc_coherent(eth->dev, size, &qdma->fwd.dscp_addr,
++					 GFP_KERNEL))
++			return -ENOMEM;
++	}
++	airoha_qdma_wr(qdma, REG_FWD_DSCP_BASE, qdma->fwd.dscp_addr);
+ 
+-	airoha_qdma_wr(qdma, REG_FWD_DSCP_BASE, dma_addr);
+ 	/* QDMA0: 2KB. QDMA1: 1KB */
+ 	airoha_qdma_rmw(qdma, REG_HW_FWD_DSCP_CFG,
+ 			HW_FWD_DSCP_PAYLOAD_SIZE_MASK,
+@@ -1292,7 +1302,7 @@ static int airoha_qdma_init_hfwd_queues(
+ 	airoha_qdma_rmw(qdma, REG_LMGR_INIT_CFG,
+ 			LMGR_INIT_START | LMGR_SRAM_MODE_MASK |
+ 			HW_FWD_DESC_NUM_MASK,
+-			FIELD_PREP(HW_FWD_DESC_NUM_MASK, num_desc) |
++			FIELD_PREP(HW_FWD_DESC_NUM_MASK, qdma->fwd.num_desc) |
+ 			LMGR_INIT_START | LMGR_SRAM_MODE_MASK);
+ 
+ 	return read_poll_timeout(airoha_qdma_rr, status,
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -534,6 +534,11 @@ struct airoha_qdma {
+ 
+ 	struct airoha_queue q_tx[AIROHA_NUM_TX_RING];
+ 	struct airoha_queue q_rx[AIROHA_NUM_RX_RING];
++	struct {
++		dma_addr_t buf_addr;
++		dma_addr_t dscp_addr;
++		int num_desc;
++	} fwd;
+ 
+ 	DECLARE_BITMAP(qos_channel_map, AIROHA_NUM_QOS_CHANNELS);
+ };

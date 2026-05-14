@@ -1,0 +1,45 @@
+From 13460f6e7374bf51cbe6983b9e196e6bda82358a Mon Sep 17 00:00:00 2001
+Message-ID: <13460f6e7374bf51cbe6983b9e196e6bda82358a.1778737555.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Fri, 7 Nov 2025 17:39:52 +0100
+Subject: [PATCH 01/10] net: airoha: Introduce airoha_qdma_rx_queue_deinit
+ utility routine
+
+This is a preliminary patch to enable LRO support for airoha_eth driver.
+
+Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 15 ++++++++++-----
+ 1 file changed, 10 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -888,6 +888,15 @@ static void airoha_qdma_cleanup_rx_queue
+ 			FIELD_PREP(RX_RING_DMA_IDX_MASK, q->tail));
+ }
+ 
++static void airoha_qdma_rx_queue_deinit(struct airoha_queue *q)
++{
++	airoha_qdma_cleanup_rx_queue(q);
++	if (q->page_pool) {
++		page_pool_destroy(q->page_pool);
++		q->page_pool = NULL;
++	}
++}
++
+ static int airoha_qdma_init_rx(struct airoha_qdma *qdma)
+ {
+ 	int i;
+@@ -1528,11 +1537,7 @@ static void airoha_qdma_cleanup(struct a
+ 			continue;
+ 
+ 		netif_napi_del(&qdma->q_rx[i].napi);
+-		airoha_qdma_cleanup_rx_queue(&qdma->q_rx[i]);
+-		if (qdma->q_rx[i].page_pool) {
+-			page_pool_destroy(qdma->q_rx[i].page_pool);
+-			qdma->q_rx[i].page_pool = NULL;
+-		}
++		airoha_qdma_rx_queue_deinit(&qdma->q_rx[i]);
+ 	}
+ 
+ 	for (i = 0; i < ARRAY_SIZE(qdma->q_tx_irq); i++) {
