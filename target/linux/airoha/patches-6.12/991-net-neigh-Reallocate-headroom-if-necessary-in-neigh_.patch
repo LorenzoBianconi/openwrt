@@ -1,27 +1,9 @@
+From d2fd58be96aa24ae82c951c5a56c53ea703dcd5c Mon Sep 17 00:00:00 2001
+Message-ID: <d2fd58be96aa24ae82c951c5a56c53ea703dcd5c.1778769453.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
-Date: Wed, 13 May 2026 18:13:51 +0200
-Subject: [PATCH net v3] net: neigh: Reallocate headroom if necessary in
+Date: Thu, 7 May 2026 15:07:49 +0200
+Subject: [PATCH] net: neigh: Reallocate headroom if necessary in
  neigh_hh_bridge()
-MIME-Version: 1.0
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
-Message-Id: <20260513-nf-neigh_hh_bridge-fix-v3-1-3145b67d5cad@kernel.org>
-X-B4-Tracking: v=1; b=H4sIAAAAAAAC/4XNwQ6CMAwG4FchPTvDxhjgyfcwhoxRWKMZZiOLh
- vDuLjvpwXj8/7ZfNwjoCQOcig08Rgq0uBSqQwHGajcjozFlEKVQZV22zE3MIc22t7YfPI1pY6I
- n6/TQNDWiqIyCdPzwmOoMX8DhCtdUWgrr4l/5WeR59M+NnHGmuVRSqnbsBJ5v6B3ej4ufsxnFh
- 8P5T0ckx8hOSdPoZminL2ff9zfjE6B8CgEAAA==
-X-Change-ID: 20260508-nf-neigh_hh_bridge-fix-9ab775ee23c6
-To: "David S. Miller" <davem@davemloft.net>, 
- Eric Dumazet <edumazet@google.com>, Jakub Kicinski <kuba@kernel.org>, 
- Paolo Abeni <pabeni@redhat.com>, Simon Horman <horms@kernel.org>, 
- Pablo Neira Ayuso <pablo@netfilter.org>, Florian Westphal <fw@strlen.de>, 
- Phil Sutter <phil@nwl.cc>, Nikolay Aleksandrov <razor@blackwall.org>, 
- Ido Schimmel <idosch@nvidia.com>, Bart De Schuymer <bdschuym@pandora.be>, 
- Patrick McHardy <kaber@trash.net>
-Cc: netdev@vger.kernel.org, netfilter-devel@vger.kernel.org, 
- coreteam@netfilter.org, bridge@lists.linux.dev, 
- Lorenzo Bianconi <lorenzo@kernel.org>
-X-Mailer: b4 0.14.3
 
 neigh_hh_bridge() assumes the skb always has sufficient headroom to copy
 the aligned  L2 header. This assumption can trigger the crash reported
@@ -104,20 +86,12 @@ the iperf3 client is sending packet for 192.168.83.123 to the bridge device.
 Fix the issue reallocating the skb headroom if necessary in neigh_hh_bridge routine.
 
 Fixes: e179e6322ac33 ("netfilter: bridge-netfilter: Fix MAC header handling with IP DNAT")
+Reviewed-by: Ido Schimmel <idosch@nvidia.com>
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---
-Changes in v3:
-- Run skb_cow_head() instead of skb_expand_head() in neigh_hh_bridge()
-- Link to v2: https://lore.kernel.org/r/20260511-nf-neigh_hh_bridge-fix-v2-1-c4964c7a7b8f@kernel.org
-
-Changes in v2:
-- Fix neighbour reference count leak
-- Run skb_expand_head() even for cloned/shared skbs.
-- Link to v1: https://lore.kernel.org/r/20260508-nf-neigh_hh_bridge-fix-v1-1-a1464468d92e@kernel.org
----
  include/net/neighbour.h         | 8 ++++++--
- net/bridge/br_netfilter_hooks.c | 8 +++++++-
- 2 files changed, 13 insertions(+), 3 deletions(-)
+ net/bridge/br_netfilter_hooks.c | 6 +++++-
+ 2 files changed, 11 insertions(+), 3 deletions(-)
 
 diff --git a/include/net/neighbour.h b/include/net/neighbour.h
 index 2dfee6d4258a..8860cc2175fc 100644
@@ -142,30 +116,22 @@ index 2dfee6d4258a..8860cc2175fc 100644
  	} while (read_seqretry(&hh->hh_lock, seq));
  	return 0;
 diff --git a/net/bridge/br_netfilter_hooks.c b/net/bridge/br_netfilter_hooks.c
-index 0ab1c94db4b9..cea2352900e9 100644
+index 0ab1c94db4b9..0a394e5f4391 100644
 --- a/net/bridge/br_netfilter_hooks.c
 +++ b/net/bridge/br_netfilter_hooks.c
-@@ -297,7 +297,13 @@ int br_nf_pre_routing_finish_bridge(struct net *net, struct sock *sk, struct sk_
+@@ -297,7 +297,11 @@ int br_nf_pre_routing_finish_bridge(struct net *net, struct sock *sk, struct sk_
  				goto free_skb;
  			}
  
 -			neigh_hh_bridge(&neigh->hh, skb);
-+			ret = neigh_hh_bridge(&neigh->hh, skb);
-+			if (ret) {
++			if (neigh_hh_bridge(&neigh->hh, skb)) {
 +				neigh_release(neigh);
-+				kfree_skb(skb);
-+				return ret;
++				goto free_skb;
 +			}
 +
  			skb->dev = br_indev;
  
  			ret = br_handle_frame_finish(net, sk, skb);
-
----
-base-commit: f5b2772d14884f4be9e718644f1203d4d0e6f0d6
-change-id: 20260508-nf-neigh_hh_bridge-fix-9ab775ee23c6
-
-Best regards,
 -- 
-Lorenzo Bianconi <lorenzo@kernel.org>
+2.54.0
 
