@@ -1,4 +1,4 @@
-From 6346bb7c73afbefd24ad2eb1ed812a32d9ac70fb Mon Sep 17 00:00:00 2001
+From 76dcd1167257368d58c40cfd61da7c47800afa4b Mon Sep 17 00:00:00 2001
 From: Christian Marangi <ansuelsmth@gmail.com>
 Date: Thu, 31 Jul 2025 15:32:32 +0200
 Subject: [PATCH] ASoC: airoha: Add AFE and machine driver for Airoha AN7581
@@ -14,12 +14,12 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
  sound/soc/mediatek/Kconfig                    |  20 +
  sound/soc/mediatek/Makefile                   |   1 +
  sound/soc/mediatek/an7581/Makefile            |   9 +
- sound/soc/mediatek/an7581/an7581-afe-common.h |  47 ++
- sound/soc/mediatek/an7581/an7581-afe-pcm.c    | 530 ++++++++++++++++++
- sound/soc/mediatek/an7581/an7581-dai-etdm.c   | 448 +++++++++++++++
+ sound/soc/mediatek/an7581/an7581-afe-common.h |  48 ++
+ sound/soc/mediatek/an7581/an7581-afe-pcm.c    | 529 ++++++++++++++++++
+ sound/soc/mediatek/an7581/an7581-dai-etdm.c   | 453 +++++++++++++++
  sound/soc/mediatek/an7581/an7581-reg.h        | 114 ++++
  sound/soc/mediatek/an7581/an7581-wm8960.c     | 156 ++++++
- 9 files changed, 1333 insertions(+)
+ 9 files changed, 1338 insertions(+)
  create mode 100644 sound/soc/mediatek/an7581/Makefile
  create mode 100644 sound/soc/mediatek/an7581/an7581-afe-common.h
  create mode 100644 sound/soc/mediatek/an7581/an7581-afe-pcm.c
@@ -105,10 +105,10 @@ index 000000000000..f48cd0269bea
 +obj-$(CONFIG_SND_SOC_AN7581_WM8960) += an7581-wm8960.o
 diff --git a/sound/soc/mediatek/an7581/an7581-afe-common.h b/sound/soc/mediatek/an7581/an7581-afe-common.h
 new file mode 100644
-index 000000000000..3220c67eaa17
+index 000000000000..7bd67ff4010b
 --- /dev/null
 +++ b/sound/soc/mediatek/an7581/an7581-afe-common.h
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,48 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * an7581-afe-common.h  --  Airoha AN7581 audio driver definitions
@@ -117,6 +117,7 @@ index 000000000000..3220c67eaa17
 +#ifndef _AN7581_AFE_COMMON_H_
 +#define _AN7581_AFE_COMMON_H_
 +
++#include <linux/atomic.h>
 +#include <sound/soc.h>
 +#include <linux/list.h>
 +#include <linux/regmap.h>
@@ -143,7 +144,7 @@ index 000000000000..3220c67eaa17
 +};
 +
 +struct an7581_afe_private {
-+	int pm_runtime_bypass_reg_ctl;
++	atomic_t users;
 +
 +	/* dai */
 +	void *dai_priv[AN7581_DAI_NUM];
@@ -158,10 +159,10 @@ index 000000000000..3220c67eaa17
 +#endif
 diff --git a/sound/soc/mediatek/an7581/an7581-afe-pcm.c b/sound/soc/mediatek/an7581/an7581-afe-pcm.c
 new file mode 100644
-index 000000000000..64d0d9f454a2
+index 000000000000..d6c3fc09951c
 --- /dev/null
 +++ b/sound/soc/mediatek/an7581/an7581-afe-pcm.c
-@@ -0,0 +1,528 @@
+@@ -0,0 +1,529 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Airoha ALSA SoC AFE platform driver for AN7581
@@ -565,6 +566,7 @@ index 000000000000..64d0d9f454a2
 +		return -ENOMEM;
 +
 +	afe_priv = afe->platform_priv;
++	atomic_set(&afe_priv->users, 0);
 +	afe->dev = &pdev->dev;
 +	dev = afe->dev;
 +
@@ -692,10 +694,10 @@ index 000000000000..64d0d9f454a2
 +MODULE_LICENSE("GPL");
 diff --git a/sound/soc/mediatek/an7581/an7581-dai-etdm.c b/sound/soc/mediatek/an7581/an7581-dai-etdm.c
 new file mode 100644
-index 000000000000..21ae062f2679
+index 000000000000..1022bedea991
 --- /dev/null
 +++ b/sound/soc/mediatek/an7581/an7581-dai-etdm.c
-@@ -0,0 +1,448 @@
+@@ -0,0 +1,453 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Airoha ALSA SoC Audio DAI eTDM Control
@@ -818,9 +820,12 @@ index 000000000000..21ae062f2679
 +				struct snd_soc_dai *dai)
 +{
 +	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
++	struct an7581_afe_private *afe_priv = afe->platform_priv;
 +
 +	regmap_set_bits(afe->regmap, AFE_DAC_CON0,
 +			BIT(AFE_AFE_ENABLE_SHIFT));
++
++	atomic_inc(&afe_priv->users);
 +
 +	return 0;
 +}
@@ -829,9 +834,11 @@ index 000000000000..21ae062f2679
 +				  struct snd_soc_dai *dai)
 +{
 +	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
++	struct an7581_afe_private *afe_priv = afe->platform_priv;
 +
-+	regmap_clear_bits(afe->regmap, AFE_DAC_CON0,
-+			  BIT(AFE_AFE_ENABLE_SHIFT));
++	if (atomic_dec_and_test(&afe_priv->users))
++		regmap_clear_bits(afe->regmap, AFE_DAC_CON0,
++				  BIT(AFE_AFE_ENABLE_SHIFT));
 +}
 +
 +static unsigned int get_etdm_ch_fixup(unsigned int channels)
