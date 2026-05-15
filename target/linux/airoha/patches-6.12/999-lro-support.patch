@@ -247,7 +247,7 @@
  	dma_addr_t dma_addr;
  
 -	q->buf_size = PAGE_SIZE / 2;
-+	q->buf_size = lro_q ? pp_params.max_len : pp_params.max_len / 2;
++	q->buf_size = pp_params.max_len / (2 * (1 + lro_q));
  	q->qdma = qdma;
  
  	q->entry = devm_kzalloc(eth->dev, ndesc * sizeof(*q->entry),
