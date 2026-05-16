@@ -171,8 +171,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(AIROHA_GDM2_IDX));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(AIROHA_GDM2_IDX));
  
--	src_port = eth->soc->ops.get_src_port_id(port, port->nbq);
-+	src_port = eth->soc->ops.get_src_port_id(port, dev->nbq);
+-	src_port = eth->soc->ops.get_sport(port, port->nbq);
++	src_port = eth->soc->ops.get_sport(port, dev->nbq);
  	if (src_port < 0)
  		return src_port;
  

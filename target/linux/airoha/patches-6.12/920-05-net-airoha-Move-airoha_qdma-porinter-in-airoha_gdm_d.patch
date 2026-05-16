@@ -93,13 +93,13 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	struct airoha_gdm_port *port = dev->port;
 -	struct airoha_qdma *qdma = port->qdma;
 +	struct airoha_qdma *qdma = dev->qdma;
- 	int i, err;
+ 	int i;
  
  	netif_tx_disable(netdev);
--	err = airoha_set_vip_for_gdm_port(port, false);
-+	err = airoha_set_vip_for_gdm_port(dev, false);
- 	if (err)
- 		return err;
+-	airoha_set_vip_for_gdm_port(port, false);
++	airoha_set_vip_for_gdm_port(dev, false);
+ 	for (i = 0; i < netdev->num_tx_queues; i++)
+ 		netdev_tx_reset_subqueue(netdev, i);
  
 @@ -1715,21 +1716,21 @@ static int airoha_dev_stop(struct net_de
  static int airoha_dev_set_macaddr(struct net_device *netdev, void *p)

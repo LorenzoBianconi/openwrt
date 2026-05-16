@@ -1,33 +1,34 @@
-From cd51dc6ce708c606a430499bd1b6ad62c30be7d9 Mon Sep 17 00:00:00 2001
-Message-ID: <cd51dc6ce708c606a430499bd1b6ad62c30be7d9.1771966444.git.lorenzo@kernel.org>
-In-Reply-To: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
-References: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
+From c06a2f2903f6fba0a3088ad05fc5cf61a66e5d89 Mon Sep 17 00:00:00 2001
 From: Lorenzo Bianconi <lorenzo@kernel.org>
-Date: Sun, 2 Nov 2025 10:12:05 +0100
-Subject: [bpf-next 09/16] net: airoha: rename get_src_port_id callback in
- get_sport
+Date: Tue, 28 Apr 2026 07:23:38 +0200
+Subject: [PATCH] net: airoha: Rename get_src_port_id callback in get_sport
 
-In order to be consistent rename get_src_port_id callback in get_sport.
-This is just a cosmetic change, no logic has been modified.
+For code consistency, rename get_src_port_id callback in get_sport.
+Please note this patch does not introduce any logical change and it is
+just a cosmetic patch.
 
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
+Link: https://patch.msgid.link/20260428-airoha-get_src_port_id-callback-v1-1-3f765c91c1e8@kernel.org
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 ---
  drivers/net/ethernet/airoha/airoha_eth.c | 10 +++++-----
  drivers/net/ethernet/airoha/airoha_eth.h |  2 +-
  2 files changed, 6 insertions(+), 6 deletions(-)
 
+diff --git a/drivers/net/ethernet/airoha/airoha_eth.c b/drivers/net/ethernet/airoha/airoha_eth.c
+index 2bb0a3ff9810..56441b99448a 100644
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1756,7 +1756,7 @@ static int airhoha_set_gdm2_loopback(str
+@@ -1813,7 +1813,7 @@ static int airoha_set_gdm2_loopback(struct airoha_gdm_port *port)
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(AIROHA_GDM2_IDX));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(AIROHA_GDM2_IDX));
  
--	src_port = eth->soc->ops.get_src_port_id(port, dev->nbq);
-+	src_port = eth->soc->ops.get_sport(port, dev->nbq);
+-	src_port = eth->soc->ops.get_src_port_id(port, port->nbq);
++	src_port = eth->soc->ops.get_sport(port, port->nbq);
  	if (src_port < 0)
  		return src_port;
  
-@@ -3388,7 +3388,7 @@ static const char * const en7581_xsi_rst
+@@ -3187,7 +3187,7 @@ static const char * const en7581_xsi_rsts_names[] = {
  	"xfp-mac",
  };
  
@@ -36,7 +37,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	switch (port->id) {
  	case AIROHA_GDM3_IDX:
-@@ -3449,7 +3449,7 @@ static const char * const an7583_xsi_rst
+@@ -3240,7 +3240,7 @@ static const char * const an7583_xsi_rsts_names[] = {
  	"xfp-mac",
  };
  
@@ -45,32 +46,37 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  {
  	switch (port->id) {
  	case AIROHA_GDM3_IDX:
-@@ -3505,7 +3505,7 @@ static const struct airoha_eth_soc_data
+@@ -3288,7 +3288,7 @@ static const struct airoha_eth_soc_data en7581_soc_data = {
  	.num_xsi_rsts = ARRAY_SIZE(en7581_xsi_rsts_names),
  	.num_ppe = 2,
  	.ops = {
 -		.get_src_port_id = airoha_en7581_get_src_port_id,
 +		.get_sport = airoha_en7581_get_sport,
-		.get_vip_port = airoha_en7581_get_vip_port,
- 		.get_dev_from_sport = airoha_en7581_get_dev_from_sport,
+ 		.get_vip_port = airoha_en7581_get_vip_port,
  	},
-@@ -3516,7 +3516,7 @@ static const struct airoha_eth_soc_data
+ };
+@@ -3299,7 +3299,7 @@ static const struct airoha_eth_soc_data an7583_soc_data = {
  	.num_xsi_rsts = ARRAY_SIZE(an7583_xsi_rsts_names),
  	.num_ppe = 1,
  	.ops = {
 -		.get_src_port_id = airoha_an7583_get_src_port_id,
 +		.get_sport = airoha_an7583_get_sport,
-		.get_vip_port = airoha_an7583_get_vip_port,
- 		.get_dev_from_sport = airoha_an7583_get_dev_from_sport,
+ 		.get_vip_port = airoha_an7583_get_vip_port,
  	},
+ };
+diff --git a/drivers/net/ethernet/airoha/airoha_eth.h b/drivers/net/ethernet/airoha/airoha_eth.h
+index e389d2fe3b86..1a052b898816 100644
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -589,7 +589,7 @@ struct airoha_eth_soc_data {
+@@ -578,7 +578,7 @@ struct airoha_eth_soc_data {
  	int num_xsi_rsts;
  	int num_ppe;
  	struct {
 -		int (*get_src_port_id)(struct airoha_gdm_port *port, int nbq);
 +		int (*get_sport)(struct airoha_gdm_port *port, int nbq);
-		u32 (*get_vip_port)(struct airoha_gdm_port *port, int nbq);
- 		int (*get_dev_from_sport)(struct airoha_qdma_desc *desc,
- 					  u16 *port, u16 *dev);
+ 		u32 (*get_vip_port)(struct airoha_gdm_port *port, int nbq);
+ 	} ops;
+ };
+-- 
+2.53.0
+
