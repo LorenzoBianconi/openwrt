@@ -95,7 +95,7 @@ index f71fb18197ec..d8ef702320a5 100644
  static int airoha_metadata_dst_alloc(struct airoha_gdm_port *port)
  {
  	int i;
-@@ -2946,6 +2968,124 @@ bool airoha_is_valid_gdm_port(struct airoha_eth *eth,
+@@ -2946,6 +2968,119 @@ bool airoha_is_valid_gdm_port(struct airoha_eth *eth,
  	return false;
  }
  
@@ -150,14 +150,22 @@ index f71fb18197ec..d8ef702320a5 100644
 +	.mac_link_down = airoha_mac_link_down,
 +};
 +
++static int airoha_fill_available_pcs(struct phylink_config *config,
++				     struct phylink_pcs **available_pcs,
++				     unsigned int num_available_pcs)
++{
++	struct device *dev = config->dev;
++
++	return fwnode_phylink_pcs_parse(dev_fwnode(dev), available_pcs,
++				        &num_available_pcs);
++}
++
 +static int airoha_setup_phylink(struct net_device *dev)
 +{
 +	struct airoha_gdm_port *port = netdev_priv(dev);
 +	struct device_node *np = dev->dev.of_node;
-+	struct phylink_pcs **available_pcs;
 +	phy_interface_t phy_mode;
 +	struct phylink *phylink;
-+	unsigned int num_pcs;
 +	int err;
 +
 +	err = of_get_phy_mode(np, &phy_mode);
@@ -172,21 +180,12 @@ index f71fb18197ec..d8ef702320a5 100644
 +						MAC_10 | MAC_100 | MAC_1000 | MAC_2500FD |
 +						MAC_5000FD | MAC_10000FD;
 +
-+	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), NULL, &num_pcs);
++	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), NULL,
++				       &port->phylink_config.num_available_pcs);
 +	if (err)
 +		return err;
 +
-+	available_pcs = kcalloc(num_pcs, sizeof(*available_pcs), GFP_KERNEL);
-+	if (!available_pcs)
-+		return -ENOMEM;
-+
-+	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), available_pcs,
-+				       &num_pcs);
-+	if (err)
-+		goto out;
-+
-+	port->phylink_config.available_pcs = available_pcs;
-+	port->phylink_config.num_available_pcs = num_pcs;
++	port->phylink_config.fill_available_pcs = airoha_fill_available_pcs;
 +
 +	__set_bit(PHY_INTERFACE_MODE_SGMII,
 +		  port->phylink_config.supported_interfaces);
@@ -205,14 +204,10 @@ index f71fb18197ec..d8ef702320a5 100644
 +	phylink = phylink_create(&port->phylink_config,
 +				 of_fwnode_handle(np),
 +				 phy_mode, &airoha_phylink_ops);
-+	if (IS_ERR(phylink)) {
-+		err = PTR_ERR(phylink);
-+		goto out;
-+	}
++	if (IS_ERR(phylink))
++		return PTR_ERR(phylink);
 +
 +	port->phylink = phylink;
-+out:
-+	kfree(available_pcs);
 +
 +	return err;
 +}
