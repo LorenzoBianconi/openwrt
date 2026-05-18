@@ -446,7 +446,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	u32 frag_size_tx, frag_size_rx;
  
  	switch (speed) {
-@@ -3000,67 +3000,67 @@ static const struct phylink_mac_ops airo
+@@ -3000,54 +3000,54 @@ static const struct phylink_mac_ops airo
  	.mac_link_up = airoha_mac_link_up,
  };
  
@@ -457,10 +457,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	struct device_node *np = dev->dev.of_node;
 +	struct airoha_gdm_dev *dev = netdev_priv(netdev);
 +	struct device_node *np = netdev->dev.of_node;
- 	struct phylink_pcs **available_pcs;
  	phy_interface_t phy_mode;
  	struct phylink *phylink;
- 	unsigned int num_pcs;
  	int err;
  
  	err = of_get_phy_mode(np, &phy_mode);
@@ -479,25 +477,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  						MAC_10 | MAC_100 | MAC_1000 | MAC_2500FD |
  						MAC_5000FD | MAC_10000FD;
  
--	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), NULL, &num_pcs);
-+	err = fwnode_phylink_pcs_parse(dev_fwnode(&netdev->dev), NULL, &num_pcs);
+-	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), NULL,
+-				       &port->phylink_config.num_available_pcs);
++	err = fwnode_phylink_pcs_parse(dev_fwnode(&netdev->dev), NULL,
++				       &dev->phylink_config.num_available_pcs);
  	if (err)
  		return err;
  
- 	available_pcs = kcalloc(num_pcs, sizeof(*available_pcs), GFP_KERNEL);
- 	if (!available_pcs)
- 		return -ENOMEM;
- 
--	err = fwnode_phylink_pcs_parse(dev_fwnode(&dev->dev), available_pcs,
-+	err = fwnode_phylink_pcs_parse(dev_fwnode(&netdev->dev), available_pcs,
- 				       &num_pcs);
- 	if (err)
- 		goto out;
- 
--	port->phylink_config.available_pcs = available_pcs;
--	port->phylink_config.num_available_pcs = num_pcs;
-+	dev->phylink_config.available_pcs = available_pcs;
-+	dev->phylink_config.num_available_pcs = num_pcs;
+-	port->phylink_config.fill_available_pcs = airoha_fill_available_pcs;
++	dev->phylink_config.fill_available_pcs = airoha_fill_available_pcs;
  
  	__set_bit(PHY_INTERFACE_MODE_SGMII,
 -		  port->phylink_config.supported_interfaces);
@@ -524,16 +512,14 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	phylink = phylink_create(&dev->phylink_config,
  				 of_fwnode_handle(np),
  				 phy_mode, &airoha_phylink_ops);
- 	if (IS_ERR(phylink)) {
- 		err = PTR_ERR(phylink);
- 		goto out;
- 	}
+ 	if (IS_ERR(phylink))
+ 		return PTR_ERR(phylink);
  
 -	port->phylink = phylink;
 +	dev->phylink = phylink;
- out:
- 	kfree(available_pcs);
  
+ 	return err;
+ }
 @@ -3005,12 +3028,71 @@ static int airoha_setup_phylink(struct n
  }
  #endif
@@ -797,7 +783,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -					struct net_device *dev, int type,
 +					struct net_device *netdev, int type,
  					struct airoha_flow_data *data,
- 					int l4proto)
+ 					int l4proto, u8 dsfield)
  {
  	u32 qdata = FIELD_PREP(AIROHA_FOE_SHAPER_ID, 0x7f), ports_pad, val;
 -	int wlan_etype = -EINVAL, dsa_port = airoha_get_dsa_port(&dev);
@@ -826,7 +812,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -			struct airoha_gdm_port *port = netdev_priv(dev);
 +			struct airoha_gdm_dev *dev = netdev_priv(netdev);
 +			struct airoha_gdm_port *port;
- 			u8 pse_port, channel;
+ 			u8 pse_port, channel, priority;
  
 -			if (!airoha_is_valid_gdm_port(eth, port))
 +			if (!airoha_is_valid_gdm_dev(eth, dev))
