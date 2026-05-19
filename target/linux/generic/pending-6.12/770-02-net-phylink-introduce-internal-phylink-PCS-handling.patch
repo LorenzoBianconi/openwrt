@@ -264,7 +264,7 @@ Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
 +		return -EINVAL;
 +	}
 +
-+	pcss = kcalloc(sizeof(*pcss), config->num_available_pcs, GFP_KERNEL);
++	pcss = kcalloc(config->num_available_pcs, sizeof(*pcss), GFP_KERNEL);
 +	if (!pcss)
 +		return -ENOMEM;
 +
