@@ -34,17 +34,25 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		if (!q->skb) { /* first buffer */
  			q->skb = napi_build_skb(e->buf, q->buf_size);
  			if (!q->skb)
-@@ -661,8 +663,8 @@ static int airoha_qdma_rx_process(struct
- 
+@@ -661,15 +663,15 @@ static int airoha_qdma_rx_process(struct
+ 			skb_reserve(q->skb, AIROHA_RX_HEADROOM);
  			__skb_put(q->skb, len);
  			skb_mark_for_recycle(q->skb);
 -			q->skb->dev = port->dev;
--			q->skb->protocol = eth_type_trans(q->skb, port->dev);
 +			q->skb->dev = netdev;
-+			q->skb->protocol = eth_type_trans(q->skb, netdev);
  			q->skb->ip_summed = CHECKSUM_UNNECESSARY;
  			skb_record_rx_queue(q->skb, qid);
+ 
+-			if (lro_q && (port->dev->features & NETIF_F_LRO) &&
++			if (lro_q && (netdev->features & NETIF_F_LRO) &&
+ 			    airoha_qdma_lro_rx_process(q, desc) < 0)
+ 				goto free_frag;
+ 
+-			q->skb->protocol = eth_type_trans(q->skb, port->dev);
++			q->skb->protocol = eth_type_trans(q->skb, netdev);
  		} else { /* scattered frame */
+ 			struct skb_shared_info *shinfo = skb_shinfo(q->skb);
+ 			int nr_frags = shinfo->nr_frags;
 @@ -680,7 +682,7 @@ static int airoha_qdma_rx_process(struct
  		if (FIELD_GET(QDMA_DESC_MORE_MASK, desc_ctrl))
  			continue;
@@ -268,6 +276,23 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  static u32 airoha_get_dsa_tag(struct sk_buff *skb, struct net_device *dev)
+@@ -1942,12 +1952,13 @@ static int airoha_get_fe_port(struct air
+ 					   : port->id;
+ }
+ 
+-static int airoha_dev_set_features(struct net_device *dev,
++static int airoha_dev_set_features(struct net_device *netdev,
+ 				   netdev_features_t features)
+ {
+ 
+-	netdev_features_t diff = dev->features ^ features;
+-	struct airoha_gdm_port *port = netdev_priv(dev);
++	netdev_features_t diff = netdev->features ^ features;
++	struct airoha_gdm_dev *dev = netdev_priv(netdev);
++	struct airoha_gdm_port *port = dev->port;
+ 	struct airoha_qdma *qdma = port->qdma;
+ 	struct airoha_eth *eth = qdma->eth;
+ 	int qdma_id = qdma - &eth->qdma[0];
 @@ -1942,9 +1952,10 @@ static int airoha_get_fe_port(struct air
  }
  
@@ -520,7 +545,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return err;
  }
-@@ -3005,12 +3028,71 @@ static int airoha_setup_phylink(struct n
+@@ -3005,12 +3028,69 @@ static int airoha_setup_phylink(struct n
  }
  #endif
  
@@ -544,11 +569,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	netdev->ethtool_ops = &airoha_ethtool_ops;
 +	netdev->max_mtu = AIROHA_MAX_MTU;
 +	netdev->watchdog_timeo = 5 * HZ;
-+	netdev->hw_features = NETIF_F_IP_CSUM | NETIF_F_RXCSUM | NETIF_F_TSO6 |
-+			      NETIF_F_IPV6_CSUM | NETIF_F_SG | NETIF_F_TSO |
-+			      NETIF_F_HW_TC;
-+	netdev->features |= netdev->hw_features;
-+	netdev->vlan_features = netdev->hw_features;
++	netdev->hw_features = AIROHA_HW_FEATURES | NETIF_F_LRO;
++	netdev->features |= AIROHA_HW_FEATURES;
++	netdev->vlan_features = AIROHA_HW_FEATURES;
 +	netdev->dev.of_node = np;
 +	SET_NETDEV_DEV(netdev, eth->dev);
 +
@@ -593,7 +616,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	int err, p;
  	u32 id;
  
-@@ -3033,47 +3107,12 @@ static int airoha_alloc_gdm_port(struct
+@@ -3033,44 +3107,12 @@ static int airoha_alloc_gdm_port(struct
  		return -EINVAL;
  	}
  
@@ -611,12 +634,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	dev->ethtool_ops = &airoha_ethtool_ops;
 -	dev->max_mtu = AIROHA_MAX_MTU;
 -	dev->watchdog_timeo = 5 * HZ;
--	dev->hw_features = NETIF_F_IP_CSUM | NETIF_F_RXCSUM |
--			   NETIF_F_TSO6 | NETIF_F_IPV6_CSUM |
--			   NETIF_F_SG | NETIF_F_TSO |
--			   NETIF_F_HW_TC;
--	dev->features |= dev->hw_features;
--	dev->vlan_features = dev->hw_features;
+-	dev->hw_features = AIROHA_HW_FEATURES | NETIF_F_LRO;
+-	dev->features |= AIROHA_HW_FEATURES;
+-	dev->vlan_features = AIROHA_HW_FEATURES;
 -	dev->dev.of_node = np;
 -	SET_NETDEV_DEV(dev, eth->dev);
 -

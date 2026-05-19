@@ -202,6 +202,16 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	switch (eth->soc->version) {
  	case 0x7583:
 @@ -1955,8 +1956,7 @@ static netdev_tx_t airoha_dev_xmit(struc
+ 
+ 	netdev_features_t diff = netdev->features ^ features;
+ 	struct airoha_gdm_dev *dev = netdev_priv(netdev);
+-	struct airoha_gdm_port *port = dev->port;
+-	struct airoha_qdma *qdma = port->qdma;
++	struct airoha_qdma *qdma = dev->qdma;
+ 	struct airoha_eth *eth = qdma->eth;
+ 	int qdma_id = qdma - &eth->qdma[0];
+ 
+@@ -1955,8 +1956,7 @@ static netdev_tx_t airoha_dev_xmit(struc
  				   struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);

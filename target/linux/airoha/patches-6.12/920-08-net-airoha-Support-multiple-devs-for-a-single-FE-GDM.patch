@@ -105,17 +105,25 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		if (!q->skb) { /* first buffer */
  			q->skb = napi_build_skb(e->buf, q->buf_size);
  			if (!q->skb)
-@@ -664,8 +657,8 @@ static int airoha_qdma_rx_process(struct
- 
+@@ -664,15 +657,15 @@ static int airoha_qdma_rx_process(struct
+ 			skb_reserve(q->skb, AIROHA_RX_HEADROOM);
  			__skb_put(q->skb, len);
  			skb_mark_for_recycle(q->skb);
 -			q->skb->dev = netdev;
--			q->skb->protocol = eth_type_trans(q->skb, netdev);
 +			q->skb->dev = dev->dev;
-+			q->skb->protocol = eth_type_trans(q->skb, dev->dev);
  			q->skb->ip_summed = CHECKSUM_UNNECESSARY;
  			skb_record_rx_queue(q->skb, qid);
+ 
+-			if (lro_q && (netdev->features & NETIF_F_LRO) &&
++			if (lro_q && (dev->dev->features & NETIF_F_LRO) &&
+ 			    airoha_qdma_lro_rx_process(q, desc) < 0)
+ 				goto free_frag;
+ 
+-			q->skb->protocol = eth_type_trans(q->skb, netdev);
++			q->skb->protocol = eth_type_trans(q->skb, dev->dev);
  		} else { /* scattered frame */
+ 			struct skb_shared_info *shinfo = skb_shinfo(q->skb);
+ 			int nr_frags = shinfo->nr_frags;
 @@ -683,7 +676,9 @@ static int airoha_qdma_rx_process(struct
  		if (FIELD_GET(QDMA_DESC_MORE_MASK, desc_ctrl))
  			continue;
