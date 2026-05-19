@@ -8,7 +8,7 @@
  	return 0;
  }
  
-@@ -2473,6 +2474,7 @@ static int airoha_dev_set_features(struc
+@@ -2475,6 +2476,7 @@ static int airoha_dev_set_features(struc
  	u32 val, pse_port, gdm_rxchn_en;
  	struct airoha_queue *q;
  
@@ -16,7 +16,7 @@
  	if (!(diff & NETIF_F_LRO))
  		return 0;
  
-@@ -2497,12 +2499,14 @@ static int airoha_dev_set_features(struc
+@@ -2499,12 +2501,14 @@ static int airoha_dev_set_features(struc
  	/* reset Tx queues */
  	for (i = 0; i < ARRAY_SIZE(qdma->q_tx); i++) {
  		netdev_tx_reset_subqueue(netdev, i);
@@ -34,7 +34,7 @@
  	/* disable FE GDMA channel */
  	gdm_rxchn_en = airoha_fe_rr(eth, REG_GDM_RXCHN_EN(port->id));
  	airoha_fe_wr(eth, REG_GDM_RXCHN_EN(port->id), 0x0);
-@@ -2519,6 +2523,7 @@ static int airoha_dev_set_features(struc
+@@ -2521,6 +2525,7 @@ static int airoha_dev_set_features(struc
  	if (err)
  		return err;
  
@@ -42,7 +42,7 @@
  	/* disable Rx DMA */
  	airoha_qdma_clear(qdma, REG_QDMA_GLOBAL_CFG,
  			  GLOBAL_CFG_RX_DMA_EN_MASK);
-@@ -2536,15 +2541,17 @@ static int airoha_dev_set_features(struc
+@@ -2538,15 +2543,17 @@ static int airoha_dev_set_features(struc
  		airoha_qdma_rx_queue_deinit(q);
  	}
  
@@ -62,7 +62,7 @@
  		q = &qdma->q_rx[i];
  		if (!q->ndesc)
  			continue;
-@@ -2558,6 +2565,7 @@ static int airoha_dev_set_features(struc
+@@ -2560,6 +2567,7 @@ static int airoha_dev_set_features(struc
  
  		airoha_qdma_setup_rx_queue(q);
  		if (features & NETIF_F_LRO) {
@@ -70,7 +70,7 @@
  			airoha_fe_lro_init_rx_queue(eth, qdma_id,
  						    lro_queue_index, i,
  						    q->page_pool->p.pool_size,
-@@ -2568,6 +2576,8 @@ static int airoha_dev_set_features(struc
+@@ -2570,6 +2578,8 @@ static int airoha_dev_set_features(struc
  		napi_enable(&q->napi);
  	}
  
@@ -79,7 +79,7 @@
  	err = airoha_qdma_init_hfwd_queues(qdma);
  	if (err)
  		return err;
-@@ -2585,6 +2595,8 @@ static int airoha_dev_set_features(struc
+@@ -2587,6 +2597,8 @@ static int airoha_dev_set_features(struc
  	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
  			GLOBAL_CFG_TX_DMA_EN_MASK | GLOBAL_CFG_RX_DMA_EN_MASK);
  

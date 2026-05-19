@@ -270,7 +270,7 @@
  static int airoha_qdma_init_tx(struct airoha_qdma *qdma)
  {
  	int i, err;
-@@ -2286,6 +2417,177 @@ int airoha_get_fe_port(struct airoha_gdm
+@@ -2288,6 +2419,177 @@ int airoha_get_fe_port(struct airoha_gdm
  					   : port->id;
  }
  
@@ -448,7 +448,7 @@
  static netdev_tx_t airoha_dev_xmit(struct sk_buff *skb,
  				   struct net_device *netdev)
  {
-@@ -3359,6 +3661,7 @@ static const struct net_device_ops airoh
+@@ -3358,6 +3660,7 @@ static const struct net_device_ops airoh
  	.ndo_stop		= airoha_dev_stop,
  	.ndo_change_mtu		= airoha_dev_change_mtu,
  	.ndo_select_queue	= airoha_dev_select_queue,
@@ -456,7 +456,7 @@
  	.ndo_start_xmit		= airoha_dev_xmit,
  	.ndo_get_stats64        = airoha_dev_get_stats64,
  	.ndo_set_mac_address	= airoha_dev_set_macaddr,
-@@ -3562,11 +3865,9 @@ static int airoha_alloc_gdm_device(struc
+@@ -3561,11 +3864,9 @@ static int airoha_alloc_gdm_device(struc
  	netdev->ethtool_ops = &airoha_ethtool_ops;
  	netdev->max_mtu = AIROHA_MAX_MTU;
  	netdev->watchdog_timeo = 5 * HZ;
