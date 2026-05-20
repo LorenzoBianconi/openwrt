@@ -836,9 +836,9 @@ index 000000000000..1022bedea991
 +	struct mtk_base_afe *afe = snd_soc_dai_get_drvdata(dai);
 +	struct an7581_afe_private *afe_priv = afe->platform_priv;
 +
-+	if (atomic_dec_and_test(&afe_priv->users))
-+		regmap_clear_bits(afe->regmap, AFE_DAC_CON0,
-+				  BIT(AFE_AFE_ENABLE_SHIFT));
++//	if (atomic_dec_and_test(&afe_priv->users))
++//		regmap_clear_bits(afe->regmap, AFE_DAC_CON0,
++//				  BIT(AFE_AFE_ENABLE_SHIFT));
 +}
 +
 +static unsigned int get_etdm_ch_fixup(unsigned int channels)
