@@ -1,14 +1,15 @@
-From 20cc439daa9e54044788da82671abe2654ae0bca Mon Sep 17 00:00:00 2001
-Message-ID: <20cc439daa9e54044788da82671abe2654ae0bca.1771966444.git.lorenzo@kernel.org>
-In-Reply-To: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
-References: <2cd15ef3379025ea1ae1f6c36c70621aa578c270.1771966444.git.lorenzo@kernel.org>
+From fb79a8a3e8d1e4d729590bb01eb24cc57ef67155 Mon Sep 17 00:00:00 2001
+Message-ID: <fb79a8a3e8d1e4d729590bb01eb24cc57ef67155.1779348625.git.lorenzo@kernel.org>
+In-Reply-To: <e15783f7c987e199ecf80b3d858ed5a86d33c508.1779348625.git.lorenzo@kernel.org>
+References: <e15783f7c987e199ecf80b3d858ed5a86d33c508.1779348625.git.lorenzo@kernel.org>
 From: Lorenzo Bianconi <lorenzo@kernel.org>
 Date: Sat, 27 Dec 2025 08:47:38 +0100
-Subject: [bpf-next 15/16] net: airoha: Disable GDM2 forwarding before
- configuring GDM2 loopback
+Subject: [PATCH 11/13] net: airoha: Disable GDM2 forwarding before configuring
+ GDM2 loopback
 
 Hw requires to disable GDM2 forwarding before enabling GDM2 loopback.
 
+Tested-by: Madhur Agrawal <madhur.agrawal@airoha.com>
 Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 ---
  drivers/net/ethernet/airoha/airoha_eth.c | 10 ++++++----
@@ -16,9 +17,9 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1740,11 +1740,8 @@ static int airhoha_enable_gdm2_loopback(
+@@ -2044,11 +2044,8 @@ static int airoha_enable_gdm2_loopback(s
  	u32 val, pse_port, chan;
- 	int src_port;
+ 	int i, src_port;
  
 -	/* Forward the traffic to the proper GDM port */
 -	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
@@ -29,7 +30,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	airoha_fe_clear(eth, REG_GDM_FWD_CFG(AIROHA_GDM2_IDX),
  			GDM_STRIP_CRC_MASK);
  
-@@ -1762,6 +1759,11 @@ static int airhoha_enable_gdm2_loopback(
+@@ -2066,6 +2063,11 @@ static int airoha_enable_gdm2_loopback(s
  		      GDM_SHORT_LEN_MASK | GDM_LONG_LEN_MASK,
  		      FIELD_PREP(GDM_SHORT_LEN_MASK, 60) |
  		      FIELD_PREP(GDM_LONG_LEN_MASK, AIROHA_MAX_MTU));

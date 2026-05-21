@@ -71,11 +71,9 @@ Signed-off-by: Kenneth Kasilag <kenneth@kasilag.me>
  drivers/crypto/inside-secure/eip93/eip93-common.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)
 
-diff --git a/drivers/crypto/inside-secure/eip93/eip93-common.c b/drivers/crypto/inside-secure/eip93/eip93-common.c
-index f4ad6beff15e..259714a4ee4d 100644
 --- a/drivers/crypto/inside-secure/eip93/eip93-common.c
 +++ b/drivers/crypto/inside-secure/eip93/eip93-common.c
-@@ -731,7 +731,7 @@ int eip93_hmac_setkey(u32 ctx_flags, const u8 *key, unsigned int keylen,
+@@ -731,7 +731,7 @@ int eip93_hmac_setkey(u32 ctx_flags, con
  		return -EINVAL;
  	}
  
@@ -84,5 +82,3 @@ index f4ad6beff15e..259714a4ee4d 100644
  	if (IS_ERR(ahash_tfm))
  		return PTR_ERR(ahash_tfm);
  
--- 
-2.51.0
