@@ -1,0 +1,137 @@
+From 3e818eb21bb5baa35a80b54a948486747d1baf1e Mon Sep 17 00:00:00 2001
+Message-ID: <3e818eb21bb5baa35a80b54a948486747d1baf1e.1779969787.git.lorenzo@kernel.org>
+From: Lorenzo Bianconi <lorenzo@kernel.org>
+Date: Thu, 28 May 2026 10:21:44 +0200
+Subject: [PATCH 1/2] fix0
+
+---
+ drivers/net/ethernet/airoha/airoha_eth.c | 15 +++++++--------
+ drivers/net/ethernet/airoha/airoha_eth.h |  2 +-
+ 2 files changed, 8 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -708,20 +708,21 @@ airoha_qdma_get_gdm_dev(struct airoha_et
+ 	return port->devs[d] ? port->devs[d] : ERR_PTR(-ENODEV);
+ }
+ 
+-static int airoha_qdma_lro_rx_process(struct airoha_queue *q,
++static int airoha_qdma_lro_rx_process(struct sk_buff *skb,
+ 				      struct airoha_qdma_desc *desc)
+ {
+ 	u32 desc_ctrl = le32_to_cpu(READ_ONCE(desc->ctrl));
++	struct skb_shared_info *shinfo = skb_shinfo(skb);
+ 	u32 msg1 = le32_to_cpu(READ_ONCE(desc->msg1));
+ 	u32 msg2 = le32_to_cpu(READ_ONCE(desc->msg2));
+ 	u32 msg3 = le32_to_cpu(READ_ONCE(desc->msg3));
+-	struct sk_buff *skb = q->skb;
+-	u32 len, th_off, tcp_ack_seq;
++	u32 len, th_off, tcp_ack_seq, agg_count;
+ 	u16 tcp_win, l2_len;
+ 	struct tcphdr *th;
+ 	bool ipv4, ipv6;
+ 
+-	if (FIELD_GET(QDMA_ETH_RXMSG_AGG_COUNT_MASK, msg2) <= 1)
++	agg_count = FIELD_GET(QDMA_ETH_RXMSG_AGG_COUNT_MASK, msg2);
++	if (agg_count <= 1)
+ 		return 0;
+ 
+ 	ipv4 = FIELD_GET(QDMA_ETH_RXMSG_IP4_MASK, msg1);
+@@ -741,22 +742,25 @@ static int airoha_qdma_lro_rx_process(st
+ 		if (iph->protocol != IPPROTO_TCP)
+ 			return -EOPNOTSUPP;
+ 
++		th_off = l2_len + (iph->ihl << 2);
++		if (!pskb_may_pull(skb, th_off))
++			return -EINVAL;
++
+ 		iph->tot_len = cpu_to_be16(len - l2_len);
+ 		iph->check = 0;
+ 		iph->check = ip_fast_csum((void *)iph, iph->ihl);
+-		th_off = l2_len + (iph->ihl << 2);
+ 	} else {
+ 		struct ipv6hdr *ip6h;
+ 
+-		if (!pskb_may_pull(skb, l2_len + sizeof(*ip6h)))
++		th_off = l2_len + sizeof(*ip6h);
++		if (!pskb_may_pull(skb, th_off))
+ 			return -EINVAL;
+ 
+ 		ip6h = (struct ipv6hdr *)(skb->data + l2_len);
+ 		if (ip6h->nexthdr != NEXTHDR_TCP)
+ 			return -EOPNOTSUPP;
+ 
+-		ip6h->payload_len = cpu_to_be16(len - l2_len - sizeof(*ip6h));
+-		th_off = l2_len + sizeof(*ip6h);
++		ip6h->payload_len = cpu_to_be16(len - th_off);
+ 	}
+ 
+ 	tcp_win = FIELD_GET(QDMA_ETH_RXMSG_TCP_WIN_MASK, msg3);
+@@ -771,8 +775,12 @@ static int airoha_qdma_lro_rx_process(st
+ 
+ 	/* Check tcp timestamp option */
+ 	if (th->doff == (sizeof(*th) + TCPOLEN_TSTAMP_ALIGNED) / 4) {
+-		__be32 *topt = (__be32 *)(th + 1);
++		__be32 *topt;
++
++		if (!pskb_may_pull(skb, th_off + (th->doff << 2)))
++			return -EINVAL;
+ 
++		topt = (__be32 *)(th + 1);
+ 		if (*topt == cpu_to_be32((TCPOPT_NOP << 24) |
+ 					 (TCPOPT_NOP << 16) |
+ 					 (TCPOPT_TIMESTAMP << 8) |
+@@ -784,6 +792,10 @@ static int airoha_qdma_lro_rx_process(st
+ 		}
+ 	}
+ 
++	shinfo->gso_size = (len - th_off - (th->doff << 2)) / agg_count;
++	shinfo->gso_type = ipv4 ? SKB_GSO_TCPV4 : SKB_GSO_TCPV6;
++	shinfo->gso_segs = agg_count;
++
+ 	return 0;
+ }
+ 
+@@ -833,15 +845,18 @@ static int airoha_qdma_rx_process(struct
+ 
+ 			skb_reserve(q->skb, AIROHA_RX_HEADROOM);
+ 			__skb_put(q->skb, len);
++			skb_mark_for_recycle(q->skb);
+ 			q->skb->dev = dev->dev;
+ 			q->skb->ip_summed = CHECKSUM_UNNECESSARY;
+ 			skb_record_rx_queue(q->skb, qid);
+ 
+-			if (airoha_qdma_lro_rx_process(q, desc) < 0)
+-				goto free_frag;
++			if (airoha_qdma_lro_rx_process(q->skb, desc) < 0) {
++				dev_kfree_skb(q->skb);
++				q->skb = NULL;
++				continue;
++			}
+ 
+ 			q->skb->protocol = eth_type_trans(q->skb, dev->dev);
+-			skb_mark_for_recycle(q->skb);
+ 		} else { /* scattered frame */
+ 			struct skb_shared_info *shinfo = skb_shinfo(q->skb);
+ 			int nr_frags = shinfo->nr_frags;
+@@ -2363,9 +2378,6 @@ static int airoha_dev_set_features(struc
+ 	if (!(diff & NETIF_F_LRO))
+ 		return 0;
+ 
+-	if (netif_running(netdev))
+-		return -EBUSY;
+-
+ 	/* reset LRO configuration */
+ 	if (features & NETIF_F_LRO) {
+ 		int lro_queue_index = 0;
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -45,7 +45,7 @@
+ 	 (_n) == 15 ? 128 :		\
+ 	 (_n) ==  0 ? 1024 : 16)
+ 
+-#define AIROHA_LRO_PAGE_ORDER		2
++#define AIROHA_LRO_PAGE_ORDER		order_base_2(SZ_16K / PAGE_SIZE)
+ #define AIROHA_MAX_NUM_LRO_QUEUES	8
+ #define AIROHA_RXQ_LRO_EN_MASK		0xff000000
+ #define AIROHA_RXQ_LRO_MAX_AGG_COUNT	64
