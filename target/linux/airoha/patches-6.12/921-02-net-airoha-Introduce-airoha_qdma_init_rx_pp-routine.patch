@@ -1,0 +1,73 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -948,25 +948,42 @@ static int airoha_qdma_rx_napi_poll(stru
+ 	return done;
+ }
+ 
+-static int airoha_qdma_init_rx_queue(struct airoha_queue *q,
+-				     struct airoha_qdma *qdma, int ndesc)
++static int airoha_qdma_init_rx_pp(struct airoha_queue *q)
+ {
+ 	struct page_pool_params pp_params = {
+ 		.pool_size = 256,
+ 		.flags = PP_FLAG_DMA_MAP | PP_FLAG_DMA_SYNC_DEV,
+ 		.dma_dir = DMA_FROM_DEVICE,
+ 		.nid = NUMA_NO_NODE,
+-		.dev = qdma->eth->dev,
++		.dev = q->qdma->eth->dev,
+ 		.napi = &q->napi,
+ 	};
++	bool lro_q = airoha_qdma_is_lro_queue(q);
++
++	pp_params.order = lro_q ? AIROHA_LRO_PAGE_ORDER : 0;
++	pp_params.max_len = PAGE_SIZE << pp_params.order;
++
++	q->page_pool = page_pool_create(&pp_params);
++	if (IS_ERR(q->page_pool)) {
++		int err = PTR_ERR(q->page_pool);
++
++		q->page_pool = NULL;
++		return err;
++	}
++
++	q->buf_size = lro_q ? pp_params.max_len : pp_params.max_len / 2;
++
++	return 0;
++}
++
++static int airoha_qdma_init_rx_queue(struct airoha_queue *q,
++				     struct airoha_qdma *qdma, int ndesc)
++{
++	int err, qid = q - &qdma->q_rx[0], thr;
+ 	struct airoha_eth *eth = qdma->eth;
+-	int qid = q - &qdma->q_rx[0], thr;
+ 	dma_addr_t dma_addr;
+-	bool lro_q;
+ 
+ 	q->qdma = qdma;
+-	lro_q = airoha_qdma_is_lro_queue(q);
+-
+ 	q->entry = devm_kzalloc(eth->dev, ndesc * sizeof(*q->entry),
+ 				GFP_KERNEL);
+ 	if (!q->entry)
+@@ -977,18 +994,10 @@ static int airoha_qdma_init_rx_queue(str
+ 	if (!q->desc)
+ 		return -ENOMEM;
+ 
+-	pp_params.order = lro_q ? AIROHA_LRO_PAGE_ORDER : 0;
+-	pp_params.max_len = PAGE_SIZE << pp_params.order;
+-
+-	q->page_pool = page_pool_create(&pp_params);
+-	if (IS_ERR(q->page_pool)) {
+-		int err = PTR_ERR(q->page_pool);
+-
+-		q->page_pool = NULL;
++	err = airoha_qdma_init_rx_pp(q);
++	if (err)
+ 		return err;
+-	}
+ 
+-	q->buf_size = lro_q ? pp_params.max_len : pp_params.max_len / 2;
+ 	q->ndesc = ndesc;
+ 	netif_napi_add(eth->napi_dev, &q->napi, airoha_qdma_rx_napi_poll);
+ 
