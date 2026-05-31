@@ -113,7 +113,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
  
  static void airoha_set_gdm_port_fwd_cfg(struct airoha_eth *eth, u32 addr,
-@@ -2005,13 +2061,18 @@ static int airoha_dev_stop(struct net_de
+@@ -2068,13 +2124,18 @@ static int airoha_dev_stop(struct net_de
  static int airoha_dev_set_macaddr(struct net_device *netdev, void *p)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
