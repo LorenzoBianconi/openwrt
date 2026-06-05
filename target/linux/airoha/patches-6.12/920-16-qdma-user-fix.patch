@@ -1,0 +1,54 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -2026,10 +2026,10 @@ static int airoha_dev_open(struct net_de
+ 	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
+ 			GLOBAL_CFG_TX_DMA_EN_MASK |
+ 			GLOBAL_CFG_RX_DMA_EN_MASK);
+-	atomic_inc(&qdma->users);
++	qdma->users++;
+ 
+ 	/* LRO is supported only when QDMA has a single user */
+-	if (atomic_read(&qdma->users) > 1) {
++	if (qdma->users > 1) {
+ 		int i;
+ 
+ 		for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
+@@ -2083,7 +2083,7 @@ static int airoha_dev_stop(struct net_de
+ 		airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
+ 					    FE_PSE_PORT_DROP);
+ 
+-	if (atomic_dec_and_test(&qdma->users)) {
++	if (!--qdma->users) {
+ 		airoha_qdma_clear(qdma, REG_QDMA_GLOBAL_CFG,
+ 				  GLOBAL_CFG_TX_DMA_EN_MASK |
+ 				  GLOBAL_CFG_RX_DMA_EN_MASK);
+@@ -2099,7 +2099,7 @@ static int airoha_dev_stop(struct net_de
+ 	/* Re-enable LRO on the remaining port if QDMA is back to
+ 	 * single user
+ 	 */
+-	if (atomic_read(&qdma->users) == 1) {
++	if (qdma->users == 1) {
+ 		for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
+ 			struct airoha_gdm_port *p = eth->ports[i];
+ 			int j;
+@@ -2441,7 +2441,7 @@ static netdev_features_t airoha_dev_fix_
+ 	struct airoha_gdm_dev *dev = netdev_priv(netdev);
+ 	struct airoha_qdma *qdma = dev->qdma;
+ 
+-	if (atomic_read(&qdma->users) > 1)
++	if (qdma->users > 1)
+ 		features &= ~NETIF_F_LRO;
+ 
+ 	return features;
+--- a/drivers/net/ethernet/airoha/airoha_eth.h
++++ b/drivers/net/ethernet/airoha/airoha_eth.h
+@@ -536,8 +536,7 @@ struct airoha_irq_bank {
+ struct airoha_qdma {
+ 	struct airoha_eth *eth;
+ 	void __iomem *regs;
+-
+-	atomic_t users;
++	int users;
+ 
+ 	struct airoha_irq_bank irq_banks[AIROHA_MAX_NUM_IRQ_BANKS];
+ 
