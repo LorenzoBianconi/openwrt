@@ -33,7 +33,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	airoha_fe_rmw(eth, REG_CDM_VLAN_CTRL(1), CDM_VLAN_MASK,
  		      FIELD_PREP(CDM_VLAN_MASK, 0x8100));
-@@ -1936,14 +1941,25 @@ static void airoha_update_hw_stats(struc
+@@ -1947,15 +1952,26 @@ static void airoha_update_hw_stats(struc
  	spin_unlock(&port->stats.lock);
  }
  
@@ -56,12 +56,13 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -	u32 cur_len, pse_port = FE_PSE_PORT_PPE1;
  	struct airoha_qdma *qdma = dev->qdma;
  	struct airoha_eth *eth = qdma->eth;
+ 	int qdma_id = qdma - &eth->qdma[0];
 +	u32 pse_port = FE_PSE_PORT_PPE1;
 +	int err;
  
- 	if (port->id == AIROHA_GDM2_IDX && airoha_is_lan_gdm_dev(dev)) {
- 		/* GDM2 can be used just as wan */
-@@ -1976,19 +1992,7 @@ static int airoha_dev_open(struct net_de
+ 	/* HW LRO is configured on the QDMA and it is shared between
+ 	 * all the devices using it. Refuse to open a second device on
+@@ -1998,19 +2014,7 @@ static int airoha_dev_open(struct net_de
  		airoha_fe_clear(eth, REG_GDM_INGRESS_CFG(port->id),
  				GDM_STAG_EN_MASK);
  
@@ -82,7 +83,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	port->users++;
  
  	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
-@@ -2032,30 +2036,6 @@ static int airoha_dev_open(struct net_de
+@@ -2029,30 +2033,6 @@ static int airoha_dev_open(struct net_de
  	return 0;
  }
  
@@ -113,7 +114,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_dev_stop(struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-@@ -2070,7 +2050,7 @@ static int airoha_dev_stop(struct net_de
+@@ -2067,7 +2047,7 @@ static int airoha_dev_stop(struct net_de
  		netdev_tx_reset_subqueue(netdev, i);
  
  	if (--port->users)
@@ -122,7 +123,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	else
  		airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
  					    FE_PSE_PORT_DROP);
-@@ -2167,10 +2147,6 @@ static int airoha_enable_gdm2_loopback(s
+@@ -2136,10 +2116,6 @@ static int airoha_enable_gdm2_loopback(s
  		      FIELD_PREP(LPBK_CHAN_MASK, chan) |
  		      LBK_GAP_MODE_MASK | LBK_LEN_MODE_MASK |
  		      LBK_CHAN_MODE_MASK | LPBK_EN_MASK);
@@ -133,7 +134,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* Forward the traffic to the proper GDM port */
  	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
  					       : FE_PSE_PORT_GDM4;
-@@ -2355,7 +2331,7 @@ static int airoha_dev_change_mtu(struct
+@@ -2324,7 +2300,7 @@ static int airoha_dev_change_mtu(struct
  
  	WRITE_ONCE(netdev->mtu, mtu);
  	if (port->users)
@@ -142,7 +143,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -2679,6 +2655,7 @@ static int airoha_dev_set_wan_flag(struc
+@@ -2648,6 +2624,7 @@ static int airoha_dev_set_wan_flag(struc
  		default:
  			return -EOPNOTSUPP;
  		}
@@ -160,7 +161,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #define AIROHA_MAX_PACKET_SIZE		2048
  #define AIROHA_NUM_QOS_CHANNELS		4
  #define AIROHA_NUM_QOS_QUEUES		8
-@@ -705,6 +706,7 @@ int airoha_get_fe_port(struct airoha_gdm
+@@ -704,6 +705,7 @@ int airoha_get_fe_port(struct airoha_gdm
  bool airoha_is_valid_gdm_dev(struct airoha_eth *eth,
  			     struct airoha_gdm_dev *dev);
  
