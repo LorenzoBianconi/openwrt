@@ -91,8 +91,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	u32 msg1 = le32_to_cpu(READ_ONCE(desc->msg1));
 +	u32 msg2 = le32_to_cpu(READ_ONCE(desc->msg2));
 +	u32 msg3 = le32_to_cpu(READ_ONCE(desc->msg3));
-+	struct tcphdr *th, _th;
 +	u16 tcp_win, l2_len;
++	struct tcphdr *th;
 +	bool ipv4, ipv6;
 +
 +	agg_count = FIELD_GET(QDMA_ETH_RXMSG_AGG_COUNT_MASK, msg2);
@@ -119,33 +119,37 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +		if (iph->ihl < 5)
 +			return -EINVAL;
 +
-+		iph = skb_header_pointer(skb, l2_len, iph->ihl << 2, &_iph);
-+		if (!iph)
++		th_off = l2_len + (iph->ihl << 2);
++		if (!pskb_may_pull(skb, th_off))
 +			return -EINVAL;
 +
++		iph = (struct iphdr *)(skb->data + l2_len);
 +		iph->tot_len = cpu_to_be16(len - l2_len);
 +		iph->check = 0;
 +		iph->check = ip_fast_csum((void *)iph, iph->ihl);
-+		th_off = l2_len + (iph->ihl << 2);
 +	} else {
-+		struct ipv6hdr *ip6h, _ip6h;
++		struct ipv6hdr *ip6h;
 +
-+		ip6h = skb_header_pointer(skb, l2_len, sizeof(*ip6h), &_ip6h);
-+		if (!ip6h)
++		th_off = l2_len + sizeof(*ip6h);
++		if (!pskb_may_pull(skb, th_off))
 +			return -EINVAL;
 +
++		ip6h = (struct ipv6hdr *)(skb->data + l2_len);
 +		if (ip6h->nexthdr != NEXTHDR_TCP)
 +			return -EOPNOTSUPP;
 +
-+		th_off = l2_len + sizeof(*ip6h);
 +		ip6h->payload_len = cpu_to_be16(len - th_off);
 +	}
 +
 +	tcp_win = FIELD_GET(QDMA_ETH_RXMSG_TCP_WIN_MASK, msg3);
 +	tcp_ack_seq = le32_to_cpu(READ_ONCE(desc->data));
 +
-+	th = skb_header_pointer(skb, th_off, sizeof(*th), &_th);
-+	if (!th)
++	if (!pskb_may_pull(skb, th_off + sizeof(*th)))
++		return -EINVAL;
++
++	th = (struct tcphdr *)(skb->data + th_off);
++	data_off = th_off + (th->doff << 2);
++	if (len <= data_off)
 +		return -EINVAL;
 +
 +	th->ack_seq = cpu_to_be32(tcp_ack_seq);
@@ -155,10 +159,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	if (th->doff == (sizeof(*th) + TCPOLEN_TSTAMP_ALIGNED) / 4) {
 +		u32 topt;
 +
-+		th = skb_header_pointer(skb, th_off, th->doff << 2, &_th);
-+		if (!th)
++		if (!pskb_may_pull(skb, data_off))
 +			return -EINVAL;
 +
++		th = (struct tcphdr *)(skb->data + th_off);
 +		topt = get_unaligned_be32(th + 1);
 +		if (topt == ((TCPOPT_NOP << 24) | (TCPOPT_NOP << 16) |
 +			     (TCPOPT_TIMESTAMP << 8) | TCPOLEN_TIMESTAMP)) {
@@ -168,10 +172,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +			put_unaligned_be32(le32_to_cpu(tcp_ts_reply), ptr);
 +		}
 +	}
-+
-+	data_off = th_off + (th->doff << 2);
-+	if (len <= data_off)
-+		return -EINVAL;
 +
 +	shinfo->gso_type = ipv4 ? SKB_GSO_TCPV4 : SKB_GSO_TCPV6;
 +	shinfo->gso_size = (len - data_off) / agg_count;
