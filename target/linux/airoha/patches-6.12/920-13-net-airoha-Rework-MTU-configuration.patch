@@ -134,7 +134,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* Forward the traffic to the proper GDM port */
  	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
  					       : FE_PSE_PORT_GDM4;
-@@ -2324,7 +2300,7 @@ static int airoha_dev_change_mtu(struct
+@@ -2328,7 +2304,7 @@ static int airoha_dev_change_mtu(struct
  
  	WRITE_ONCE(netdev->mtu, mtu);
  	if (port->users)
@@ -143,14 +143,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -2648,6 +2624,7 @@ static int airoha_dev_set_wan_flag(struc
- 		default:
- 			return -EOPNOTSUPP;
- 		}
-+		airoha_dev_set_mtu(netdev);
- 	} else {
- 		switch (port->id) {
- 		case AIROHA_GDM3_IDX:
+@@ -2654,6 +2630,8 @@ static int airoha_dev_set_wan_flag(struc
+ 	if (err)
+ 		goto error;
+ 
++	airoha_dev_set_mtu(netdev);
++
+ 	return 0;
+ error:
+ 	/* Restore previous LAN or WAN configuration */
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -23,6 +23,7 @@
