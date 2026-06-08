@@ -33,7 +33,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	airoha_fe_rmw(eth, REG_CDM_VLAN_CTRL(1), CDM_VLAN_MASK,
  		      FIELD_PREP(CDM_VLAN_MASK, 0x8100));
-@@ -1947,15 +1952,26 @@ static void airoha_update_hw_stats(struc
+@@ -1951,15 +1956,26 @@ static void airoha_update_hw_stats(struc
  	spin_unlock(&port->stats.lock);
  }
  
@@ -62,7 +62,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	/* HW LRO is configured on the QDMA and it is shared between
  	 * all the devices using it. Refuse to open a second device on
-@@ -1998,19 +2014,7 @@ static int airoha_dev_open(struct net_de
+@@ -1997,19 +2013,7 @@ static int airoha_dev_open(struct net_de
  		airoha_fe_clear(eth, REG_GDM_INGRESS_CFG(port->id),
  				GDM_STAG_EN_MASK);
  
@@ -82,8 +82,8 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 +	airoha_dev_set_mtu(netdev);
  	port->users++;
  
- 	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
-@@ -2029,30 +2033,6 @@ static int airoha_dev_open(struct net_de
+ 	if (!airoha_is_lan_gdm_dev(dev) &&
+@@ -2023,30 +2027,6 @@ static int airoha_dev_open(struct net_de
  	return 0;
  }
  
@@ -114,7 +114,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_dev_stop(struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-@@ -2067,7 +2047,7 @@ static int airoha_dev_stop(struct net_de
+@@ -2061,7 +2041,7 @@ static int airoha_dev_stop(struct net_de
  		netdev_tx_reset_subqueue(netdev, i);
  
  	if (--port->users)
@@ -123,7 +123,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	else
  		airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(port->id),
  					    FE_PSE_PORT_DROP);
-@@ -2136,10 +2116,6 @@ static int airoha_enable_gdm2_loopback(s
+@@ -2117,10 +2097,6 @@ static int airoha_enable_gdm2_loopback(s
  		      FIELD_PREP(LPBK_CHAN_MASK, chan) |
  		      LBK_GAP_MODE_MASK | LBK_LEN_MODE_MASK |
  		      LBK_CHAN_MODE_MASK | LPBK_EN_MASK);
@@ -134,7 +134,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* Forward the traffic to the proper GDM port */
  	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
  					       : FE_PSE_PORT_GDM4;
-@@ -2328,7 +2304,7 @@ static int airoha_dev_change_mtu(struct
+@@ -2283,7 +2259,7 @@ static int airoha_dev_change_mtu(struct
  
  	WRITE_ONCE(netdev->mtu, mtu);
  	if (port->users)
@@ -143,15 +143,22 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -2654,6 +2630,8 @@ static int airoha_dev_set_wan_flag(struc
+@@ -3302,6 +3278,7 @@ static int airoha_enable_qos_for_gdm34(s
  	if (err)
- 		goto error;
+ 		goto error_disable_loopback;
  
 +	airoha_dev_set_mtu(netdev);
-+
- 	return 0;
- error:
- 	/* Restore previous LAN or WAN configuration */
+ 	pse_port = airoha_ppe_is_enabled(dev->eth, 1) ? FE_PSE_PORT_PPE2
+ 						      : FE_PSE_PORT_PPE1;
+ 	airoha_set_gdm_port_fwd_cfg(dev->eth, REG_GDM_FWD_CFG(port->id),
+@@ -3341,6 +3318,7 @@ static void airoha_disable_qos_for_gdm34
+ 	dev->flags &= ~AIROHA_PRIV_F_WAN;
+ 	airoha_dev_set_qdma(dev);
+ 	airoha_set_macaddr(dev, netdev->dev_addr);
++	airoha_dev_set_mtu(netdev);
+ 	airoha_set_gdm_port_fwd_cfg(dev->eth, REG_GDM_FWD_CFG(port->id),
+ 				    FE_PSE_PORT_PPE1);
+ }
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -23,6 +23,7 @@
