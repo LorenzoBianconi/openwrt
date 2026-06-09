@@ -112,12 +112,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static struct airoha_gdm_dev *
  airoha_get_wan_gdm_dev(struct airoha_eth *eth)
  {
-@@ -2213,40 +2242,14 @@ static int airoha_dev_init(struct net_de
- 	struct airoha_gdm_dev *dev = netdev_priv(netdev);
- 	struct airoha_gdm_port *port = dev->port;
+@@ -2215,20 +2244,13 @@ static int airoha_dev_init(struct net_de
  
--	switch (port->id) {
--	case AIROHA_GDM3_IDX:
+ 	switch (port->id) {
+ 	case AIROHA_GDM3_IDX:
 -	case AIROHA_GDM4_IDX: {
 -		struct airoha_eth *eth = dev->eth;
 -
@@ -126,36 +124,19 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 -			break;
 -
 -		if (airoha_get_wan_gdm_dev(eth))
--			break;
--
--		fallthrough;
++	case AIROHA_GDM4_IDX:
++		if (airoha_get_wan_gdm_dev(dev->eth))
+ 			break;
+ 
+ 		fallthrough;
 -	}
--	case AIROHA_GDM2_IDX:
+ 	case AIROHA_GDM2_IDX:
 -		/* GDM2 is always used as wan */
-+	if (port->id == AIROHA_GDM2_IDX) {
 +		/* GDM2 is always used as WAN */
  		dev->flags |= AIROHA_PRIV_F_WAN;
--		break;
--	default:
--		break;
- 	}
- 
- 	airoha_dev_set_qdma(dev);
- 	airoha_set_macaddr(dev, netdev->dev_addr);
- 
--	if (!airoha_is_lan_gdm_dev(dev) &&
--	    (port->id == AIROHA_GDM3_IDX || port->id == AIROHA_GDM4_IDX)) {
--		int err;
--
--		err = airoha_enable_gdm2_loopback(dev);
--		if (err)
--			return err;
--	}
--
- 	return 0;
- }
- 
-@@ -3269,6 +3272,79 @@ static int airoha_tc_htb_delete_leaf_que
+ 		break;
+ 	default:
+@@ -3269,6 +3291,79 @@ static int airoha_tc_htb_delete_leaf_que
  	return 0;
  }
  
@@ -235,7 +216,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_tc_htb_destroy(struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-@@ -3277,6 +3353,8 @@ static int airoha_tc_htb_destroy(struct
+@@ -3277,6 +3372,8 @@ static int airoha_tc_htb_destroy(struct
  	for_each_set_bit(q, dev->qos_sq_bmap, AIROHA_NUM_QOS_CHANNELS)
  		airoha_tc_remove_htb_queue(netdev, q);
  
@@ -244,7 +225,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	return 0;
  }
  
-@@ -3301,7 +3379,7 @@ static int airoha_tc_setup_qdisc_htb(str
+@@ -3301,7 +3398,7 @@ static int airoha_tc_setup_qdisc_htb(str
  {
  	switch (opt->command) {
  	case TC_HTB_CREATE:
@@ -253,7 +234,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	case TC_HTB_DESTROY:
  		return airoha_tc_htb_destroy(dev);
  	case TC_HTB_NODE_MODIFY:
-@@ -3804,6 +3882,11 @@ static int airoha_probe(struct platform_
+@@ -3804,6 +3901,11 @@ static int airoha_probe(struct platform_
  	if (err)
  		goto error_napi_stop;
  

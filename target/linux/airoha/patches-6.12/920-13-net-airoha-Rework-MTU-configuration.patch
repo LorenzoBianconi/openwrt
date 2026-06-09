@@ -134,7 +134,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* Forward the traffic to the proper GDM port */
  	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
  					       : FE_PSE_PORT_GDM4;
-@@ -2283,7 +2259,7 @@ static int airoha_dev_change_mtu(struct
+@@ -2302,7 +2278,7 @@ static int airoha_dev_change_mtu(struct
  
  	WRITE_ONCE(netdev->mtu, mtu);
  	if (port->users)
@@ -143,7 +143,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -3302,6 +3278,7 @@ static int airoha_enable_qos_for_gdm34(s
+@@ -3321,6 +3297,7 @@ static int airoha_enable_qos_for_gdm34(s
  	if (err)
  		goto error_disable_loopback;
  
@@ -151,7 +151,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	pse_port = airoha_ppe_is_enabled(dev->eth, 1) ? FE_PSE_PORT_PPE2
  						      : FE_PSE_PORT_PPE1;
  	airoha_set_gdm_port_fwd_cfg(dev->eth, REG_GDM_FWD_CFG(port->id),
-@@ -3341,6 +3318,7 @@ static void airoha_disable_qos_for_gdm34
+@@ -3360,6 +3337,7 @@ static void airoha_disable_qos_for_gdm34
  	dev->flags &= ~AIROHA_PRIV_F_WAN;
  	airoha_dev_set_qdma(dev);
  	airoha_set_macaddr(dev, netdev->dev_addr);
