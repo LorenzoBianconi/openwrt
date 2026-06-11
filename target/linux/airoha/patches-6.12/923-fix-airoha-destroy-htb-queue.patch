@@ -1,0 +1,11 @@
+--- a/drivers/net/ethernet/airoha/airoha_eth.c
++++ b/drivers/net/ethernet/airoha/airoha_eth.c
+@@ -3341,7 +3341,7 @@ static void airoha_tc_remove_htb_queue(s
+ 	struct airoha_qdma *qdma;
+ 
+ 	netif_set_real_num_tx_queues(netdev, netdev->real_num_tx_queues - 1);
+-	airoha_qdma_set_tx_rate_limit(netdev, queue + 1, 0, 0);
++	airoha_qdma_set_tx_rate_limit(netdev, queue, 0, 0);
+ 
+ 	qdma = airoha_qdma_deref(dev);
+ 	clear_bit(queue, qdma->qos_channel_map);

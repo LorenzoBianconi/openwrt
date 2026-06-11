@@ -33,7 +33,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	airoha_fe_rmw(eth, REG_CDM_VLAN_CTRL(1), CDM_VLAN_MASK,
  		      FIELD_PREP(CDM_VLAN_MASK, 0x8100));
-@@ -1983,15 +1988,25 @@ static void airoha_qdma_stop(struct airo
+@@ -1988,15 +1993,25 @@ static void airoha_qdma_stop(struct airo
  	}
  }
  
@@ -62,7 +62,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	/* HW LRO is configured on the QDMA and it is shared between
  	 * all the devices using it. Refuse to open a second device on
-@@ -2032,19 +2047,7 @@ static int airoha_dev_open(struct net_de
+@@ -2037,19 +2052,7 @@ static int airoha_dev_open(struct net_de
  		airoha_fe_clear(eth, REG_GDM_INGRESS_CFG(port->id),
  				GDM_STAG_EN_MASK);
  
@@ -83,7 +83,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	port->users++;
  
  	airoha_qdma_start(qdma);
-@@ -2060,30 +2063,6 @@ static int airoha_dev_open(struct net_de
+@@ -2065,30 +2068,6 @@ static int airoha_dev_open(struct net_de
  	return 0;
  }
  
@@ -114,7 +114,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_dev_stop(struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-@@ -2098,7 +2077,7 @@ static int airoha_dev_stop(struct net_de
+@@ -2101,7 +2080,7 @@ static int airoha_dev_stop(struct net_de
  
  	qdma = airoha_qdma_deref(dev);
  	if (--port->users)
@@ -123,7 +123,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	else
  		airoha_set_gdm_port_fwd_cfg(qdma->eth,
  					    REG_GDM_FWD_CFG(port->id),
-@@ -2156,10 +2135,6 @@ static int airoha_enable_gdm2_loopback(s
+@@ -2162,10 +2141,6 @@ static int airoha_enable_gdm2_loopback(s
  		      FIELD_PREP(LPBK_CHAN_MASK, chan) |
  		      LBK_GAP_MODE_MASK | LBK_LEN_MODE_MASK |
  		      LBK_CHAN_MODE_MASK | LPBK_EN_MASK);
@@ -134,7 +134,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	/* Forward the traffic to the proper GDM port */
  	pse_port = port->id == AIROHA_GDM3_IDX ? FE_PSE_PORT_GDM3
  					       : FE_PSE_PORT_GDM4;
-@@ -2372,7 +2347,7 @@ static int airoha_dev_change_mtu(struct
+@@ -2373,7 +2348,7 @@ static int airoha_dev_change_mtu(struct
  
  	WRITE_ONCE(netdev->mtu, mtu);
  	if (port->users)
@@ -143,7 +143,15 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	return 0;
  }
-@@ -3413,6 +3388,7 @@ static int airoha_enable_qos_for_gdm34(s
+@@ -3397,6 +3372,7 @@ static void airoha_disable_qos_for_gdm34
+ 
+ 	dev->flags &= ~AIROHA_PRIV_F_WAN;
+ 	airoha_dev_set_qdma(dev);
++	airoha_dev_set_mtu(netdev);
+ 
+ 	airoha_set_macaddr(dev, netdev->dev_addr);
+ 	if (netif_running(netdev))
+@@ -3445,6 +3421,7 @@ static int airoha_enable_qos_for_gdm34(s
  	if (err)
  		goto error_disable_loopback;
  
@@ -151,15 +159,6 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	if (netif_running(netdev)) {
  		u32 pse_port;
  
-@@ -3456,6 +3432,8 @@ static void airoha_disable_qos_for_gdm34
- 	dev->flags &= ~AIROHA_PRIV_F_WAN;
- 	airoha_dev_set_qdma(dev);
- 	airoha_set_macaddr(dev, netdev->dev_addr);
-+	airoha_dev_set_mtu(netdev);
-+
- 	if (netif_running(netdev))
- 		airoha_set_gdm_port_fwd_cfg(dev->eth,
- 					    REG_GDM_FWD_CFG(port->id),
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
 @@ -23,6 +23,7 @@
@@ -170,18 +169,18 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  #define AIROHA_MAX_PACKET_SIZE		2048
  #define AIROHA_NUM_QOS_CHANNELS		4
  #define AIROHA_NUM_QOS_QUEUES		8
-@@ -716,6 +717,7 @@ airoha_qdma_deref(struct airoha_gdm_dev
+@@ -715,6 +716,7 @@ airoha_qdma_deref(struct airoha_gdm_dev
+ 					 lockdep_is_held(&flow_offload_mutex));
+ }
  
- void __airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id, u8 fport);
- void airoha_ppe_clear_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id, u8 fport);
 +void airoha_ppe_set_mtu(struct airoha_gdm_dev *dev);
- 
- static inline void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev,
- 					   u8 ppe_id, u8 fport)
+ void airoha_ppe_set_cpu_port(struct airoha_gdm_dev *dev, u8 ppe_id, u8 fport);
+ bool airoha_ppe_is_enabled(struct airoha_eth *eth, int index);
+ void airoha_ppe_check_skb(struct airoha_ppe_dev *dev, struct sk_buff *skb,
 --- a/drivers/net/ethernet/airoha/airoha_ppe.c
 +++ b/drivers/net/ethernet/airoha/airoha_ppe.c
-@@ -106,6 +106,39 @@ void airoha_ppe_clear_cpu_port(struct ai
- 	mutex_unlock(&flow_offload_mutex);
+@@ -101,6 +101,39 @@ void airoha_ppe_set_cpu_port(struct airo
+ 		      __field_prep(DFT_CPORT_MASK(fport), fe_cpu_port));
  }
  
 +void airoha_ppe_set_mtu(struct airoha_gdm_dev *dev)
@@ -220,7 +219,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static void airoha_ppe_hw_init(struct airoha_ppe *ppe)
  {
  	u32 sram_ppe_num_data_entries = PPE_SRAM_NUM_ENTRIES, sram_num_entries;
-@@ -124,8 +157,6 @@ static void airoha_ppe_hw_init(struct ai
+@@ -119,8 +152,6 @@ static void airoha_ppe_hw_init(struct ai
  		PPE_RAM_NUM_ENTRIES_SHIFT(sram_ppe_num_data_entries);
  
  	for (i = 0; i < eth->soc->num_ppe; i++) {
@@ -229,7 +228,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  		airoha_fe_wr(eth, REG_PPE_TB_BASE(i),
  			     ppe->foe_dma + sram_tb_size);
  
-@@ -175,15 +206,6 @@ static void airoha_ppe_hw_init(struct ai
+@@ -170,15 +201,6 @@ static void airoha_ppe_hw_init(struct ai
  		airoha_fe_wr(eth, REG_PPE_HASH_SEED(i), PPE_HASH_SEED);
  		airoha_fe_clear(eth, REG_PPE_PPE_FLOW_CFG(i),
  				PPE_FLOW_CFG_IP6_6RD_MASK);
@@ -245,10 +244,10 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	}
  
  	for (i = 0; i < ARRAY_SIZE(eth->ports); i++) {
-@@ -205,6 +227,7 @@ static void airoha_ppe_hw_init(struct ai
+@@ -200,6 +222,7 @@ static void airoha_ppe_hw_init(struct ai
  				 airoha_ppe_is_enabled(eth, 1);
  			fport = airoha_get_fe_port(dev);
- 			__airoha_ppe_set_cpu_port(dev, ppe_id, fport);
+ 			airoha_ppe_set_cpu_port(dev, ppe_id, fport);
 +			airoha_ppe_set_mtu(dev);
  		}
  	}
