@@ -12,7 +12,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2146,6 +2146,10 @@ static int airoha_enable_gdm2_loopback(s
+@@ -2229,6 +2229,10 @@ static int airoha_enable_gdm2_loopback(s
  	u32 val, pse_port, chan;
  	int i, src_port;
  
@@ -23,7 +23,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	airoha_set_gdm_port_fwd_cfg(eth, REG_GDM_FWD_CFG(AIROHA_GDM2_IDX),
  				    FE_PSE_PORT_DROP);
  	airoha_fe_clear(eth, REG_GDM_FWD_CFG(AIROHA_GDM2_IDX),
-@@ -2171,10 +2175,6 @@ static int airoha_enable_gdm2_loopback(s
+@@ -2254,10 +2258,6 @@ static int airoha_enable_gdm2_loopback(s
  	airoha_fe_clear(eth, REG_FE_VIP_PORT_EN, BIT(AIROHA_GDM2_IDX));
  	airoha_fe_clear(eth, REG_FE_IFC_PORT_EN, BIT(AIROHA_GDM2_IDX));
  

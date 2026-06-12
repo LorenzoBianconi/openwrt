@@ -23,7 +23,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -1896,10 +1896,10 @@ static int airoha_dev_open(struct net_de
+@@ -1971,10 +1971,10 @@ static int airoha_dev_open(struct net_de
  	int err, len = ETH_HLEN + netdev->mtu + ETH_FCS_LEN;
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
  	struct airoha_gdm_port *port = dev->port;
@@ -35,7 +35,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	/* HW LRO is configured on the QDMA and it is shared between
  	 * all the devices using it. Refuse to open a second device on
-@@ -1937,10 +1937,20 @@ static int airoha_dev_open(struct net_de
+@@ -2013,10 +2013,20 @@ static int airoha_dev_open(struct net_de
  		airoha_fe_clear(eth, REG_GDM_INGRESS_CFG(port->id),
  				GDM_STAG_EN_MASK);
  
@@ -60,7 +60,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	airoha_qdma_set(qdma, REG_QDMA_GLOBAL_CFG,
  			GLOBAL_CFG_TX_DMA_EN_MASK |
-@@ -1958,6 +1968,30 @@ static int airoha_dev_open(struct net_de
+@@ -2039,6 +2049,30 @@ static int airoha_dev_open(struct net_de
  	return 0;
  }
  
@@ -91,7 +91,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  static int airoha_dev_stop(struct net_device *netdev)
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
-@@ -1971,8 +2005,11 @@ static int airoha_dev_stop(struct net_de
+@@ -2052,8 +2086,11 @@ static int airoha_dev_stop(struct net_de
  	for (i = 0; i < netdev->num_tx_queues; i++)
  		netdev_tx_reset_subqueue(netdev, i);
  
@@ -105,7 +105,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  
  	if (!--qdma->users) {
  		airoha_qdma_clear(qdma, REG_QDMA_GLOBAL_CFG,
-@@ -2134,13 +2171,10 @@ static int airoha_dev_change_mtu(struct
+@@ -2217,13 +2254,10 @@ static int airoha_dev_change_mtu(struct
  {
  	struct airoha_gdm_dev *dev = netdev_priv(netdev);
  	struct airoha_gdm_port *port = dev->port;
@@ -123,7 +123,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -570,6 +570,7 @@ struct airoha_gdm_dev {
+@@ -571,6 +571,7 @@ struct airoha_gdm_dev {
  struct airoha_gdm_port {
  	struct airoha_gdm_dev *devs[AIROHA_MAX_NUM_GDM_DEVS];
  	int id;

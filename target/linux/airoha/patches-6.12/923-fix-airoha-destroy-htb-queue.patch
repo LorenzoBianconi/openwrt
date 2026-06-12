@@ -1,6 +1,6 @@
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -3333,7 +3333,7 @@ static void airoha_tc_remove_htb_queue(s
+@@ -3394,7 +3394,7 @@ static void airoha_tc_remove_htb_queue(s
  	struct airoha_qdma *qdma;
  
  	netif_set_real_num_tx_queues(netdev, netdev->real_num_tx_queues - 1);

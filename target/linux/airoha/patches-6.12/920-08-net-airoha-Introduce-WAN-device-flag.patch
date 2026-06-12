@@ -29,7 +29,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2110,36 +2110,81 @@ static int airoha_set_gdm2_loopback(stru
+@@ -2193,36 +2193,81 @@ static int airoha_set_gdm2_loopback(stru
  	return 0;
  }
  
@@ -128,7 +128,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  }
 --- a/drivers/net/ethernet/airoha/airoha_eth.h
 +++ b/drivers/net/ethernet/airoha/airoha_eth.h
-@@ -549,6 +549,10 @@ struct airoha_qdma {
+@@ -550,6 +550,10 @@ struct airoha_qdma {
  	DECLARE_BITMAP(qos_channel_map, AIROHA_NUM_QOS_CHANNELS);
  };
  
@@ -139,7 +139,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  struct airoha_gdm_dev {
  	struct airoha_gdm_port *port;
  	struct airoha_qdma *qdma;
-@@ -564,6 +568,7 @@ struct airoha_gdm_dev {
+@@ -565,6 +569,7 @@ struct airoha_gdm_dev {
  	u64 cpu_tx_packets;
  	u64 fwd_tx_packets;
  
@@ -147,7 +147,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
  	int nbq;
  };
  
-@@ -670,13 +675,7 @@ static inline u16 airoha_qdma_get_txq(st
+@@ -671,13 +676,7 @@ static inline u16 airoha_qdma_get_txq(st
  
  static inline bool airoha_is_lan_gdm_dev(struct airoha_gdm_dev *dev)
  {

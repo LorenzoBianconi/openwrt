@@ -19,7 +19,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2303,18 +2303,10 @@ static int airoha_dev_init(struct net_de
+@@ -2386,18 +2386,10 @@ static int airoha_dev_init(struct net_de
  
  	switch (port->id) {
  	case AIROHA_GDM3_IDX:
