@@ -29,7 +29,7 @@ Signed-off-by: Lorenzo Bianconi <lorenzo@kernel.org>
 
 --- a/drivers/net/ethernet/airoha/airoha_eth.c
 +++ b/drivers/net/ethernet/airoha/airoha_eth.c
-@@ -2193,36 +2193,81 @@ static int airoha_set_gdm2_loopback(stru
+@@ -2214,36 +2214,81 @@ static int airoha_set_gdm2_loopback(stru
  	return 0;
  }
  
